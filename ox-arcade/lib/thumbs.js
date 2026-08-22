@@ -88,8 +88,12 @@ async function resolveBuildDir(root, id) {
  * Capture one build thumbnail.
  * @returns {Promise<{ok:boolean, meta?:object, error?:string}>}
  */
+function thumbsDirFor(archiveRoot) {
+  return process.env.ARCHIVE_THUMBS_DIR || path.join(archiveRoot, ".archive", "thumbs");
+}
+
 async function captureThumb(archiveRoot, root, id, opts = {}) {
-  const thumbsDir = path.join(archiveRoot, ".archive", "thumbs");
+  const thumbsDir = thumbsDirFor(archiveRoot);
   await fsp.mkdir(thumbsDir, { recursive: true });
   const failedMarker = path.join(thumbsDir, `${id}.failed`);
   try { await fsp.rm(failedMarker, { force: true }); } catch {}
@@ -145,4 +149,4 @@ async function captureThumb(archiveRoot, root, id, opts = {}) {
   return { ok: false, error: lastErr };
 }
 
-module.exports = { captureThumb, findBrowser, resolveBuildDir, captureOnce, waitForSettled };
+module.exports = { captureThumb, findBrowser, resolveBuildDir, captureOnce, waitForSettled, thumbsDirFor };

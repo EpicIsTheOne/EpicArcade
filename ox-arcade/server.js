@@ -16,7 +16,7 @@ const path = require("path");
 const { spawn } = require("node:child_process");
 
 const { scanBuilds, HARNESS_META } = require("./lib/scan");
-const { captureThumb, resolveBuildDir } = require("./lib/thumbs");
+const { captureThumb, resolveBuildDir, thumbsDirFor } = require("./lib/thumbs");
 const arcade = require("./lib/arcade");
 
 const MIME = {
@@ -227,7 +227,7 @@ function start(opts = {}) {
 
       if ((m = url.pathname.match(/^\/thumbs\/([\w-]+)\.(png|json)$/))) {
         return await serveFrom(
-          path.join(archiveRoot, ".archive", "thumbs"),
+          thumbsDirFor(archiveRoot),
           [`${m[1]}.${m[2]}`], res
         );
       }
