@@ -1,0 +1,13 @@
+{
+  "name": "ox-arcade",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local museum site for everything built in the Ox model test folder",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/scan.test.js test/server.test.js test/arcade.test.js",
+    "thumbs": "node scripts/thumbs.js",
+    "publish": "node scripts/publish.js"
+  }
+}

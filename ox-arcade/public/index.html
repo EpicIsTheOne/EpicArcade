@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ox Arcade</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/style.css">
+<script src="/config.js"></script>
+</head>
+<body>
+<canvas id="stars" aria-hidden="true"></canvas>
+<div class="boot" id="boot">
+  <pre class="mono" id="boot-text"></pre>
+</div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="pulse-dot" aria-hidden="true"></span>
+    <h1>OX&nbsp;ARCADE</h1>
+    <span class="count" id="count"></span>
+    <button class="btn small ghost sync-btn" id="sync-btn" hidden title="Pull EpicArcade repo">&#8645; Sync</button>
+  </div>
+  <div class="controls">
+    <input id="search" type="search" placeholder="Search exhibits…" autocomplete="off" spellcheck="false">
+    <nav class="chips" id="chips">
+      <button class="chip active" data-filter="all">All</button>
+      <button class="chip" data-filter="game">Games</button>
+      <button class="chip" data-filter="instrument">Instruments</button>
+      <button class="chip" data-filter="incomplete">Incomplete</button>
+    </nav>
+    <nav class="chips hz-chips" id="hz-chips"></nav>
+    <div class="viewtoggle" id="viewtoggle">
+      <button class="active" data-view="grid" title="Grid view">▦</button>
+      <button data-view="strip" title="Filmstrip view">▥</button>
+    </div>
+  </div>
+</header>
+
+<section class="hero" id="hero" hidden>
+  <div class="hero-bg">
+    <img id="hero-img" alt="">
+    <div class="hero-fade"></div>
+    <div class="scanline" aria-hidden="true"></div>
+  </div>
+  <div class="hero-content">
+    <div class="eyebrow">LATEST EXHIBIT</div>
+    <h2 id="hero-title"></h2>
+    <p id="hero-desc"></p>
+    <div class="hero-actions">
+      <button class="btn primary" id="hero-play">&#9654; Play</button>
+      <button class="btn ghost" id="hero-folder">Open folder</button>
+    </div>
+  </div>
+</section>
+
+<main id="grid" class="grid" aria-live="polite"></main>
+<div id="empty" class="empty" hidden>Nothing matches that filter.</div>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="overlay-backdrop" id="ov-backdrop"></div>
+  <div class="overlay-panel" role="dialog" aria-modal="true">
+    <button class="overlay-close" id="ov-close" title="Close (Esc)">&#10005;</button>
+    <div class="ov-stage" id="ov-stage">
+      <iframe id="ov-frame" sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-popups"
+              allow="autoplay; fullscreen" title="Game"></iframe>
+      <div class="ov-note" id="ov-note" hidden></div>
+      <div class="ov-bar">
+        <button class="btn small" id="ov-reload">&#10227; Reload</button>
+        <button class="btn small" id="ov-pop">&#8599; Pop out</button>
+        <button class="btn small" id="ov-fs">&#9974; Fullscreen</button>
+      </div>
+    </div>
+    <aside class="ov-side">
+      <h2 id="ov-title"></h2>
+      <p id="ov-desc"></p>
+      <dl class="meta" id="ov-meta"></dl>
+      <div class="gallery" id="ov-gallery"></div>
+      <div class="ov-actions">
+        <button class="btn ghost" id="ov-folder">Open folder</button>
+        <button class="btn ghost" id="ov-regen">Regenerate thumbnail</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<template id="card-tpl">
+  <article class="card" tabindex="0">
+    <div class="thumb">
+      <img loading="lazy" alt="">
+      <div class="ph"><span class="ph-name mono"></span></div>
+      <div class="live-holder"></div>
+      <span class="ribbon"></span>
+      <span class="hz-badge" hidden><span class="glyph mono"></span><span class="hz-name"></span></span>
+    </div>
+    <div class="card-body">
+      <h3 class="c-title"></h3>
+      <p class="c-desc"></p>
+      <footer><span class="c-time"></span><span class="c-tags mono"></span></footer>
+    </div>
+  </article>
+</template>
+
+<script src="/app.js"></script>
+</body>
+</html>
