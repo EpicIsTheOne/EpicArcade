@@ -19,6 +19,11 @@ function git(args, cwd, timeoutMs = 120000) {
     let out = "", err = "";
     proc.stdout.on("data", (d) => { out += d; });
     proc.stderr.on("data", (d) => { err += d; });
+    // Missing binary / spawn failure must degrade gracefully, never crash.
+    proc.on("error", (e) => {
+      clearTimeout(t);
+      resolve({ code: -1, out: "", err: `spawn failed: ${e.message}` });
+    });
     const t = setTimeout(() => { try { proc.kill(); } catch {} }, timeoutMs);
     proc.on("close", (code) => {
       clearTimeout(t);
