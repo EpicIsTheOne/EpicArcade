@@ -208,6 +208,12 @@ const NETCODE_PATTERNS = [
   ["sse",       /\bnew\s+EventSource\b/i],
 ];
 const MP_TEXT_RE = /\.(html?|js|mjs|cjs)$/i;
+// Dev/QA dirs routinely talk raw WebSockets (CDP drivers, puppeteer, e2e
+// runners) without the GAME being online-capable — never scan them.
+const MP_SKIP_DIRS = new Set([
+  "test", "tests", "scripts", "tools", "qa", "e2e",
+  "screenshots", "shots", "reference", "docs", "saves", "test-artifacts",
+]);
 const MP_FILE_CAP = 600 * 1024;   // per file — skips bundled engines' fat chunks
 const MP_BUDGET = 3 * 1024 * 1024;
 
@@ -222,7 +228,7 @@ async function detectNetcode(dir) {
     for (const e of entries) {
       if (budget <= 0 || hits.size === NETCODE_PATTERNS.length) return [...hits];
       if (e.isDirectory()) {
-        if (ENTRY_JUNK.has(e.name) || e.name.startsWith(".")) continue;
+        if (ENTRY_JUNK.has(e.name) || MP_SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
         stack.push(path.join(cur, e.name));
         continue;
       }

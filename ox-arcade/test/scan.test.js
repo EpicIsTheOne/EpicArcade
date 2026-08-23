@@ -222,6 +222,18 @@ test("detectNetcode finds websocket/webrtc/sse signals", async () => {
   assert.deepEqual(await detectNetcode(plain), []);
 });
 
+test("detectNetcode ignores QA tooling (tests/scripts dirs)", async () => {
+  const root = await buildFixture({ after() {} });
+  const game = path.join(root, "Fake Game");
+  // CDP/e2e drivers live in tests/ or scripts/ — not game netcode
+  await put(path.join(game, "tests", "cdp.js"), "const ws = new WebSocket('ws://x');");
+  await put(path.join(game, "scripts", "e2e.js"), "new WebSocket(url);");
+  assert.deepEqual(await detectNetcode(game), []);
+  // but the same code next to the game IS a signal
+  await put(path.join(game, "js", "cdp.js"), "new WebSocket('ws://x');");
+  assert.deepEqual(await detectNetcode(game), ["websocket"]);
+});
+
 test("scanBuilds attaches multiplayer; plain builds are single-player", async (t) => {
   const root = await buildFixture(t);
   await put(path.join(root, "Fake Game", "js", "net.js"), "new WebSocket('ws://x');");
