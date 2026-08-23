@@ -18,6 +18,21 @@ model as literal text.
 | Setup timing | Skill installation happens BEFORE benchmark timing; never during it |
 | Safety notes | The skill governs browser/process hygiene only; it grants no deployment or production-access permissions. Artifacts produced under its guidance belong in the run's project folder |
 
+### Resolution (server-side)
+
+`api_server.py` resolves placeholders at **serve time** — raw `prompts.json`
+stays portable and path-free:
+
+- Resolution order for `{{E2E_ISOLATION_SKILL_PATH}}`: env override
+  `E2E_ISOLATION_SKILL_PATH`, then `<home>/.agents/skills/isolated-e2e-testing/SKILL.md`,
+  then `<home>/.claude/skills/...`; first existing file wins, else `UNAVAILABLE`.
+- Applies to `GET /api/prompts`, `GET /api/prompts/{id}`, `GET /api/prompts/{id}/text`.
+- `GET /api/placeholders` shows current resolution status (supervisor/debug aid).
+- Note: resolution reflects the **API server's** machine. A local tracker
+  resolves real paths for local agents; the kvm2 production instance serves
+  `UNAVAILABLE` unless the skill is installed there — correct by contract,
+  since the server cannot know the client machine's skills.
+
 Introduced: 2026-08-23 — added to all 46 prompts, inserted as
 "OPTIONAL CAPABILITY — ISOLATED E2E TESTING" directly after the
 "Optional capabilities" section.

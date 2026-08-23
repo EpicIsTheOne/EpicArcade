@@ -17,6 +17,58 @@ VALID_STATUS = {"running", "pass", "fail", "error", "skipped"}
 API_KEY = os.environ.get("OXALPHA_API_KEY") or "Epic"
 
 
+# ---- placeholder resolution (contract: OxAlphaTracker/PLACEHOLDER_CONTRACT.md) ----
+
+def _resolve_e2e_isolation_skill():
+    override = os.environ.get("E2E_ISOLATION_SKILL_PATH")
+    candidates = []
+    if override:
+        candidates.append(override)
+    home = Path(os.path.expanduser("~"))
+    for base in (".agents", ".claude"):
+        candidates.append(str(home / base / "skills" / "isolated-e2e-testing" / "SKILL.md"))
+    for c in candidates:
+        try:
+            if c and c != "UNAVAILABLE" and Path(c).is_file():
+                return str(Path(c).resolve())
+        except OSError:
+            continue
+    return "UNAVAILABLE"
+
+
+PLACEHOLDER_RESOLVERS = {
+    "{{E2E_ISOLATION_SKILL_PATH}}": _resolve_e2e_isolation_skill,
+}
+
+
+def resolve_placeholders(text):
+    for ph, resolver in PLACEHOLDER_RESOLVERS.items():
+        if ph in text:
+            try:
+                text = text.replace(ph, resolver())
+            except Exception:
+                pass
+    return text
+
+
+def resolved_prompt(p):
+    q = dict(p)
+    if "text" in q:
+        q["text"] = resolve_placeholders(q["text"])
+    return q
+
+
+def placeholders_status():
+    out = {}
+    for ph, resolver in PLACEHOLDER_RESOLVERS.items():
+        try:
+            value = resolver()
+        except Exception:
+            value = "UNAVAILABLE"
+        out[ph] = {"resolved": value != "UNAVAILABLE", "value": value}
+    return {"placeholders": out}
+
+
 def load_runs():
     try:
         return json.loads(RUNS_FILE.read_text(encoding="utf-8"))
@@ -212,14 +264,16 @@ class Handler(BaseHTTPRequestHandler):
         m = re.fullmatch(r"/api/prompts/(\d+)", path)
         if m:
             p = BY_ID.get(int(m.group(1)))
-            return self._json(p) if p else self._error(404, f"no prompt with id {m.group(1)}")
+            return self._json(resolved_prompt(p)) if p else self._error(404, f"no prompt with id {m.group(1)}")
         m = re.fullmatch(r"/api/prompts/(\d+)/text", path)
         if m:
             p = BY_ID.get(int(m.group(1)))
             if not p:
                 return self._error(404, f"no prompt with id {m.group(1)}")
             extra = {"Content-Disposition": f'attachment; filename="{p["filename"]}"'}
-            return self._bytes(200, p["text"].encode("utf-8"), "text/plain; charset=utf-8", extra)
+            return self._bytes(200, resolve_placeholders(p["text"]).encode("utf-8"), "text/plain; charset=utf-8", extra)
+        if path == "/api/placeholders":
+            return self._json(placeholders_status())
         return self._error(404, f"unknown API route {path}")
 
     def list_prompts(self, params):
@@ -236,6 +290,7 @@ class Handler(BaseHTTPRequestHandler):
         if "fields" in params:
             keep = {f.strip() for f in params["fields"].split(",")} & FIELDS
             rows = [{k: p[k] for k in p if k in keep} for p in rows]
+        rows = [resolved_prompt(r) if "text" in r else r for r in rows]
         self._json({"count": len(rows), "prompts": rows})
 
     def list_status(self, params):
@@ -269,6 +324,7 @@ class Handler(BaseHTTPRequestHandler):
                 "GET /api/prompts/{id}": "single prompt object",
                 "GET /api/prompts/{id}/text": "raw prompt text as plain text (copy-paste ready)",
                 "GET /api/status": "benchmark run statuses; optional filters run=, model=, status=running|pass|fail|error|skipped, promptId=",
+                "GET /api/placeholders": "runtime placeholder resolution status (what the supervisor would inject)",
                 "POST /api/status [auth]": "upsert a benchmark status; JSON body {run, model, promptId?, status, score?, durationMs?, notes?}",
                 "DELETE /api/status?run=<id> [auth]": "clear all entries of one run",
             },
