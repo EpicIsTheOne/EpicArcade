@@ -1,0 +1,1197 @@
+/* Emberwake — main.js
+ * Engine glue: three.js scene, procedural terrain bake, entity sync, camera/input,
+ * event choreography (particles/audio/UI), adaptive music director, quality tiers,
+ * autopilot, QA debug hooks. Global `window.EWGame`.
+ */
+(function () {
+  'use strict';
+
+  var Sim = window.EWSim, Ent = window.EWEnt, Audio = window.EmberAudio, UI = window.EWUI;
+
+  // ---------- settings / persistence ----------
+  var SET_KEY = 'ew_settings';
+  var settings = {
+    master: 0.8, music: 0.7, sfx: 0.9,
+    quality: 'ULTRA', shake: true, reduceFlash: false, colorSafe: false
+  };
+  try {
+    var saved = JSON.parse(localStorage.getItem(SET_KEY) || 'null');
+    if (saved) Object.keys(settings).forEach(function (k) { if (saved[k] !== undefined) settings[k] = saved[k]; });
+  } catch (e) { /* ignore */ }
+  function saveSettings() {
+    try { localStorage.setItem(SET_KEY, JSON.stringify(settings)); } catch (e) { /* ignore */ }
+  }
+
+  var QA = /[\?&]qa=1/.test(location.search);
+  var AUTOPILOT = /[\?&]autopilot=1/.test(location.search);
+  var SKIP_TITLE = QA || AUTOPILOT;
+
+  // ---------- renderer / scene ----------
+  var canvas = document.getElementById('game-canvas');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: !QA, powerPreference: 'high-performance' });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, QA ? 1 : 2));
+  renderer.shadowMap.enabled = false; // stylized blob shadows instead — cheaper and reads better at night
+
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 900);
+
+  var hemi = new THREE.HemisphereLight(0x2b3a5e, 0x1a1420, 1.15);
+  scene.add(hemi);
+  var moon = new THREE.DirectionalLight(0x8fa8d8, 0.38);
+  moon.position.set(-120, 180, -80);
+  scene.add(moon);
+  var ambient = new THREE.AmbientLight(0x1c2030, 0.55);
+  scene.add(ambient);
+
+  // lantern light — the hero light of the game
+  var lanternLight = new THREE.PointLight(0xffa04c, 2.4, 60, 1.6);
+  scene.add(lanternLight);
+  var lanternGlow = Ent.makeGlow(0xffa04c, 4.2, 0.85);
+  scene.add(lanternGlow);
+
+  // sky group follows the keeper so the heavens never parallax away
+  var skyGroup = new THREE.Group();
+  scene.add(skyGroup);
+
+  // aurora ribbons
+  var auroraGroup = new THREE.Group();
+  scene.add(auroraGroup);
+  for (var ai = 0; ai < 3; ai++) {
+    var aGeo = new THREE.PlaneGeometry(700, 60 + ai * 24, 48, 1);
+    var aMat = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      uniforms: { uTime: { value: 0 }, uHue: { value: ai * 0.35 } },
+      vertexShader:
+        'varying vec2 vUv; uniform float uTime;' +
+        'void main(){ vUv=uv; vec3 p=position;' +
+        'p.z += sin(uv.x*7.0+uTime*0.25)*14.0 + sin(uv.x*13.0-uTime*0.17)*7.0;' +
+        'gl_Position = projectionMatrix*modelViewMatrix*vec4(p,1.0);}',
+      fragmentShader:
+        'varying vec2 vUv; uniform float uTime; uniform float uHue;' +
+        'float band(vec2 uv,float c,float w){return smoothstep(c-w,c,uv.y)-smoothstep(c,c+w,uv.y);}' +
+        'void main(){' +
+        ' float b1=band(vUv,0.45+sin(vUv.x*5.0+uTime*0.3)*0.12,0.16);' +
+        ' float b2=band(vUv,0.62+cos(vUv.x*4.0-uTime*0.22)*0.10,0.20);' +
+        ' float edge=smoothstep(0.0,0.18,vUv.x)*smoothstep(1.0,0.82,vUv.x)*smoothstep(0.0,0.15,vUv.y)*smoothstep(1.0,0.7,vUv.y);' +
+        ' float a=(b1*1.15+b2*0.8)*(0.5+0.3*sin(uTime*0.4+vUv.x*9.0))*edge;' +
+        ' vec3 col=mix(vec3(0.35,0.95,0.70),vec3(0.50,0.55,1.0),0.5+0.5*sin(vUv.x*3.0+uHue));' +
+        ' gl_FragColor=vec4(col,a);} '
+    });
+    var ribbon = new THREE.Mesh(aGeo, aMat);
+    ribbon.position.set(0, 38 + ai * 20, -400 + ai * 30);
+    ribbon.frustumCulled = false;
+    ribbon.material.depthWrite = false;
+    auroraGroup.add(ribbon);
+  }
+  // moon disc (lives in the sky group — follows the player)
+  var moonDisc = new THREE.Mesh(
+    new THREE.CircleGeometry(22, 24),
+    new THREE.MeshBasicMaterial({ color: 0xd8e2f4, transparent: true, opacity: 0.9, fog: false })
+  );
+  moonDisc.position.set(-260, 210, -420);
+  moonDisc.lookAt(0, 40, 0);
+  skyGroup.add(moonDisc);
+  var moonHalo = Ent.makeGlow(0xaebfd8, 130, 0.5);
+  moonHalo.position.copy(moonDisc.position);
+  skyGroup.add(moonHalo);
+
+  // fog per region (set on region change)
+  scene.fog = new THREE.FogExp2(0x141a2a, 0.0075);
+
+  // stars
+  (function makeStars() {
+    var n = 1100;
+    var pos = new Float32Array(n * 3);
+    for (var i = 0; i < n; i++) {
+      var th = Math.random() * Math.PI * 2, ph = Math.random() * Math.PI * 0.42;
+      pos[i * 3] = Math.cos(th) * Math.sin(ph + 0.15) * 800;
+      pos[i * 3 + 1] = Math.cos(ph) * 500 + 60;
+      pos[i * 3 + 2] = Math.sin(th) * Math.sin(ph + 0.15) * 800;
+    }
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    var m = new THREE.PointsMaterial({ color: 0xd8e4ff, size: 2.4, sizeAttenuation: false, transparent: true, opacity: 0.95, depthWrite: false });
+    var stars = new THREE.Points(g, m);
+    stars.frustumCulled = false;
+    scene.add(stars);
+  })();
+
+  // ---------- world baking ----------
+  var sim = null;
+  var keeperObj = null;
+  var beetleObjs = [];
+  var hollowObjs = [];
+  var wispObjs = [];
+  var wardenObjs = [];
+  var wraithObj = null;
+  var shrineObjs = [];
+  var gateObj = null;
+  var particles = null;
+  var motes = null;
+  var pondMeshes = [];
+  var fissureGlows = [];
+
+  function buildWorld(world) {
+    // ---- ground: one big plane, vertex-displaced, road-blended colors ----
+    var SEG_X = QA ? 110 : 190, SEG_Z = QA ? 70 : 120;
+    var geo = new THREE.PlaneGeometry(880, 480, SEG_X, SEG_Z);
+    geo.rotateX(-Math.PI / 2);
+    var posA = geo.attributes.position;
+    var colors = new Float32Array(posA.count * 3);
+    var tmpC = new THREE.Color();
+    for (var i = 0; i < posA.count; i++) {
+      var vx = posA.getX(i), vz = posA.getZ(i);
+      var h = world.height(vx, vz);
+      posA.setY(i, h);
+      // base grass color by region blend
+      var rg = world.regionAtX(vx);
+      // multi-octave mottling so the ground has visible texture
+      var n = 0.74
+        + 0.20 * Math.sin(vx * 0.31 + vz * 0.53) * Math.cos(vz * 0.21)
+        + 0.13 * Math.sin(vx * 0.9 + vz * 0.7)
+        + 0.11 * Math.cos(vx * 0.13 - vz * 0.29);
+      var nr = world.roadNearest(vx, vz);
+      var onRoad = nr.dist < world.ROAD_HALF + 1.2;
+      if (onRoad) {
+        tmpC.setHex(rg.dirt).multiplyScalar(1.08);
+      } else {
+        tmpC.setHex((Math.sin(vx * 0.08 + vz * 0.11) > 0) ? rg.grassA : rg.grassB).multiplyScalar(n);
+      }
+      if (h > 26) tmpC.lerp(new THREE.Color(rg.rock), Math.min(1, (h - 26) / 14));
+      colors[i * 3] = tmpC.r; colors[i * 3 + 1] = tmpC.g; colors[i * 3 + 2] = tmpC.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+    var groundMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+    var ground = new THREE.Mesh(geo, groundMat);
+    scene.add(ground);
+
+    // ---- frozen ponds ----
+    world.ponds.forEach(function (p) {
+      var pg = new THREE.CircleGeometry(p.r, 26);
+      pg.rotateX(-Math.PI / 2);
+      var pm = new THREE.Mesh(pg, new THREE.MeshPhongMaterial({
+        color: 0x7ea6c8, specular: 0xcfe8ff, shininess: 90,
+        transparent: true, opacity: 0.82
+      }));
+      pm.position.set(p.x, p.y + 0.28, p.z);
+      pm.rotation.z = Math.random() * Math.PI;
+      scene.add(pm);
+      pondMeshes.push(pm);
+    });
+
+    // ---- lava fissures ----
+    world.fissures.forEach(function (f) {
+      var fg = new THREE.Mesh(
+        new THREE.CircleGeometry(1, 24),
+        new THREE.MeshBasicMaterial({ color: 0xff5a1e })
+      );
+      fg.scale.set(f.rx, f.rz, 1);
+      fg.rotation.x = -Math.PI / 2;
+      fg.rotation.z = f.rot;
+      fg.position.set(f.x, f.y + 0.22, f.z);
+      scene.add(fg);
+      var glow = Ent.makeGlow(0xff6a24, f.rx * 1.7, 0.5);
+      glow.position.set(f.x, f.y + 0.8, f.z);
+      scene.add(glow);
+      fissureGlows.push({ mesh: fg, glow: glow, seed: Math.random() * 10 });
+    });
+
+    // ---- props (trees/rocks/spires/moss/shards/caches) ----
+    world.props.forEach(function (p) {
+      var obj = null;
+      if (p.kind.indexOf('tree_') === 0) obj = Ent.makeTree(p.kind.slice(5), p.v);
+      else if (p.kind === 'rock') obj = Ent.makeRock(p.v);
+      else if (p.kind === 'spire') obj = Ent.makeSpire();
+      else if (p.kind === 'moss') obj = Ent.makeMossTuft();
+      else if (p.kind === 'shard') obj = Ent.makeShardCrystal();
+      else if (p.kind === 'cache') {
+        obj = new THREE.Group();
+        var logs = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 1.1, 6),
+          Ent.lam(0x5a4426));
+        logs.rotation.z = Math.PI / 2;
+        logs.position.y = 0.36;
+        var logs2 = logs.clone(); logs2.rotation.y = Math.PI / 2.6; logs2.position.y = 0.52;
+        obj.add(logs); obj.add(logs2);
+        var cg = Ent.makeGlow(0xffb060, 1.0, 0.4);
+        cg.position.y = 0.6;
+        obj.add(cg);
+      }
+      if (!obj) return;
+      obj.position.set(p.x, p.y, p.z);
+      obj.rotation.y = p.rot;
+      obj.scale.multiplyScalar(p.s);
+      scene.add(obj);
+      p.obj = obj;
+    });
+
+    // ---- shrines ----
+    world.shrines.forEach(function (s) {
+      var o = Ent.makeShrine();
+      o.position.set(s.x, world.height(s.x, s.z), s.z);
+      scene.add(o);
+      shrineObjs.push(o);
+      s.obj = o;
+    });
+
+    // ---- Dawn Gate ----
+    gateObj = Ent.makeDawnGate();
+    gateObj.position.set(world.dawnGate.x, world.height(world.dawnGate.x, world.dawnGate.z), world.dawnGate.z);
+    scene.add(gateObj);
+
+    // ---- keeper ----
+    keeperObj = new THREE.Group();
+    var cloak = new THREE.Mesh(new THREE.ConeGeometry(0.52, 1.75, 7), Ent.lam(0x5a6a94));
+    cloak.position.y = 0.85;
+    keeperObj.add(cloak);
+    var trim = new THREE.Mesh(new THREE.TorusGeometry(0.30, 0.05, 6, 12), Ent.lam(0x8a5c2e));
+    trim.rotation.x = Math.PI / 2;
+    trim.position.y = 1.28;
+    keeperObj.add(trim);
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 6), Ent.lam(0xd9b38c));
+    head.position.y = 1.82;
+    keeperObj.add(head);
+    var hood = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.55, 7), Ent.lam(0x46547c));
+    hood.position.y = 1.98;
+    keeperObj.add(hood);
+    var staff = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 2.15, 5), Ent.lam(0x6b5232));
+    staff.position.set(0.46, 1.08, 0.12);
+    keeperObj.add(staff);
+    var lantFrame = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.3, 0.22),
+      new THREE.MeshLambertMaterial({ color: 0x2a2018, emissive: 0x664411 }));
+    lantFrame.position.set(0.44, 1.95, 0.1);
+    keeperObj.add(lantFrame);
+    var lantGlow = Ent.makeGlow(0xffb454, 1.5, 0.95);
+    lantGlow.position.set(0.44, 1.95, 0.1);
+    keeperObj.add(lantGlow);
+    keeperObj.userData.lantGlow = lantGlow;
+    keeperObj.userData.lantFrame = lantFrame;
+    var shadowBlob = new THREE.Mesh(new THREE.CircleGeometry(0.55, 14),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 }));
+    shadowBlob.rotation.x = -Math.PI / 2;
+    shadowBlob.position.y = 0.03;
+    keeperObj.add(shadowBlob);
+    scene.add(keeperObj);
+
+    // ---- caravan ----
+    beetleObjs = [];
+    sim.beetles.forEach(function (b) {
+      var o = Ent.makeBeetle(Ent.BEETLE_SHELLS[b.shell]);
+      scene.add(o);
+      beetleObjs.push(o);
+    });
+
+    // ---- particles & weather ----
+    particles = new Ent.ParticlePool(scene, QA ? 220 : 650);
+    motes = new Ent.MoteField(scene, QA ? 140 : 420, 240, 0xcfd8e8, 0.35, 1.1);
+  }
+
+  // ---------- camera ----------
+  var camYaw = 0, camPitch = 0.33, camDist = 15;
+  var camPos = new THREE.Vector3(), camTarget = new THREE.Vector3();
+  var shakeT = 0, shakeMag = 0;
+
+  document.addEventListener('mousemove', function (ev) {
+    if (state !== 'play' && state !== 'shrine') return;
+    if (document.pointerLockElement === canvas) {
+      camYaw -= ev.movementX * 0.0032;   // mouse right → view rotates right
+      camPitch += ev.movementY * 0.0026; // mouse down → look down
+      camPitch = Math.max(0.12, Math.min(1.15, camPitch));
+    }
+  });
+  canvas.addEventListener('wheel', function (ev) {
+    camDist = Math.max(8, Math.min(26, camDist + ev.deltaY * 0.012));
+    ev.preventDefault();
+  }, { passive: false });
+  canvas.addEventListener('click', function () {
+    if ((state === 'play' || state === 'shrine') && document.pointerLockElement !== canvas && !AUTOPILOT) {
+      canvas.requestPointerLock();
+    }
+  });
+  document.addEventListener('contextmenu', function (ev) { ev.preventDefault(); });
+
+  // ---------- input ----------
+  var keys = {};
+  var flareQueued = false, interactQueued = false;
+  window.addEventListener('keydown', function (ev) {
+    if (ev.repeat) return;
+    keys[ev.code] = true;
+    if (ev.code === 'Space') { flareQueued = true; ev.preventDefault(); }
+    if (ev.code === 'KeyE') interactQueued = true;
+    if (ev.code === 'KeyF') toggleBank();
+    if (ev.code === 'Digit1') setLevel(0);
+    if (ev.code === 'Digit2') setLevel(1);
+    if (ev.code === 'Digit3') setLevel(2);
+    if (ev.code === 'KeyP' || ev.code === 'Escape') togglePause();
+    if (ev.code === 'Enter' && state === 'title') startRun();
+  });
+  window.addEventListener('keyup', function (ev) { keys[ev.code] = false; });
+
+  function setLevel(l) { manualLevel = l; if (audio) audio.sfx.levelSet(); }
+  function toggleBank() {
+    banked = !banked;
+    if (audio) { banked ? audio.sfx.bankOn() : audio.sfx.bankOff(); }
+    if (sim) UI.toast(banked ? 'Flame banked — walk soft' : 'Flame raised', banked ? 'quiet' : '');
+  }
+  var manualLevel = 1, banked = false;
+
+  function lockPointer() {
+    if (AUTOPILOT) return;
+    // Chrome throws NotAllowedError without a gesture or during the re-lock cooldown
+    try {
+      var p = canvas.requestPointerLock();
+      if (p && typeof p.catch === 'function') p.catch(function () { /* player can click to re-lock */ });
+    } catch (e) { /* same */ }
+  }
+
+  // ---------- game flow ----------
+  var state = 'title'; // title | howto | play | shrine | pause | elegy | victory
+  var audio = null;
+  var lastRegionKey = '';
+  var pausedFrom = 'play';
+
+  function startRun() {
+    if (sim) disposeSim();
+    sim = Sim.createSim({ seed: 'EPIC-1' });
+    if (!worldBuilt) { buildWorld(sim.world); worldBuilt = true; }
+    else resetDynamicProps();
+
+    UI.hideScreens();
+    UI.showHUD(true);
+    UI.setObjective('Follow the pilgrim road east. Relight the wayshrines.');
+
+    if (!audio) { audio = Audio.create(); applyVolumes(); }
+    audio.start();
+    audio.setRegion('ashfall');
+    lastRegionKey = 'ashfall';
+
+    manualLevel = 1; banked = false;
+    state = 'play';
+    if (!AUTOPILOT) lockPointer();
+  }
+
+  var worldBuilt = false;
+  function resetDynamicProps() {
+    // restore consumed props
+    sim.world.props.forEach(function (p) {
+      p.dead = false;
+      if (p.obj) p.obj.visible = true;
+    });
+    sim.world.shrines.forEach(function (s, i) {
+      s.lit = false;
+      if (s.obj) { s.obj.userData.flame.visible = false; s.obj.userData.light.intensity = 0; }
+    });
+    // clear transient entities from the scene
+    [hollowObjs, wispObjs, wardenObjs].forEach(function (list) {
+      list.forEach(function (o) { scene.remove(o); });
+      list.length = 0;
+    });
+    if (wraithObj) { scene.remove(wraithObj); wraithObj = null; }
+  }
+
+  function disposeSim() {
+    resetDynamicProps.call({});
+  }
+
+  function togglePause() {
+    if (state === 'play' || state === 'shrine') {
+      pausedFrom = state;
+      state = 'pause';
+      UI.showScreen('pause');
+      document.exitPointerLock && document.exitPointerLock();
+    } else if (state === 'pause') {
+      state = pausedFrom;
+      UI.hideScreens();
+    }
+  }
+
+  function toTitle() {
+    state = 'title';
+    UI.showHUD(false);
+    UI.showScreen('title');
+    UI.setBossBar(0, false);
+    UI.wraithBanner(false);
+    if (audio) audio.stop();
+  }
+
+  // ---------- entity pool management ----------
+  function syncEntityPools() {
+    // hollows
+    while (hollowObjs.length < sim.hollows.length) {
+      var ho = Ent.makeHollow();
+      scene.add(ho);
+      hollowObjs.push(ho);
+    }
+    while (wispObjs.length < sim.wisps.length) {
+      var wo = Ent.makeWisp();
+      scene.add(wo);
+      wispObjs.push(wo);
+    }
+    while (wardenObjs.length < sim.wardens.length) {
+      var wd = Ent.makeWarden();
+      scene.add(wd);
+      wardenObjs.push(wd);
+    }
+    if (sim.wraith && !sim.wraith.defeated) {
+      if (!wraithObj) {
+        wraithObj = Ent.makeWraith();
+        scene.add(wraithObj);
+      }
+    } else if (wraithObj && (!sim.wraith || !sim.wraith.alive)) {
+      scene.remove(wraithObj);
+      wraithObj = null;
+    }
+  }
+
+  // ---------- event choreography ----------
+  function handleEvents(evs, dt) {
+    evs.forEach(function (ev) {
+      switch (ev.type) {
+        case 'flare': {
+          var k = sim.keeper;
+          var ky = terrainYAt(k.x, k.z);
+          particles.burst(k.x, ky + 1.2, k.z, 90, 9, 0.9, 0xffa040, -2);
+          particles.burst(k.x, ky + 1.2, k.z, 40, 4, 1.3, 0xffdca0, -1);
+          addShockwave(k.x, ky + 0.4, k.z, ev.data.r);
+          shake(0.5);
+          audio.sfx.flare();
+          break;
+        }
+        case 'flareFail':
+          audio.sfx.uiDeny();
+          UI.toast('Not enough flame to flare', 'warn');
+          break;
+        case 'moss':
+          audio.sfx.mossPickup();
+          particles.burst(sim.keeper.x, sim.keeper.y0 + 0.5, sim.keeper.z, 10, 2, 0.5, 0x53e6b0, -2);
+          break;
+        case 'cache':
+          audio.sfx.mossPickup();
+          particles.burst(sim.keeper.x, sim.keeper.y0 ? sim.keeper.y0 : terrainYAt(sim.keeper.x, sim.keeper.z) + 0.5, sim.keeper.z, 18, 2.4, 0.7, 0xffb060, -2);
+          UI.toast('Kindling cache — the ember swells', 'good');
+          break;
+        case 'shard':
+          audio.sfx.shardPickup();
+          break;
+        case 'chirp':
+          audio.sfx.beetleChirp(1000 + Math.random() * 400);
+          break;
+        case 'skitter':
+          if (Math.random() < 0.6) audio.sfx.hollowSkitter();
+          break;
+        case 'beetleCold':
+          break; // silent; HUD chip shows it
+        case 'beetleHurt':
+          audio.sfx.beetleHurt();
+          flashDanger(settings.reduceFlash ? 0.12 : 0.3);
+          shake(0.25);
+          break;
+        case 'shieldPop':
+          audio.sfx.uiDeny();
+          particles.burst(lastBeetlePos(ev.data.name).x, 0.8, lastBeetlePos(ev.data.name).z, 16, 3, 0.6, 0x86c8ff, -2);
+          UI.toast(ev.data.name + '\'s shield shattered!', 'warn');
+          break;
+        case 'beetleDeath': {
+          var bp = lastBeetlePos(ev.data.name);
+          if (bp) particles.burst(bp.x, 0.8, bp.z, 42, 4, 1.2, 0xc46a3a, -3);
+          audio.sfx.beetleDie();
+          flashDanger(settings.reduceFlash ? 0.2 : 0.55);
+          shake(0.6);
+          UI.toast('✝ ' + ev.data.name + ' — ' + (ev.data.why || 'lost'), 'death');
+          break;
+        }
+        case 'hollowDie':
+          audio.sfx.hollowDie();
+          break;
+        case 'wispNear':
+          audio.sfx.wispWhisper();
+          UI.toast('Something out there is pretending to be warm…', 'warn');
+          break;
+        case 'lureStart':
+          audio.sfx.wispWhisper();
+          UI.toast(ev.data.name + ' is following a false light!', 'warn');
+          break;
+        case 'wispDie':
+          audio.sfx.wispDie();
+          break;
+        case 'wardens':
+          UI.toast('Frost Wardens stalk the Reach', 'warn');
+          break;
+        case 'wardenStep':
+          if (Math.random() < 0.5) audio.sfx.wardenStep();
+          break;
+        case 'wardenDie':
+          audio.sfx.hollowDie();
+          UI.toast('Warden felled', 'good');
+          break;
+        case 'shrineLit':
+          audio.sfx.shrineRelight();
+          var sh = sim.world.shrines[ev.data.index];
+          if (sh) particles.burst(sh.x, sh.obj.position.y + 2.4, sh.z, 60, 4, 1.4, 0xffc070, -1);
+          UI.toast('Wayshrine relit  ·  ' + sim.shrinesLit + '/8', 'good');
+          lastLitShrineIdx = ev.data.index;
+          break;
+        case 'shrineOpen':
+          openShrine(lastLitShrineIdx || 0);
+          break;
+        case 'shrineClose':
+          state = 'play';
+          UI.hideScreens();
+          lockPointer();
+          break;
+        case 'gateHint':
+          UI.toast('The Dawn Gate waits beyond the Reach.', 'good');
+          break;
+        case 'gustStart':
+          audio.sfx.windGust(0.2);
+          UI.toast('A gust fans the flame!', 'warn');
+          break;
+        case 'wraithSpawn':
+          audio.sfx.wraithRoar();
+          UI.wraithBanner(true);
+          setTimeout(function () { UI.wraithBanner(false); }, 3400);
+          shake(0.8);
+          break;
+        case 'wraithTelegraph':
+          audio.sfx.wraithRoar();
+          if (wraithTeleMarker) updateTelegraphMarker(sim.wraith.teleX, sim.wraith.teleZ);
+          break;
+        case 'wraithDive':
+          audio.sfx.windGust(0.3);
+          break;
+        case 'wraithSlam':
+          audio.sfx.hollowSkitter();
+          flashDanger(settings.reduceFlash ? 0.2 : 0.5);
+          shake(0.7);
+          UI.toast('The Wraith tore heat from you!', 'warn');
+          break;
+        case 'wraithSummon':
+          audio.sfx.hollowSkitter();
+          break;
+        case 'wraithDie':
+          audio.sfx.dawnStinger();
+          shake(1.0);
+          break;
+        case 'upgrade':
+          audio.sfx.upgrade();
+          UI.toast('Upgrade woven into the wick', 'good');
+          refreshShop(sim);
+          break;
+        case 'shopDeny':
+          audio.sfx.uiDeny();
+          break;
+        case 'caravanHealed':
+          audio.sfx.upgrade();
+          refreshShop(sim);
+          break;
+        case 'beetleRevived':
+          UI.toast(ev.data.name + ' crawls back to the light', 'good');
+          refreshShop(sim);
+          break;
+        case 'gameover':
+          endRun(false, ev.data.cause);
+          break;
+        case 'victory':
+          endRun(true, null);
+          break;
+      }
+    });
+  }
+
+  var shockwaves = [];
+  function addShockwave(x, y, z, r) {
+    var ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.5, 0.09, 6, 40),
+      new THREE.MeshBasicMaterial({ color: 0xffc070, transparent: true, opacity: 0.95 })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(x, y, z);
+    scene.add(ring);
+    shockwaves.push({ mesh: ring, t: 0, dur: 0.55, maxR: r });
+  }
+  var teleMarker = null;
+  function ensureTeleMarker() {
+    if (teleMarker) return teleMarker;
+    teleMarker = new THREE.Mesh(
+      new THREE.RingGeometry(1.1, 1.7, 32),
+      new THREE.MeshBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.85, side: THREE.DoubleSide })
+    );
+    teleMarker.rotation.x = -Math.PI / 2;
+    scene.add(teleMarker);
+    teleMarker.visible = false;
+    return teleMarker;
+  }
+  function updateTelegraphMarker(x, z) {
+    var m = ensureTeleMarker();
+    m.position.set(x, (wraithObj ? 0.2 : 0.2) + (terrainYAt(x, z)), z);
+    m.visible = true;
+  }
+  function hideTeleMarker() { if (teleMarker) teleMarker.visible = false; }
+
+  function terrainYAt(x, z) { return sim ? sim.world.height(x, z) : 0; }
+  function lastBeetlePos(name) {
+    var b = sim.beetles.find(function (bb) { return bb.name === name; });
+    return b ? { x: b.x, y0: terrainYAt(b.x, b.z), z: b.z } : null;
+  }
+
+  function shake(mag) {
+    if (!settings.shake) return;
+    shakeMag = Math.max(shakeMag, mag);
+    shakeT = 0.4;
+  }
+
+  // ---------- flow helpers ----------
+  function refreshShop(s) {
+    if (state === 'shrine') UI.openShop(s, currentShrineIdx);
+  }
+  var currentShrineIdx = 0;
+  var lastLitShrineIdx = 0;
+
+  function openShrine(idx) {
+    currentShrineIdx = idx;
+    state = 'shrine';
+    pausedFrom = 'play';
+    UI.openShop(sim, idx);
+    document.exitPointerLock && document.exitPointerLock();
+  }
+
+  function leaveShrine() {
+    state = 'play';
+    UI.hideScreens();
+    sim.input.interact = 2;
+    lockPointer();
+  }
+
+  function endRun(won, cause) {
+    state = won ? 'victory' : 'elegy';
+    UI.showHUD(false);
+    UI.setBossBar(0, false);
+    document.exitPointerLock && document.exitPointerLock();
+    if (won) {
+      UI.fillVictory(sim);
+      UI.showScreen('victory');
+      try {
+        var best = JSON.parse(localStorage.getItem('ew_best') || 'null');
+        if (!best || sim.score > best.score)
+          localStorage.setItem('ew_best', JSON.stringify({ rank: sim.finalStats.rank, score: sim.score }));
+      } catch (e) { /* ignore */ }
+    } else {
+      UI.fillElegy(sim);
+      UI.showScreen('elegy');
+      audio.sfx.gameOver();
+    }
+  }
+
+  // ---------- UI action wiring ----------
+  UI.build({
+    settings: settings,
+    action: function (act, payload) {
+      audio && audio.resume();
+      switch (act) {
+        case 'start': startRun(); break;
+        case 'howto': UI.showScreen('howto'); state = 'howto'; break;
+        case 'backTitle': UI.showScreen('title'); state = 'title'; break;
+        case 'level': setLevel(payload); break;
+        case 'bank': toggleBank(); break;
+        case 'flare': flareQueued = true; break;
+        case 'resume': togglePause(); break;
+        case 'abandon': toTitle(); break;
+        case 'leaveShrine': leaveShrine(); break;
+        case 'restart': startRun(); break;
+        case 'buy':
+          if (sim.buyUpgrade(payload)) { /* events refresh shop */ }
+          else audio.sfx.uiDeny();
+          break;
+        case 'heal':
+          sim.healBeetles();
+          refreshShop(sim);
+          break;
+        case 'setting':
+          if (payload.key === 'master' || payload.key === 'music' || payload.key === 'sfx') {
+            audio.settings[payload.key] = payload.value;
+            audio.applyVolumes();
+            settings[payload.key] = payload.value;
+          } else {
+            settings[payload.key] = payload.value;
+            if (payload.key === 'quality') applyQuality();
+          }
+          saveSettings();
+          break;
+      }
+    }
+  });
+  window.EW = { settings: settings, qualityTiers: ['LOW', 'HIGH', 'ULTRA'] };
+
+  function applyVolumes() {
+    audio.settings.master = settings.master;
+    audio.settings.music = settings.music;
+    audio.settings.sfx = settings.sfx;
+    audio.applyVolumes();
+  }
+
+  function applyQuality() {
+    if (settings.quality === 'LOW') renderer.setPixelRatio(0.66);
+    else if (settings.quality === 'HIGH') renderer.setPixelRatio(1);
+    else renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  }
+  applyQuality();
+
+  window.addEventListener('resize', function () {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ---------- adaptive audio direction ----------
+  function directAudio(dt) {
+    if (!audio || !audio.started) return;
+    var k = sim.keeper;
+    var region = sim.world.regionAtX(k.x);
+    if (region.key !== lastRegionKey) {
+      lastRegionKey = region.key;
+      audio.setRegion(region.key);
+      scene.fog.color.setHex(region.fog);
+      scene.fog.density = region.fogDensity;
+      hemi.color.setHex(region.hemiSky);
+      hemi.groundColor.setHex(region.hemiGround);
+      UI.toast(region.name.toUpperCase() + '', 'region');
+    }
+    // danger level drives mode
+    var danger = 0;
+    sim.hollows.forEach(function (h) {
+      var d = Math.sqrt((h.x - k.x) * (h.x - k.x) + (h.z - k.z) * (h.z - k.z));
+      if (d < 18) danger = Math.max(danger, 1 - d / 18);
+    });
+    if (sim.wraith && sim.wraith.alive && k.x > 350) danger = 1;
+    var mode = danger > 0.45 ? 'danger' : 'safe';
+    if (state === 'victory') mode = 'dawn';
+    audio.setMode(mode);
+    audio.setBanked(k.banked);
+    audio.setCrackle(Math.min(0.16, 0.02 + (k.fuel / k.fuelMax) * 0.12 + (k.gust > 0 ? 0.05 : 0)));
+    // low-fuel heartbeat
+    heartbeatT -= dt;
+    if (k.fuel < 18 && !k.banked && heartbeatT <= 0) {
+      audio.sfx.heartbeat();
+      heartbeatT = 0.85 + (k.fuel / 18) * 0.7;
+    }
+  }
+  var heartbeatT = 0;
+
+  // ---------- objective text ----------
+  function updateObjective() {
+    var txt;
+    if (sim.phase === 'victory') txt = 'Dawn.';
+    if (sim.wraith && sim.wraith.alive) {
+      var hpTxt = Math.ceil(sim.wraith.hp) + '/' + sim.wraith.maxHp;
+      txt = 'THE NIGHT-WRAITH (' + hpTxt + ') — burn it between dives';
+    } else {
+      var next = null;
+      for (var i = 0; i < sim.world.shrines.length; i++) if (!sim.world.shrines[i].lit) { next = sim.world.shrines[i]; break; }
+      if (next) {
+        var d = Math.round(Math.sqrt((next.x - sim.keeper.x) ** 2 + (next.z - sim.keeper.z) ** 2));
+        txt = 'Relight Wayshrine ' + (sim.shrinesLit + 1) + '/8  ·  ' + d + ' m';
+        if (sim.helpers.canInteract()) txt = 'Press E — relight this wayshrine';
+      } else txt = 'Reach the Dawn Gate';
+    }
+    UI.setObjective(txt);
+  }
+
+  // ---------- main loop ----------
+  var clock = new THREE.Clock();
+  var frameCount = 0, fpsAccum = 0, fpsN = 0, avgMs = 16;
+  var autopilotPhase = '';
+
+  function tick() {
+    requestAnimationFrame(tick);
+    var dt = Math.min(clock.getDelta(), 0.05);
+    frameCount++;
+
+    if (!sim) { renderer.render(scene, camera); return; }
+    var k = sim.keeper;
+
+    // ----- build input -----
+    var inp = { mx: 0, mz: 0, level: manualLevel, bank: banked ? 1 : 0, sprint: 0, flare: 0, interact: 0 };
+    if (state === 'play') {
+      if (keys.KeyW || keys.ArrowUp) inp.mz -= 1;   // W = up-screen = away from camera
+      if (keys.KeyS || keys.ArrowDown) inp.mz += 1;
+      if (keys.KeyA || keys.ArrowLeft) inp.mx -= 1;
+      if (keys.KeyD || keys.ArrowRight) inp.mx += 1;
+      if (keys.ShiftLeft || keys.ShiftRight) inp.sprint = 1;
+      if (flareQueued) { inp.flare = 1; flareQueued = false; }
+      if (interactQueued) { inp.interact = 1; interactQueued = false; }
+
+      // rotate movement into camera space (screen-relative semantics):
+      // camera sits at (sin yaw, cos yaw) behind the keeper, so screen-up (W)
+      // must move along forward = (-sin yaw, -cos yaw); right = (-fz, fx).
+      if (inp.mx || inp.mz) {
+        var fx = -Math.sin(camYaw), fz = -Math.cos(camYaw);
+        var rgx = -fz, rgz = fx;
+        var rawMx = inp.mx, rawMz = inp.mz;
+        inp.mx = fx * (-rawMz) + rgx * rawMx;
+        inp.mz = fz * (-rawMz) + rgz * rawMx;
+        var l = Math.sqrt(inp.mx * inp.mx + inp.mz * inp.mz);
+        if (l > 0.001) { inp.mx /= l; inp.mz /= l; }
+      }
+    } else if (state === 'shrine') {
+      if (interactQueued) { leaveShrine(); interactQueued = false; }
+    }
+
+    if (AUTOPILOT && (state === 'play' || state === 'shrine')) {
+      inp = autopilotInput(dt);
+    }
+
+    // ----- simulate -----
+    var evs = [];
+    if (state === 'play' || state === 'shrine') {
+      evs = sim.update(dt, inp);
+      handleEvents(evs, dt);
+    }
+
+    // ----- visuals sync -----
+    syncVisuals(dt);
+    directAudio(dt);
+    updateObjective();
+
+    // HUD
+    if (state === 'play' || state === 'shrine') {
+      UI.updateHUD(sim, camYaw);
+    }
+
+    if (sim.wraith && sim.wraith.alive && state === 'play') {
+      UI.setBossBar(sim.wraith.hp / sim.wraith.maxHp, true);
+    } else UI.setBossBar(0, false);
+
+    // fade overlays
+    if (elDangerFade > 0) elDangerFade -= dt * 2;
+    UI.flashDanger(Math.max(0, elDangerFade));
+
+    // camera
+    updateCamera(dt);
+
+    // perf sampling
+    fpsAccum += dt; fpsN++;
+    if (fpsAccum >= 0.5) { avgMs = (fpsAccum / fpsN) * 1000; fpsAccum = 0; fpsN = 0; }
+
+    // autopilot finish detection
+    if (AUTOPILOT && (sim.phase === 'victory' || sim.phase === 'gameover')) {
+      autopilotReport();
+    }
+
+    renderer.render(scene, camera);
+  }
+
+  function flashDanger(s) {
+    elDangerFade = Math.max(elDangerFade, s);
+  }
+
+  var elDangerFade = 0;
+
+  function syncVisuals(dt) {
+    var k = sim.keeper;
+    var ky = terrainYAt(k.x, k.z);
+    keeperObj.position.set(k.x, ky, k.z);
+    keeperObj.rotation.y = k.face;
+    var flick = 0.9 + Math.sin(performance.now() * 0.02) * 0.08 + Math.random() * 0.06;
+    var lvlScale = k.banked ? 0.25 : [0.55, 0.85, 1.25][k.level];
+    lanternLight.intensity = 1.6 * lvlScale * flick;
+    lanternLight.distance = 40 * lvlScale;
+    lanternLight.position.set(k.x, ky + 2.0, k.z);
+    lanternGlow.position.set(k.x, ky + 2.0, k.z);
+    lanternGlow.scale.set(4.2 * lvlScale * flick, 4.2 * lvlScale * flick, 1);
+
+    // warm radius ring (the safe zone made visible)
+    radiusRing.position.set(k.x, ky + 0.06, k.z);
+    var wr = sim.helpers.warmRadius();
+    radiusRing.scale.set(wr, wr, wr);
+    radiusRing.material.opacity = k.banked ? 0.05 : 0.14;
+
+    // beetles
+    sim.beetles.forEach(function (b, i) {
+      var o = beetleObjs[i];
+      if (!b.alive) { o.visible = false; return; }
+      o.visible = true;
+      var by = terrainYAt(b.x, b.z);
+      b.anim += dt * 9;
+      o.position.set(b.x, by + Math.abs(Math.sin(b.anim)) * 0.05, b.z);
+      var fdx = b.fx !== undefined ? b.fx : 0.01;
+      var fdz = b.fz !== undefined ? b.fz : 0.01;
+      if (Math.abs(fdx) + Math.abs(fdz) > 0.001) {
+        o.rotation.y = Math.atan2(fdx, fdz);
+      }
+      var glow = o.userData.glow;
+      glow.material.opacity = 0.35 + 0.25 * Math.sin(b.anim * 0.6 + i);
+    });
+
+    syncEntityPools();
+    sim.hollows.forEach(function (h, i) {
+      var o = hollowObjs[i];
+      if (!o) return;
+      var hy = terrainYAt(h.x, h.z);
+      h.anim += dt * 11;
+      o.position.set(h.x, hy + Math.abs(Math.sin(h.anim * 1.3)) * 0.07, h.z);
+      o.rotation.y = Math.atan2(k.x - h.x, k.z - h.z);
+      o.visible = true;
+    });
+    sim.wisps.forEach(function (w, i) {
+      var o = wispObjs[i];
+      if (!o) return;
+      var wy = terrainYAt(w.x, w.z);
+      o.position.set(w.x, wy + 1.1 + Math.sin(performance.now() * 0.002 + i * 2) * 0.3, w.z);
+      o.visible = true;
+    });
+    sim.wardens.forEach(function (wd, i) {
+      var o = wardenObjs[i];
+      if (!o) return;
+      var dy = terrainYAt(wd.x, wd.z);
+      o.position.set(wd.x, dy, wd.z);
+      o.rotation.y = Math.atan2(k.x - wd.x, k.z - wd.z);
+      o.userData.orbGlow.material.opacity = 0.6 + 0.3 * Math.sin(performance.now() * 0.004 + i);
+      o.visible = true;
+    });
+    if (sim.wraith && sim.wraith.alive && wraithObj) {
+      var wy2 = terrainYAt(sim.wraith.x, sim.wraith.z);
+      wraithObj.position.set(sim.wraith.x, wy2 + 1.4, sim.wraith.z);
+      wraithObj.rotation.y = Math.atan2(k.x - sim.wraith.x, k.z - sim.wraith.z);
+      var pulseT = performance.now() * 0.003;
+      wraithObj.userData.crownGlow.material.opacity =
+        sim.wraith.state === 'telegraph' ? 1.0 : 0.55 + 0.25 * Math.sin(pulseT);
+      wraithObj.userData.crownGlow.scale.set(
+        sim.wraith.state === 'telegraph' ? 10 : 8.5, sim.wraith.state === 'telegraph' ? 10 : 8.5, 1);
+      wraithObj.userData.ribbons.forEach(function (rib, ri) {
+        rib.rotation.x = Math.sin(performance.now() * 0.002 + ri) * 0.3;
+      });
+    }
+
+    // shrines lit flames
+    sim.world.shrines.forEach(function (s, i) {
+      var o = shrineObjs[i];
+      if (!o) return;
+      if (s.lit) {
+        o.userData.flame.visible = true;
+        o.userData.light.intensity = 1.2 + Math.sin(performance.now() * 0.011 + i) * 0.25;
+        o.userData.flame.material.opacity = 0.8 + Math.sin(performance.now() * 0.013 + i) * 0.15;
+      }
+    });
+
+    // fissure pulse
+    fissureGlows.forEach(function (f) {
+      f.mesh.material.color.setHSL(0.05, 1, 0.45 + Math.sin(performance.now() * 0.003 + f.seed) * 0.1);
+    });
+
+    // shockwaves
+    for (var sw = shockwaves.length - 1; sw >= 0; sw--) {
+      var s = shockwaves[sw];
+      s.t += dt;
+      var pr = s.t / s.dur;
+      if (pr >= 1) {
+        scene.remove(s.mesh);
+        shockwaves.splice(sw, 1);
+      } else {
+        var rr = 0.5 + pr * s.maxR;
+        s.mesh.scale.set(rr, rr, 1);
+        s.mesh.material.opacity = 0.95 * (1 - pr);
+      }
+    }
+
+    // telegraph marker
+    if (sim.wraith && sim.wraith.state === 'telegraph') {
+      updateTelegraphMarker(sim.wraith.teleX, sim.wraith.teleZ);
+    } else hideTeleMarker();
+
+    // particles & weather
+    particles.update(dt);
+    motes.update(dt, k.x, k.z, k.gust > 0 ? (k.gustDirX || 0) * 8 : 0);
+
+    // aurora time + keep sky anchored to the traveler
+    var tt = performance.now() * 0.001;
+    auroraGroup.children.forEach(function (r) {
+      r.material.uniforms.uTime.value = tt;
+      r.quaternion.copy(camera.quaternion);
+    });
+    auroraGroup.position.x = k.x * 0.92;
+    auroraGroup.position.z = k.z * 0.92;
+    skyGroup.position.set(k.x, 0, k.z);
+
+    // prop pickup visibility
+    sim.world.props.forEach(function (p) {
+      if (p.obj && p.dead && p.obj.visible) {
+        if (p.kind === 'moss' || p.kind === 'shard' || p.kind === 'cache') p.obj.visible = false;
+      }
+    });
+  }
+
+  // caches for facing directions
+  var tx_cache = [], tx_cache_dx = [], tx_cache_dz = [];
+
+  var radiusRing = (function () {
+    var g = new THREE.RingGeometry(0.94, 1.0, 64);
+    g.rotateX(-Math.PI / 2);
+    var m = new THREE.MeshBasicMaterial({
+      color: 0xffb454, transparent: true, opacity: 0.14,
+      side: THREE.DoubleSide, depthWrite: false
+    });
+    var r = new THREE.Mesh(g, m);
+    scene.add(r);
+    return r;
+  })();
+
+  function updateCamera(dt) {
+    var k = sim.keeper;
+    var ty = terrainYAt(k.x, k.z);
+    camTarget.set(k.x, ty + 1.8, k.z);
+    var cx = k.x + Math.sin(camYaw) * Math.cos(camPitch) * camDist;
+    var cz = k.z + Math.cos(camYaw) * Math.cos(camPitch) * camDist;
+    var cy = ty + 2.0 + Math.sin(camPitch) * camDist;
+    camPos.lerp(new THREE.Vector3(cx, cy, cz), 1 - Math.pow(0.0015, dt));
+    // terrain clearance
+    var minY = terrainYAt(camPos.x, camPos.z) + 1.2;
+    if (camPos.y < minY) camPos.y = minY;
+    // shake
+    var sx = 0, sy = 0;
+    if (shakeT > 0) {
+      shakeT -= dt;
+      var m = shakeMag * (shakeT / 0.4);
+      sx = (Math.random() - 0.5) * m;
+      sy = (Math.random() - 0.5) * m;
+      if (shakeT <= 0) shakeMag = 0;
+    }
+    camera.position.set(camPos.x + sx, camPos.y + sy, camPos.z);
+    camera.lookAt(camTarget);
+    // gentle idle sway
+    camera.rotation.z += Math.sin(performance.now() * 0.0006) * 0.002;
+  }
+
+  // ---------- autopilot (visual run driver, mirrors the Node-tested strategy) ----------
+  function autopilotInput(dt) {
+    var k = sim.keeper;
+    var inp = { mx: 0, mz: 0, level: 2, bank: 0, sprint: 0, flare: 0, interact: 0 };
+    if (state === 'shrine') {
+      sim.healBeetles();
+      if (sim.shards >= 12 && sim.beetles.some(function (b) { return !b.alive; })) sim.healBeetles();
+      if (sim.shards >= 6 && k.upgrades.wick < 3) sim.buyUpgrade('wick');
+      else if (sim.shards >= 5 && k.upgrades.aura < 3) sim.buyUpgrade('aura');
+      else if (sim.shards >= 5 && k.upgrades.emberH < 3) sim.buyUpgrade('emberH');
+      inp.interact = 2;
+      return inp;
+    }
+    var wr = sim.helpers.warmRadius();
+    var near = 1e9, swarm = 0;
+    sim.hollows.forEach(function (h) {
+      var d = Math.hypot(h.x - k.x, h.z - k.z);
+      near = Math.min(near, d);
+      if (d < wr * 1.15) swarm++;
+    });
+    var wardenNear = false;
+    sim.wardens.forEach(function (wd) {
+      var d = Math.hypot(wd.x - k.x, wd.z - k.z);
+      near = Math.min(near, d * 0.8);
+      if (d < 4.2) wardenNear = true;
+    });
+
+    // boss plan
+    var BW = sim.wraith;
+    if (BW && BW.alive && k.x > 355) {
+      var bfx = 372 - k.x, bfz = 10 - k.z;
+      var bfl = Math.hypot(bfx, bfz);
+      if (bfl > 1.5 && k.fuel < 70) { inp.mx = bfx / bfl; inp.mz = bfz / bfl; }
+      if (BW.state === 'telegraph' || BW.state === 'dive') {
+        var ddx = k.x - BW.teleX, ddz = k.z - BW.teleZ;
+        var dl = Math.hypot(ddx, ddz) || 1;
+        if (dl < 4.0) { inp.mx = -ddz / dl; inp.mz = ddx / dl; }
+      }
+      var bdw = Math.hypot(BW.x - k.x, BW.z - k.z);
+      var bvuln = BW.state === 'dive' || BW.state === 'telegraph';
+      var bnear = 0;
+      sim.hollows.forEach(function (h) { if (Math.hypot(h.x - k.x, h.z - k.z) < 6) bnear++; });
+      inp.flare = (k.flareRecover <= 0 && k.fuel >= 18 &&
+        ((bdw < 11 && (bvuln || bdw < 8.5)) || bnear >= 2)) ? 1 : 0;
+      return inp;
+    }
+
+    if (k.flareRecover <= 0 && k.fuel > 34 && (swarm >= 2 || near < 3.2 || wardenNear)) inp.flare = 1;
+    else if (near < 5.5 && swarm === 0 && sim.wardens.length === 0) inp.level = 0;
+    else if (k.fuel > 55 && swarm === 0 && near > wr) inp.level = 2;
+    else inp.level = k.fuel < 25 ? 0 : 1;
+    if (swarm === 0 && near > 12 && k.fuel < 12) inp.bank = 1;
+
+    // navigation target: next shrine / gate
+    var tgt = null;
+    for (var i = 0; i < sim.world.shrines.length; i++) if (!sim.world.shrines[i].lit) { tgt = sim.world.shrines[i]; break; }
+    if (!tgt) tgt = { x: 396, z: 0 };
+    var dx = tgt.x - k.x, dz = tgt.z - k.z, dl2 = Math.hypot(dx, dz);
+
+    if (dl2 < 3.6 && sim.helpers.canInteract()) { inp.interact = 1; return inp; }
+
+    if (k.fuel < 42) {
+      var food = null, fc = 1e9;
+      sim.world.props.forEach(function (p) {
+        if ((p.kind !== 'moss' && p.kind !== 'cache') || p.dead) return;
+        var pd = Math.hypot(p.x - k.x, p.z - k.z);
+        var cost = pd + (p.kind === 'cache' ? -6 : 0);
+        if (pd < 26 && cost < fc) { fc = cost; food = p; }
+      });
+      if (food) { dx = food.x - k.x; dz = food.z - k.z; dl2 = Math.hypot(dx, dz); }
+    }
+    if (dl2 > 0.5) { inp.mx = dx / dl2; inp.mz = dz / dl2; }
+    inp.sprint = dl2 > 18 && k.fuel > 45 ? 1 : 0;
+    return inp;
+  }
+
+  var apReported = false;
+  function autopilotReport() {
+    if (apReported) return;
+    apReported = true;
+    window.__EW_AUTOPILOT_RESULT = {
+      phase: sim.phase,
+      shrines: sim.shrinesLit,
+      beetlesAlive: sim.beetles.filter(function (b) { return b.alive; }).length,
+      score: sim.score,
+      timeSec: Math.round(sim.t),
+      rank: sim.finalStats ? sim.finalStats.rank : null
+    };
+    console.log('[AUTOPILOT]', JSON.stringify(window.__EW_AUTOPILOT_RESULT));
+  }
+
+  // ---------- QA hooks ----------
+  window.__EW_DEBUG = {
+    get state() { return state; },
+    get sim() { return sim; },
+    start: function () { startRun(); },
+    warp: function (x, z) { if (sim) { sim.keeper.x = x; sim.keeper.z = z; } },
+    giveFuel: function (n) { if (sim) sim.keeper.fuel = n; },
+    giveShards: function (n) { if (sim) sim.shards = n; },
+    spawnBoss: function () { if (sim) sim.helpers.spawnWraith(); },
+    killWraith: function () { if (sim && sim.wraith) sim.helpers.damageWraith(999); },
+    stats: function () { return { fps: +(1000 / avgMs).toFixed(1), ms: +avgMs.toFixed(2), draws: renderer.info.render.calls, tris: renderer.info.render.triangles, geoms: renderer.info.memory.geometries }; },
+    screenshot: function () { return renderer.domElement.toDataURL('image/png'); },
+    setQuality: function (q) { settings.quality = q; applyQuality(); },
+    press: function (code) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: code }));
+      setTimeout(function () { window.dispatchEvent(new KeyboardEvent('keyup', { code: code })); }, 90);
+    },
+    hold: function (code, ms) {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: code }));
+      setTimeout(function () { window.dispatchEvent(new KeyboardEvent('keyup', { code: code })); }, ms || 1000);
+    },
+    get autopilotResult() { return window.__EW_AUTOPILOT_RESULT || null; }
+  };
+
+  // boot
+  if (SKIP_TITLE) {
+    // build immediately and drop into play for automated runs
+    sim = Sim.createSim({ seed: 'EPIC-1' });
+    buildWorld(sim.world);
+    worldBuilt = true;
+    audio = Audio.create(); applyVolumes();
+    if (!QA) audio.start(); else { try { audio.start(); } catch (e) { } }
+    audio.setRegion('ashfall');
+    state = 'play';
+    UI.hideScreens();
+    UI.showHUD(true);
+    if (AUTOPILOT) console.log('[AUTOPILOT] run started');
+  } else {
+    UI.showScreen('title');
+  }
+  tick();
+})();

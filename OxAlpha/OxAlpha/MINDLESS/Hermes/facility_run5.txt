@@ -1,6 +1,0 @@
-0s play -- -- -- --
-5s play A- -- -- --
-15s play AC A- -- --
-30s play AC AC A- --
-45s play AC AC AC --
-50s play AC AC AC A-

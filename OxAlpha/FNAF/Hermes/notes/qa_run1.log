@@ -1,0 +1,8 @@
+QA DRIVER CRASH: Error [ReferenceError]: WD is not defined
+    at evaluate (evaluate at main (file:///C:/Users/Epic/Documents/ChatGPT/Ox%20model%20test/FNAF-Hermes/test/qa.mjs:52:29), <anonymous>:0:14)
+    at #evaluate (file:///C:/Users/Epic/Documents/ChatGPT/Ox%20model%20test/FNAF-Hermes/node_modules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:402:19)
+    at async ExecutionContext.evaluate (file:///C:/Users/Epic/Documents/ChatGPT/Ox%20model%20test/FNAF-Hermes/node_modules/puppeteer-core/lib/puppeteer/cdp/ExecutionContext.js:288:16)
+    at async IsolatedWorld.evaluate (file:///C:/Users/Epic/Documents/ChatGPT/Ox%20model%20test/FNAF-Hermes/node_modules/puppeteer-core/lib/puppeteer/cdp/IsolatedWorld.js:104:16)
+    at async CdpFrame.evaluate (file:///C:/Users/Epic/Documents/ChatGPT/Ox%20model%20test/FNAF-Hermes/node_modules/puppeteer-core/lib/puppeteer/api/Frame.js:364:20)
+    at async CdpPage.evaluate (file:///C:/Users/Epic/Documents/ChatGPT/Ox%20model%20test/FNAF-Hermes/node_modules/puppeteer-core/lib/puppeteer/api/Page.js:832:20)
+    at async main (file:///C:/Users/Epic/Documents/ChatGPT/Ox%20model%20test/FNAF-Hermes/test/qa.mjs:52:18)

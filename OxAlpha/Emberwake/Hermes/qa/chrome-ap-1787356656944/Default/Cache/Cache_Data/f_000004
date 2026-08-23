@@ -1,0 +1,462 @@
+/* Emberwake — entities.js
+ * Procedural mesh factories + pooled particles + glow sprites. Global `window.EWEnt`.
+ */
+(function (root, factory) {
+  if (typeof module !== 'undefined' && module.exports) module.exports = factory();
+  else root.EWEnt = factory();
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+
+  var MAT_CACHE = {};
+
+  function lam(color, opts) {
+    opts = opts || {};
+    var key = 'L' + color + '_' + (opts.flat ? 1 : 0) + '_' + (opts.emissive || 0);
+    if (!MAT_CACHE[key]) {
+      MAT_CACHE[key] = new THREE.MeshLambertMaterial({
+        color: color,
+        emissive: opts.emissive || 0x000000,
+        transparent: !!opts.opacity && opts.opacity < 1,
+        opacity: opts.opacity || 1
+      });
+    }
+    return MAT_CACHE[key];
+  }
+
+  // ---- canvas glow texture (shared) ----
+  var _glowTex = null;
+  function glowTexture() {
+    if (_glowTex) return _glowTex;
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var g = c.getContext('2d');
+    var grd = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+    grd.addColorStop(0, 'rgba(255,255,255,1)');
+    grd.addColorStop(0.25, 'rgba(255,255,255,0.55)');
+    grd.addColorStop(0.6, 'rgba(255,255,255,0.16)');
+    grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, 128, 128);
+    _glowTex = new THREE.CanvasTexture(c);
+    return _glowTex;
+  }
+
+  function makeGlow(hexColor, size, opacity) {
+    var m = new THREE.SpriteMaterial({
+      map: glowTexture(), color: hexColor,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+      transparent: true, opacity: opacity == null ? 0.85 : opacity
+    });
+    var s = new THREE.Sprite(m);
+    s.scale.set(size, size, 1);
+    return s;
+  }
+
+  // ================= BEETLE =================
+  var BEETLE_SHELLS = [0xc46a3a, 0x3aa38a, 0xa8518c, 0x5077b8, 0xb89b3a];
+  var BEETLE_NAMES = ['Bramble', 'Cinder', 'Juniper', 'Wick', 'Marzen', 'Soot', 'Tansy', 'Emberly'];
+
+  function makeBeetle(shellHex) {
+    var g = new THREE.Group();
+    var shellMat = new THREE.MeshLambertMaterial({ color: shellHex });
+    var body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 9, 7), shellMat);
+    body.scale.set(1.15, 0.72, 1.35); body.position.y = 0.34;
+    body.castShadow = false;
+    g.add(body);
+    var seam = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.06, 0.75), lam(0x241812));
+    seam.position.y = 0.56; g.add(seam);
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 7, 6), lam(0x2c2018, { flat: true }));
+    head.position.set(0, 0.32, 0.56); g.add(head);
+    // antennae
+    for (var sgn = -1; sgn <= 1; sgn += 2) {
+      var ant = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, 0.34, 4), lam(0x2c2018));
+      ant.position.set(sgn * 0.08, 0.52, 0.68);
+      ant.rotation.x = -0.7; ant.rotation.z = sgn * 0.35;
+      g.add(ant);
+    }
+    // legs
+    var legGeo = new THREE.CylinderGeometry(0.022, 0.012, 0.36, 4);
+    for (var i = 0; i < 4; i++) {
+      for (var s2 = -1; s2 <= 1; s2 += 2) {
+        var leg = new THREE.Mesh(legGeo, lam(0x241a14));
+        leg.position.set(s2 * 0.42, 0.16, -0.28 + i * 0.2);
+        leg.rotation.z = s2 * 0.95;
+        leg.userData.baseZ = leg.position.z;
+        g.add(leg);
+      }
+    }
+    // lantern abdomen glow
+    var glow = makeGlow(shellHex, 1.15, 0.5);
+    glow.position.set(0, 0.34, -0.5);
+    g.add(glow);
+    g.userData.glow = glow;
+    g.userData.legs = [];
+    g.traverse(function (o) { if (o.geometry && o.geometry.type === 'CylinderGeometry' && o.rotation.z !== 0) g.userData.legs.push(o); });
+    return g;
+  }
+
+  // ================= HOLLOW =================
+  function makeHollow() {
+    var g = new THREE.Group();
+    var body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), lam(0x11131f, { flat: true }));
+    body.scale.set(1.25, 0.6, 1.0); body.position.y = 0.34;
+    g.add(body);
+    for (var i = 0; i < 4; i++) {
+      var sp = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.42, 5), lam(0x0b0d16, { flat: true }));
+      sp.position.set((i % 2 ? 0.3 : -0.3), 0.62, -0.2 + Math.floor(i / 2) * 0.36);
+      sp.rotation.z = (i % 2 ? -0.5 : 0.5); sp.rotation.x = -0.25;
+      g.add(sp);
+    }
+    for (var sgn = -1; sgn <= 1; sgn += 2) {
+      var claw = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.4, 5), lam(0x161a29, { flat: true }));
+      claw.position.set(sgn * 0.55, 0.3, 0.28);
+      claw.rotation.z = sgn * 1.9;
+      g.add(claw);
+      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5),
+        new THREE.MeshBasicMaterial({ color: 0x9fd8e8 }));
+      eye.position.set(sgn * 0.17, 0.46, 0.44);
+      g.add(eye);
+    }
+    // legs
+    var legGeo = new THREE.CylinderGeometry(0.02, 0.01, 0.4, 4);
+    for (var l = 0; l < 3; l++) {
+      for (var s2 = -1; s2 <= 1; s2 += 2) {
+        var leg = new THREE.Mesh(legGeo, lam(0x0b0d16));
+        leg.position.set(s2 * 0.5, 0.14, -0.22 + l * 0.24);
+        leg.rotation.z = s2 * 1.05;
+        g.add(leg);
+      }
+    }
+    return g;
+  }
+
+  // ================= WISP =================
+  function makeWisp() {
+    var g = new THREE.Group();
+    var core = new THREE.Mesh(new THREE.SphereGeometry(0.13, 7, 6),
+      new THREE.MeshBasicMaterial({ color: 0xd8f2e8 }));
+    g.add(core);
+    var halo = makeGlow(0x9fe8c8, 1.6, 0.8);
+    g.add(halo);
+    g.userData.halo = halo;
+    return g;
+  }
+
+  // ================= WARDEN =================
+  function makeWarden() {
+    var g = new THREE.Group();
+    var robe = new THREE.Mesh(new THREE.ConeGeometry(0.85, 2.6, 7), lam(0x274052, { flat: true }));
+    robe.position.y = 1.3; g.add(robe);
+    var hood = new THREE.Mesh(new THREE.SphereGeometry(0.42, 7, 6), lam(0x1c3040, { flat: true }));
+    hood.position.y = 2.55; g.add(hood);
+    var face = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5),
+      new THREE.MeshBasicMaterial({ color: 0xbfeaff }));
+    face.position.set(0, 2.5, 0.3); g.add(face);
+    var staff = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 2.6, 5), lam(0x101c26));
+    staff.position.set(0.75, 1.3, 0.1); staff.rotation.z = -0.08; g.add(staff);
+    var orbGlow = makeGlow(0x86c8ff, 0.9, 0.9);
+    orbGlow.position.set(0.83, 2.5, 0.1); g.add(orbGlow);
+    g.userData.orbGlow = orbGlow;
+    return g;
+  }
+
+  // ================= WRAITH =================
+  function makeWraith() {
+    var g = new THREE.Group();
+    var coreMat = new THREE.MeshLambertMaterial({ color: 0x0a0e1a, transparent: true, opacity: 0.92 });
+    var body = new THREE.Mesh(new THREE.ConeGeometry(2.6, 6.4, 8), coreMat);
+    body.position.y = 3.2; body.rotation.x = Math.PI; body.scale.set(1, 1, 0.72);
+    g.add(body);
+    var shroud = new THREE.Mesh(new THREE.SphereGeometry(2.0, 8, 6), coreMat.clone());
+    shroud.scale.set(1.15, 0.55, 1.0); shroud.position.y = 0.6;
+    g.add(shroud);
+    var eyeMat = new THREE.MeshBasicMaterial({ color: 0xcfeaff });
+    for (var sgn = -1; sgn <= 1; sgn += 2) {
+      var eye = new THREE.Mesh(new THREE.SphereGeometry(0.22, 6, 5), eyeMat);
+      eye.position.set(sgn * 0.55, 4.4, 0.9);
+      g.add(eye);
+    }
+    var crownGlow = makeGlow(0x7fb8e8, 7.5, 0.5);
+    crownGlow.position.y = 3.4; g.add(crownGlow);
+    g.userData.crownGlow = crownGlow;
+    // ribbon trails
+    var ribbons = [];
+    for (var i = 0; i < 5; i++) {
+      var rib = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.7, 5.2, 1, 4),
+        new THREE.MeshBasicMaterial({ color: 0x16233c, transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+      );
+      rib.position.set(-1.6 + i * 0.8, 1.6, -0.4);
+      g.add(rib); ribbons.push(rib);
+    }
+    g.userData.ribbons = ribbons;
+    return g;
+  }
+
+  // ================= SHRINE / GATE / PROPS =================
+  function makeShrine() {
+    var g = new THREE.Group();
+    var base = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 2.0, 0.5, 8), lam(0x4b4f5e, { flat: true }));
+    base.position.y = 0.25; g.add(base);
+    var plinth = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.5, 1.0), lam(0x565b6c, { flat: true }));
+    plinth.position.y = 1.2; g.add(plinth);
+    var bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.4, 0.42, 8), lam(0x3a2c20, { flat: true }));
+    bowl.position.y = 2.1; g.add(bowl);
+    // arch
+    var arch = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.14, 6, 14, Math.PI), lam(0x565b6c, { flat: true }));
+    arch.position.y = 1.6; arch.rotation.y = Math.PI / 2;
+    g.add(arch);
+    // kindling post sign
+    var post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.0, 0.14), lam(0x4a3826));
+    post.position.set(1.6, 0.5, 0); g.add(post);
+    var board = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.06), lam(0x6b4f30));
+    board.position.set(1.6, 1.1, 0); g.add(board);
+    // flame (hidden until lit)
+    var flame = makeGlow(0xffb454, 2.6, 0.95);
+    flame.position.y = 2.6; flame.visible = false; g.add(flame);
+    var light = new THREE.PointLight(0xff9c48, 0, 26, 2);
+    light.position.y = 2.7; g.add(light);
+    g.userData.flame = flame; g.userData.light = light;
+    return g;
+  }
+
+  function makeDawnGate() {
+    var g = new THREE.Group();
+    var pillarGeo = new THREE.BoxGeometry(2.2, 16, 2.2);
+    for (var sgn = -1; sgn <= 1; sgn += 2) {
+      var p = new THREE.Mesh(pillarGeo, lam(0x3d3a4a, { flat: true }));
+      p.position.set(sgn * 5.2, 8, 0);
+      g.add(p);
+      var cap = new THREE.Mesh(new THREE.ConeGeometry(1.8, 2.4, 4), lam(0x4c4960, { flat: true }));
+      cap.position.set(sgn * 5.2, 17.2, 0); cap.rotation.y = Math.PI / 4;
+      g.add(cap);
+    }
+    var lintel = new THREE.Mesh(new THREE.BoxGeometry(13.4, 1.6, 2.0), lam(0x4c4960, { flat: true }));
+    lintel.position.y = 15.2; g.add(lintel);
+    // warm crystals embedded
+    for (var i = 0; i < 7; i++) {
+      var cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.34),
+        new THREE.MeshBasicMaterial({ color: 0xffc06a }));
+      cr.position.set(-4.5 + i * 1.5, 13.6 + (i % 3) * 0.8, 1.1);
+      g.add(cr);
+    }
+    var glow = makeGlow(0xffb060, 10, 0.35);
+    glow.position.y = 7.5; g.add(glow);
+    return g;
+  }
+
+  function makeTree(kind, variant) {
+    var g = new THREE.Group();
+    if (kind === 'birch') {
+      var trunkH = 2.6 + variant * 0.5;
+      var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.14, trunkH, 5), lam(0xcfc8bd));
+      trunk.position.y = trunkH / 2; g.add(trunk);
+      for (var b = 0; b < 2; b++) {
+        var cano = new THREE.Mesh(new THREE.SphereGeometry(0.9 - b * 0.22, 7, 5),
+          new THREE.MeshLambertMaterial({ color: b ? 0x7d9070 : 0x93a67e }));
+        cano.position.set((b - 0.5) * 0.5, trunkH + 0.5 - b * 0.7, (b - 0.5) * 0.3);
+        cano.scale.y = 0.8;
+        g.add(cano);
+      }
+    } else if (kind === 'pine' || kind === 'spruce') {
+      var h = kind === 'spruce' ? 4.6 : 3.4;
+      var tcol = kind === 'spruce' ? 0x1e3229 : 0x2c4238;
+      var tr = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.16, 1.2, 5), lam(0x3a2c22));
+      tr.position.y = 0.6; g.add(tr);
+      for (var c = 0; c < 3; c++) {
+        var cone = new THREE.Mesh(new THREE.ConeGeometry(1.5 - c * 0.42, 1.7, 7),
+          new THREE.MeshLambertMaterial({ color: tcol }));
+        cone.position.y = 1.4 + c * 1.05;
+        g.add(cone);
+      }
+      if (kind === 'spruce') g.scale.set(1, 1.25, 1);
+    } else { // dead
+      var th = 2.8 + variant * 0.6;
+      var dt = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.2, th, 5), lam(0x2a2020, { flat: true }));
+      dt.position.y = th / 2; g.add(dt);
+      for (var br = 0; br < 3; br++) {
+        var limb = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.07, 1.3, 4), lam(0x2a2020));
+        limb.position.y = th * (0.55 + br * 0.15);
+        limb.rotation.z = (br % 2 ? -1 : 1) * (0.7 + br * 0.2);
+        limb.rotation.y = br * 2.1;
+        limb.translateY(0.5);
+        g.add(limb);
+      }
+    }
+    return g;
+  }
+
+  function makeRock(variant) {
+    var geo = variant === 0 ? new THREE.DodecahedronGeometry(0.8)
+      : variant === 1 ? new THREE.IcosahedronGeometry(0.7)
+        : new THREE.OctahedronGeometry(0.9);
+    var m = new THREE.Mesh(geo, lam(0x585d6b, { flat: true }));
+    m.scale.y = 0.7;
+    return m;
+  }
+
+  function makeSpire() {
+    var m = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.6, 5), lam(0x4c5160, { flat: true }));
+    m.position.y = 1.1;
+    return m;
+  }
+
+  function makeMossTuft() {
+    var g = new THREE.Group();
+    for (var i = 0; i < 4; i++) {
+      var blade = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.4 + Math.random() * 0.3, 4),
+        new THREE.MeshBasicMaterial({ color: 0x53e6b0 }));
+      blade.position.set((Math.random() - 0.5) * 0.3, 0.2, (Math.random() - 0.5) * 0.3);
+      blade.rotation.z = (Math.random() - 0.5) * 0.5;
+      g.add(blade);
+    }
+    var glow = makeGlow(0x53e6b0, 0.85, 0.5);
+    glow.position.y = 0.3;
+    g.add(glow);
+    return g;
+  }
+
+  function makeShardCrystal() {
+    var g = new THREE.Group();
+    var cr = new THREE.Mesh(new THREE.OctahedronGeometry(0.3),
+      new THREE.MeshLambertMaterial({ color: 0xff9a3c, emissive: 0x994d10 }));
+    cr.position.y = 0.42; cr.rotation.z = 0.2;
+    g.add(cr);
+    var glow = makeGlow(0xff9a3c, 1.1, 0.6);
+    glow.position.y = 0.42;
+    g.add(glow);
+    return g;
+  }
+
+  function makeCampfire() {
+    var g = new THREE.Group();
+    for (var i = 0; i < 5; i++) {
+      var log = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.9, 5), lam(0x4a3826));
+      log.rotation.z = Math.PI / 2.4;
+      log.rotation.y = i * (Math.PI * 2 / 5);
+      log.position.y = 0.12;
+      g.add(log);
+    }
+    var flame = makeGlow(0xffa040, 1.6, 0.9);
+    flame.position.y = 0.5; g.add(flame);
+    var light = new THREE.PointLight(0xff9c48, 1.1, 14, 2);
+    light.position.y = 0.9; g.add(light);
+    g.userData.flame = flame; g.userData.light = light;
+    return g;
+  }
+
+  // ================= PARTICLE POOL =================
+  function ParticlePool(scene, max) {
+    max = max || 500;
+    this.max = max;
+    this.pos = new Float32Array(max * 3);
+    this.col = new Float32Array(max * 3);
+    this.parts = [];
+    for (var i = 0; i < max; i++) this.parts.push({ alive: false, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 0, maxLife: 1, r: 1, g: 1, b: 1, grav: 0, drag: 1 });
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
+    var mat = new THREE.PointsMaterial({
+      size: 0.22, vertexColors: true, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+      map: glowTexture()
+    });
+    this.points = new THREE.Points(geo, mat);
+    this.points.frustumCulled = false;
+    this.cursor = 0;
+    scene.add(this.points);
+  }
+
+  ParticlePool.prototype.spawn = function (x, y, z, vx, vy, vz, life, hexColor, grav, drag) {
+    var p = this.parts[this.cursor];
+    this.cursor = (this.cursor + 1) % this.max;
+    p.alive = true;
+    p.x = x; p.y = y; p.z = z;
+    p.vx = vx; p.vy = vy; p.vz = vz;
+    p.life = life; p.maxLife = life;
+    p.r = ((hexColor >> 16) & 255) / 255;
+    p.g = ((hexColor >> 8) & 255) / 255;
+    p.b = (hexColor & 255) / 255;
+    p.grav = grav == null ? -3 : grav;
+    p.drag = drag == null ? 0.985 : drag;
+  };
+
+  ParticlePool.prototype.burst = function (x, y, z, n, speed, life, hexColor, grav) {
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * Math.PI * 2, up = Math.random();
+      var sp = speed * (0.4 + Math.random() * 0.6);
+      this.spawn(x, y, z,
+        Math.cos(a) * sp, up * sp * 1.4 + 1.2, Math.sin(a) * sp,
+        life * (0.6 + Math.random() * 0.6), hexColor, grav, 0.97);
+    }
+  };
+
+  ParticlePool.prototype.update = function (dt) {
+    var ps = this.parts;
+    for (var i = 0; i < ps.length; i++) {
+      var p = ps[i];
+      if (!p.alive) { this.pos[i * 3 + 1] = -9999; continue; }
+      p.life -= dt;
+      if (p.life <= 0) { p.alive = false; this.pos[i * 3 + 1] = -9999; continue; }
+      p.vy += p.grav * dt;
+      p.vx *= p.drag; p.vz *= p.drag;
+      p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      var f = p.life / p.maxLife;
+      this.pos[i * 3] = p.x; this.pos[i * 3 + 1] = p.y; this.pos[i * 3 + 2] = p.z;
+      this.col[i * 3] = p.r * f; this.col[i * 3 + 1] = p.g * f; this.col[i * 3 + 2] = p.b * f;
+    }
+    this.points.geometry.attributes.position.needsUpdate = true;
+    this.points.geometry.attributes.color.needsUpdate = true;
+  };
+
+  // ================= SNOW / ASH MOTES =================
+  function MoteField(scene, count, area, colorHex, size, fallSpeed) {
+    this.count = count; this.area = area; this.fall = fallSpeed;
+    this.posArr = new Float32Array(count * 3);
+    this.drift = [];
+    for (var i = 0; i < count; i++) {
+      this.posArr[i * 3] = (Math.random() - 0.5) * area;
+      this.posArr[i * 3 + 1] = Math.random() * 30;
+      this.posArr[i * 3 + 2] = (Math.random() - 0.5) * area;
+      this.drift.push({ ph: Math.random() * Math.PI * 2, sp: 0.6 + Math.random() });
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(this.posArr, 3));
+    var mat = new THREE.PointsMaterial({
+      color: colorHex, size: size, transparent: true, opacity: 0.7,
+      depthWrite: false, map: glowTexture(), blending: THREE.NormalBlending
+    });
+    this.points = new THREE.Points(geo, mat);
+    this.points.frustumCulled = false;
+    scene.add(this.points);
+  }
+  MoteField.prototype.update = function (dt, camX, camZ, windX) {
+    for (var i = 0; i < this.count; i++) {
+      var y = this.posArr[i * 3 + 1] - this.fall * dt;
+      var d = this.drift[i];
+      this.posArr[i * 3] += Math.sin(d.ph + performance.now() * 0.0006 * d.sp) * dt * 0.6 + (windX || 0) * dt;
+      this.posArr[i * 3 + 2] += Math.cos(d.ph * 1.3 + performance.now() * 0.0004 * d.sp) * dt * 0.4;
+      if (y < -2) { y = 26 + Math.random() * 6; }
+      this.posArr[i * 3 + 1] = y;
+      // wrap around camera
+      var dx = this.posArr[i * 3] - camX, dz = this.posArr[i * 3 + 2] - camZ;
+      if (dx > this.area / 2) this.posArr[i * 3] -= this.area;
+      if (dx < -this.area / 2) this.posArr[i * 3] += this.area;
+      if (dz > this.area / 2) this.posArr[i * 3 + 2] -= this.area;
+      if (dz < -this.area / 2) this.posArr[i * 3 + 2] += this.area;
+    }
+    this.points.geometry.attributes.position.needsUpdate = true;
+  };
+
+  return {
+    lam: lam, makeGlow: makeGlow, glowTexture: glowTexture,
+    BEETLE_SHELLS: BEETLE_SHELLS, BEETLE_NAMES: BEETLE_NAMES,
+    makeBeetle: makeBeetle, makeHollow: makeHollow, makeWisp: makeWisp,
+    makeWarden: makeWarden, makeWraith: makeWraith,
+    makeShrine: makeShrine, makeDawnGate: makeDawnGate,
+    makeTree: makeTree, makeRock: makeRock, makeSpire: makeSpire,
+    makeMossTuft: makeMossTuft, makeShardCrystal: makeShardCrystal,
+    makeCampfire: makeCampfire,
+    ParticlePool: ParticlePool, MoteField: MoteField
+  };
+});

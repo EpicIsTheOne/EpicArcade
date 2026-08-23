@@ -1,0 +1,38 @@
+PASS  boot: menu screen reached  — "menu"
+PASS  boot: all 5 characters loaded  — bolt,sera,wonder,orv,rivets
+   shot: qa_01_menu.png
+PASS  night start: screen=play
+PASS  night start: power near-full and draining  — power=97.2
+PASS  controls: mouse right => view right  — dyaw=-0.2300
+PASS  controls: mouse up => view up  — dpitch=0.2300
+PASS  controls: invertY option flips vertical
+PASS  controls: D toggles west door
+PASS  controls: D again reopens west door
+PASS  controls: E toggles east door
+PASS  controls: S toggles vent seal
+PASS  controls: SPACE opens monitor
+PASS  monitor open: usage pips rose  — pips=4
+PASS  camera system: all 10 feeds selectable
+PASS  camera map state tracks selection
+   shot: qa_02_monitor.png
+PASS  music box winds while held  — box=100
+PASS  AI night1: Orv active on stage  — {"room":"stage","state":"dormant","moving":false,"doorSide":null,"pos":[0,-16.64]}
+PASS  AI: forced relocation to dining applied  — {"room":"dining","state":"roam","moving":false,"doorSide":null,"pos":[0,-7.15]}
+PASS  AI: Orv roams rooms over time  — {"room":"dining","state":"roam","moving":false,"doorSide":null,"pos":[0,-7.15]}
+PASS  mechanic hook: rivets can reach vent_n  — {"room":"vent_n","state":"in_vent"}
+PASS  mechanic hook: bolt can reach hall_e  — {"room":"hall_e","state":"roam"}
+PASS  mechanic hook: sera can reach door_l  — {"room":"door_l","state":"at_door"}
+PASS  mechanic hook: wonder can reach backstage  — {"room":"backstage","state":"roam"}
+PASS  death: jumpscare leads to death screen  — dead/orv
+   shot: qa_03_death.png
+PASS  blackout: power outage triggers  — power=0
+   shot: qa_04_blackout.png
+PASS  blackout: death follows the dark  — deadBy=orv
+PASS  win: surviving reaches 6AM  — unlocked=2
+PASS  win: unlocks next night  — unlocked=2
+PASS  night 5: all five threats active  — orv,rivets,bolt,sera,wonder
+PASS  lore: file unlock persisted to save  — 1
+PASS  performance: headless render loop alive  — {"fps":60,"drawCalls":1,"tris":1}
+PASS  console: no page errors
+
+===== QA SUMMARY: 32/32 passed =====

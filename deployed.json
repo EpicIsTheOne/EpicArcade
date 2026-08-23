@@ -1,4 +1,11 @@
 {
+  "Emberwake/Hermes": "https://techexplore.us/Emberwake/Hermes/",
+  "FNAF/Hermes": "https://techexplore.us/FNAF/Hermes/",
+  "Fortnite/Hermes": "https://techexplore.us/Fortnite/Hermes/",
+  "GTA/Hermes": "https://techexplore.us/GTA/Hermes/",
+  "Lumencraft/OpenCode": "https://techexplore.us/Lumencraft/OpenCode/",
+  "MINDLESS/Hermes": "https://techexplore.us/MINDLESS/Hermes/",
+  "MinecraftVoxel/Hermes": "https://techexplore.us/MinecraftVoxel/Hermes/",
   "OxAlpha/Emberwake/Hermes": "https://techexplore.us/OxAlpha/Emberwake/Hermes/",
   "OxAlpha/FNAF/Hermes": "https://techexplore.us/OxAlpha/FNAF/Hermes/",
   "OxAlpha/Fortnite/Hermes": "https://techexplore.us/OxAlpha/Fortnite/Hermes/",
@@ -10,5 +17,10 @@
   "OxAlpha/Pulse9/Hermes": "https://techexplore.us/OxAlpha/Pulse9/Hermes/",
   "OxAlpha/Pulse9Studio/Hermes": "https://techexplore.us/OxAlpha/Pulse9Studio/Hermes/",
   "OxAlpha/SpeedGame/Hermes": "https://techexplore.us/OxAlpha/SpeedGame/Hermes/",
-  "OxAlpha/SubwaySurfers/Hermes": "https://techexplore.us/OxAlpha/SubwaySurfers/Hermes/"
+  "OxAlpha/SubwaySurfers/Hermes": "https://techexplore.us/OxAlpha/SubwaySurfers/Hermes/",
+  "Portal/Hermes": "https://techexplore.us/Portal/Hermes/",
+  "Pulse9/Hermes": "https://techexplore.us/Pulse9/Hermes/",
+  "Pulse9Studio/Hermes": "https://techexplore.us/Pulse9Studio/Hermes/",
+  "SpeedGame/Hermes": "https://techexplore.us/SpeedGame/Hermes/",
+  "SubwaySurfers/Hermes": "https://techexplore.us/SubwaySurfers/Hermes/"
 }
