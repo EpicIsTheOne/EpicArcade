@@ -192,6 +192,23 @@ test("overrides.json wins for title/description/tags", async () => {
   assert.deepEqual(g.tags, ["game", "favorite"]);
 });
 
+test("scanBuilds surfaces .status.json as buildStatus (null when absent/garbage)", async () => {
+  const root = await buildFixture({ after() {} });
+  await put(path.join(root, "Fake Game", ".status.json"), JSON.stringify({
+    status: "done", checks: "passed",
+    lastChangeAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T01:00:00Z",
+  }));
+  await put(path.join(root, "PubBuild", ".status.json"), "{not json");
+  const builds = await scanBuilds(root);
+  const g = builds.find((b) => b.id === "fake-game");
+  assert.equal(g.buildStatus.status, "done");
+  assert.equal(g.buildStatus.checks, "passed");
+  assert.equal(g.buildStatus.lastChangeAt, "2026-01-01T00:00:00Z");
+  // invalid status value coerces to inprogress; garbage json -> null
+  const p = builds.find((b) => b.id === "pubbuild");
+  assert.equal(p.buildStatus, null);
+});
+
 test("mtime walk skips node_modules and .git", async () => {
   const root = await buildFixture({ after() {} });
   const gameDir = path.join(root, "Fake Game");

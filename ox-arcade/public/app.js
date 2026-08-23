@@ -141,7 +141,16 @@ function render() {
     img.addEventListener("error", () => { img.removeAttribute("src"); });
 
     const ribbon = node.querySelector(".ribbon");
-    if (b.remote && b.status === "undeployed") {
+    const st = b.buildStatus;
+    if (b.status === "incomplete") {
+      ribbon.textContent = "INCOMPLETE";
+    } else if (st && st.status === "done") {
+      ribbon.textContent = "DONE";
+      ribbon.classList.add("green");
+    } else if (st && st.status === "inprogress") {
+      ribbon.textContent = "IN PROGRESS";
+      ribbon.classList.add("amber");
+    } else if (b.remote && b.status === "undeployed") {
       ribbon.textContent = "UNDEPLOYED";
       ribbon.classList.add("muted");
     } else if (b.remote) {
@@ -275,8 +284,10 @@ function openOverlay(id) {
   const hz = hzOf(b);
   const hzLabel = hz && state.hzMeta[hz] ? state.hzMeta[hz].label : "—";
   const mp = b.multiplayer;
+  const bst = b.buildStatus;
   meta.innerHTML = `
     <dt>STATUS</dt><dd>${b.status}</dd>
+    ${bst ? `<dt>BUILD</dt><dd>${bst.status} · checks ${bst.checks}</dd>` : ""}
     <dt>HARNESS</dt><dd class="mono">${hzLabel}</dd>
     ${b.model ? `<dt>MODEL</dt><dd class="mono">${b.model}</dd>` : ""}
     <dt>NETCODE</dt><dd class="mono">${mp && mp.supported ? mp.signals.join(" + ") + (mp.endpoint ? " · " + mp.endpoint : "") : "single-player"}</dd>

@@ -191,6 +191,22 @@ async function collectShots(dir, id) {
   return out;
 }
 
+// Per-build agent status protocol (.status.json next to the entry):
+// {"status":"done|inprogress","checks":"passed|failed|untested",
+//  "lastChangeAt":ISO,"updatedAt":ISO}. Absent/garbage -> null.
+async function readBuildStatus(dir) {
+  let d;
+  try { d = JSON.parse(await fs.readFile(path.join(dir, ".status.json"), "utf8")); }
+  catch { return null; }
+  if (!d || typeof d !== "object") return null;
+  return {
+    status: d.status === "done" ? "done" : "inprogress",
+    checks: ["passed", "failed", "untested"].includes(d.checks) ? d.checks : "untested",
+    lastChangeAt: typeof d.lastChangeAt === "string" ? d.lastChangeAt : null,
+    updatedAt: typeof d.updatedAt === "string" ? d.updatedAt : null,
+  };
+}
+
 function tagFor(dirName, hasEntry) {
   if (!hasEntry) return ["incomplete"];
   if (/fl studio/i.test(dirName)) return ["instrument"];
@@ -308,6 +324,7 @@ async function scanBuilds(root, opts = {}) {
       tags: ov.tags || tagFor(c.name, !!entry),
       shots: await collectShots(dir, id),
       multiplayer: await multiplayerFor(dir, ov),
+      buildStatus: await readBuildStatus(dir),
       thumbWaitMs: Number(ov.thumbWaitMs) || undefined,
       harness: deriveHarness(c.name, ov.harness),
     };
@@ -317,4 +334,4 @@ async function scanBuilds(root, opts = {}) {
   return clean;
 }
 
-module.exports = { scanBuilds, slugify, findEntry, resolveEntry, deriveHarness, parseFolderMeta, HARNESS_META, detectNetcode, multiplayerFor };
+module.exports = { scanBuilds, slugify, findEntry, resolveEntry, deriveHarness, parseFolderMeta, HARNESS_META, detectNetcode, multiplayerFor, readBuildStatus };
