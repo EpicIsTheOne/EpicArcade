@@ -7,9 +7,9 @@
   // Absolute origin URLs: blob/classic workers cannot resolve relative paths.
   const origin = 'http://127.0.0.1:8477';
   const files = [
-    '/src/shared/util.js', '/src/shared/noise.js', '/src/shared/blocks.js',
-    '/src/shared/atlas_meta.js', '/src/gen/worldgen.js',
-    '/src/world/light.js', '/src/mesh/mesher.js',
+    '/Minecraft/src/shared/util.js', '/Minecraft/src/shared/noise.js', '/Minecraft/src/shared/blocks.js',
+    '/Minecraft/src/shared/atlas_meta.js', '/Minecraft/src/gen/worldgen.js',
+    '/Minecraft/src/world/light.js', '/Minecraft/src/mesh/mesher.js',
   ];
   for (const f of files) {
     try {
