@@ -6,7 +6,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("path");
 
-const { scanBuilds, slugify, findEntry, parseFolderMeta } = require("../lib/scan");
+const { scanBuilds, slugify, findEntry, parseFolderMeta, detectNetcode, multiplayerFor } = require("../lib/scan");
 
 async function makeDir(p) { await fs.mkdir(p, { recursive: true }); }
 async function put(p, content) {
@@ -203,4 +203,61 @@ test("mtime walk skips node_modules and .git", async () => {
   const g = builds.find(b => b.id === "fake-game");
   const mt = new Date(g.mtime).getTime();
   assert.ok(mt < far.getTime(), "mtime must ignore node_modules");
+});
+
+// ---- multiplayer (netcode) detection ---------------------------------------
+
+test("detectNetcode finds websocket/webrtc/sse signals", async () => {
+  const root = await buildFixture({ after() {} });
+  const game = path.join(root, "Fake Game");
+  await put(path.join(game, "js", "net.js"),
+    "const ws = new WebSocket('wss://x/y'); const pc = new RTCPeerConnection();");
+  await put(path.join(game, "js", "feed.js"), "const es = new EventSource('/api/feed');");
+  const hits = await detectNetcode(game);
+  assert.ok(hits.includes("websocket"));
+  assert.ok(hits.includes("webrtc"));
+  assert.ok(hits.includes("sse"));
+
+  const plain = path.join(root, "PubBuild");
+  assert.deepEqual(await detectNetcode(plain), []);
+});
+
+test("scanBuilds attaches multiplayer; plain builds are single-player", async (t) => {
+  const root = await buildFixture(t);
+  await put(path.join(root, "Fake Game", "js", "net.js"), "new WebSocket('ws://x');");
+
+  const builds = await scanBuilds(root);
+  const mpBuild = builds.find((b) => b.id === "fake-game");
+  assert.equal(mpBuild.multiplayer.supported, true);
+  assert.deepEqual(mpBuild.multiplayer.signals, ["websocket"]);
+  assert.equal(mpBuild.multiplayer.source, "scan");
+
+  const plain = builds.find((b) => b.id === "pubbuild");
+  assert.equal(plain.multiplayer.supported, false);
+  assert.deepEqual(plain.multiplayer.signals, []);
+});
+
+test("multiplayer overrides: force-on (declared) and force-off win over scans", async () => {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "ga-mp-"));
+  try {
+    // force-on without any signal -> "declared"
+    const on = await multiplayerFor(tmp, { multiplayer: true });
+    assert.equal(on.supported, true);
+    assert.deepEqual(on.signals, ["declared"]);
+    assert.equal(on.source, "override");
+
+    // force-off beats a real websocket signal
+    await put(path.join(tmp, "net.js"), "new WebSocket('ws://x');");
+    const off = await multiplayerFor(tmp, { multiplayer: false });
+    assert.equal(off.supported, false);
+
+    // no declaration -> pure scan
+    const auto = await multiplayerFor(tmp, {});
+    assert.equal(auto.supported, true);
+    assert.deepEqual(auto.signals, ["websocket"]);
+
+    // endpoint passthrough
+    const ep = await multiplayerFor(tmp, { multiplayer: true, endpoint: "/ws/lobby" });
+    assert.equal(ep.endpoint, "/ws/lobby");
+  } finally { await fs.rm(tmp, { recursive: true, force: true }); }
 });

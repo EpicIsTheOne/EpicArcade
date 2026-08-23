@@ -197,6 +197,67 @@ function tagFor(dirName, hasEntry) {
   return ["game"];
 }
 
+// ---- multiplayer (netcode) detection ---------------------------------------
+// Static heuristic over the build's own text files: flags realtime-network
+// APIs so the dashboard can badge online-capable exhibits. Declarations win:
+// overrides "multiplayer": true/false (+"endpoint"), or arcade.json
+// "multiplayer": true / false / {"endpoint": "/ws/..."}.
+const NETCODE_PATTERNS = [
+  ["websocket", /\bnew\s+WebSocket\b|\brequire\(\s*['"](?:ws|socket\.io[^'"]*)['"]\s*\)|from\s+['"](?:ws|socket\.io[^'"]*)['"]|\bio\s*\(\s*['"]?\s*(?:wss?:)?\/\//i],
+  ["webrtc",    /\bRTCPeerConnection\b|\bRTCDataChannel\b/i],
+  ["sse",       /\bnew\s+EventSource\b/i],
+];
+const MP_TEXT_RE = /\.(html?|js|mjs|cjs)$/i;
+const MP_FILE_CAP = 600 * 1024;   // per file — skips bundled engines' fat chunks
+const MP_BUDGET = 3 * 1024 * 1024;
+
+async function detectNetcode(dir) {
+  const hits = new Set();
+  let budget = MP_BUDGET;
+  const stack = [dir];
+  while (stack.length && budget > 0) {
+    const cur = stack.pop();
+    let entries;
+    try { entries = await fs.readdir(cur, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (budget <= 0 || hits.size === NETCODE_PATTERNS.length) return [...hits];
+      if (e.isDirectory()) {
+        if (ENTRY_JUNK.has(e.name) || e.name.startsWith(".")) continue;
+        stack.push(path.join(cur, e.name));
+        continue;
+      }
+      if (!MP_TEXT_RE.test(e.name)) continue;
+      const p = path.join(cur, e.name);
+      let st; try { st = await fs.stat(p); } catch { continue; }
+      if (!st.isFile() || st.size > MP_FILE_CAP || st.size > budget) continue;
+      budget -= st.size;
+      let txt; try { txt = await fs.readFile(p, "utf8"); } catch { continue; }
+      for (const [name, re] of NETCODE_PATTERNS) {
+        if (!hits.has(name) && re.test(txt)) hits.add(name);
+      }
+    }
+  }
+  return [...hits];
+}
+
+function multiplayerFor(dir, ov = {}) {
+  const endpoint = typeof ov.endpoint === "string" ? ov.endpoint : null;
+  if (ov.multiplayer === false) {
+    return Promise.resolve({ supported: false, signals: [], endpoint, source: "override" });
+  }
+  if (ov.multiplayer === true) {
+    return detectNetcode(dir).then((signals) => ({
+      supported: true,
+      signals: signals.length ? signals : ["declared"],
+      endpoint,
+      source: "override",
+    }));
+  }
+  return detectNetcode(dir).then((signals) => ({
+    supported: signals.length > 0, signals, endpoint, source: "scan",
+  }));
+}
+
 async function scanBuilds(root, opts = {}) {
   let overrides = {};
   const ovPath = opts.overridesPath || path.join(root, ".archive-overrides.json");
@@ -240,6 +301,7 @@ async function scanBuilds(root, opts = {}) {
       fileCount: stats.fileCount,
       tags: ov.tags || tagFor(c.name, !!entry),
       shots: await collectShots(dir, id),
+      multiplayer: await multiplayerFor(dir, ov),
       thumbWaitMs: Number(ov.thumbWaitMs) || undefined,
       harness: deriveHarness(c.name, ov.harness),
     };
@@ -249,4 +311,4 @@ async function scanBuilds(root, opts = {}) {
   return clean;
 }
 
-module.exports = { scanBuilds, slugify, findEntry, resolveEntry, deriveHarness, parseFolderMeta, HARNESS_META };
+module.exports = { scanBuilds, slugify, findEntry, resolveEntry, deriveHarness, parseFolderMeta, HARNESS_META, detectNetcode, multiplayerFor };

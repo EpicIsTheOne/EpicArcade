@@ -5,7 +5,7 @@
 const fsp = require("node:fs/promises");
 const path = require("path");
 const { spawn } = require("node:child_process");
-const { findEntry, deriveHarness } = require("./scan");
+const { findEntry, deriveHarness, multiplayerFor } = require("./scan");
 
 const DEFAULT_REPO = "https://github.com/EpicIsTheOne/EpicArcade";
 
@@ -90,6 +90,12 @@ async function parseArcadeLayout(repoDir) {
           return kv ? kv[1].trim() : null;
         })();
 
+        // arcade.json "multiplayer": true / false / {"endpoint": "/ws/..."}
+        // (the object form declares multiplayer AND names its endpoint)
+        const mpMeta = meta.multiplayer;
+        const declared = typeof mpMeta === "object" && mpMeta !== null ? true : mpMeta;
+        const endpoint = typeof mpMeta === "object" && mpMeta !== null ? mpMeta.endpoint : meta.multiplayerEndpoint;
+
         games.push({
           source: "remote",
           route,
@@ -103,6 +109,7 @@ async function parseArcadeLayout(repoDir) {
           thumb: meta.thumb || null,       // remote absolute or repo-relative
           deployed: null,                  // filled by applyDeployments()
           mtime,
+          multiplayer: await multiplayerFor(gameDir, { multiplayer: declared, endpoint }),
         });
       }
     }

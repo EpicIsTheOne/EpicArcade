@@ -63,6 +63,7 @@ async function load() {
       tags: g.deployed ? ["remote", "game"] : ["remote", "undeployed"],
       shots: [],
       harness: g.harness,
+      multiplayer: g.multiplayer || null,
     }));
 
   state.builds = [...body.builds, ...remotes];
@@ -106,6 +107,8 @@ function visibleBuilds() {
       tagOk = true;
     } else if (state.filter === "incomplete") {
       tagOk = b.status === "incomplete";
+    } else if (state.filter === "multiplayer") {
+      tagOk = !!(b.multiplayer && b.multiplayer.supported);
     } else {
       tagOk = b.tags.includes(state.filter);
     }
@@ -160,6 +163,19 @@ function render() {
       badge.hidden = false;
     } else {
       badge.hidden = true;
+    }
+
+    // multiplayer badge — shown when netcode was detected or declared
+    const mpBadge = node.querySelector(".mp-badge");
+    if (mpBadge) {
+      const mp = b.multiplayer;
+      if (mp && mp.supported) {
+        mpBadge.hidden = false;
+        mpBadge.title = "Online-capable (" + mp.signals.join(", ") + ")" +
+          (mp.endpoint ? " \u00b7 " + mp.endpoint : "");
+      } else {
+        mpBadge.hidden = true;
+      }
     }
 
     node.querySelector(".c-title").textContent = b.title;
@@ -258,10 +274,12 @@ function openOverlay(id) {
   const meta = $("#ov-meta");
   const hz = hzOf(b);
   const hzLabel = hz && state.hzMeta[hz] ? state.hzMeta[hz].label : "—";
+  const mp = b.multiplayer;
   meta.innerHTML = `
     <dt>STATUS</dt><dd>${b.status}</dd>
     <dt>HARNESS</dt><dd class="mono">${hzLabel}</dd>
     ${b.model ? `<dt>MODEL</dt><dd class="mono">${b.model}</dd>` : ""}
+    <dt>NETCODE</dt><dd class="mono">${mp && mp.supported ? mp.signals.join(" + ") + (mp.endpoint ? " · " + mp.endpoint : "") : "single-player"}</dd>
     <dt>ENTRY</dt><dd class="mono">${b.entry || "—"}</dd>
     <dt>FOLDER</dt><dd class="mono">${b.dir}</dd>
     <dt>SIZE</dt><dd>${fmtBytes(b.sizeBytes)} · ${b.fileCount} files</dd>
