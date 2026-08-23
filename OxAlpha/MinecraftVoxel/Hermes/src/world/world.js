@@ -42,7 +42,7 @@ class World {
 
   initWorkers() {
     for (let i = 0; i < this.workerCount; i++) {
-      const w = new Worker('/src/gen/worker.js');
+      const w = new Worker('/Minecraft/src/gen/worker.js');
       w.postMessage({ type: 'init', seed: this.seed });
       w.onmessage = (ev) => this.onWorkerMsg(i, ev.data);
       w.onerror = (e) => console.error('[worker ' + i + '] error:', e.message || e, e.filename || '');
