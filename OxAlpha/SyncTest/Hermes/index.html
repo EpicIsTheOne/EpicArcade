@@ -32,7 +32,10 @@ const hudScore = document.getElementById("score"), hudTime = document.getElement
       hudBest = document.getElementById("best"), msg = document.getElementById("msg");
 const W = cv.width, H = cv.height;
 const START_TIME = 30;
-let player, orbs, score, timeLeft, playing, started = false, keys = {}, last = 0;
+let player = null, orbs = [], score = 0, timeLeft = START_TIME, playing = false,
+    started = false, keys = {}, last = 0;
+let bestEver = Number(localStorage.getItem("orbsprint.best") || 0);
+hudBest.textContent = bestEver;
 
 function reset() {
   player = { x: W / 2, y: H / 2, r: 14, vx: 0, vy: 0 };
@@ -75,9 +78,9 @@ function step(dt) {
 
 function end() {
   playing = false;
-  const best = Number(localStorage.getItem("orbsprint.best") || 0);
-  if (score > best) localStorage.setItem("orbsprint.best", String(score));
-  hudBest.textContent = Math.max(best, score);
+  const best = bestEver;
+  if (score > best) { bestEver = score; localStorage.setItem("orbsprint.best", String(score)); }
+  hudBest.textContent = bestEver;
   msg.innerHTML = "<h1>TIME!</h1><p>Final score: " + score + "</p><p>Press any key to play again</p>";
   msg.style.display = "";
   setTimeout(() => { addEventListener("keydown", () => location.reload(), { once: true }); }, 400);
@@ -99,7 +102,6 @@ function draw(now) {
   }
 }
 
-hudBest.textContent = localStorage.getItem("orbsprint.best") || 0;
 (function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000 || 0);
   if (started && playing) last = now;
