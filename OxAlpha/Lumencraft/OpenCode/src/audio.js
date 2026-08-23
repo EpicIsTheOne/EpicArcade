@@ -1,4 +1,6 @@
 // Procedural audio: all sounds synthesized with WebAudio (no assets).
+import { MusicSys } from './music.js';
+
 export class AudioSys {
   constructor(settings) {
     this.settings = settings;
@@ -7,6 +9,7 @@ export class AudioSys {
     this.noiseBuf = null;
     this.loops = {};
     this._cricketT = 0;
+    this.music = new MusicSys(this);
   }
 
   ensure() {
@@ -21,12 +24,17 @@ export class AudioSys {
       this.master.gain.value = ((this.settings.volume ?? 60) / 100) * 0.8;
       this.master.connect(this.ctx.destination);
       this._makeLoops();
+      this.music.update(1);
       return true;
     } catch { return false; }
   }
 
-  resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); }
+  resume() {
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.music) this.music.update(1);
+  }
   setVolume(v) { if (this.master) this.master.gain.value = (v / 100) * 0.8; }
+  setMusicVolume(v) { if (this.music) this.music.setVolume(v / 100); }
 
   _noise(dur, freq, type, vol, q = 1, decay = true) {
     if (!this.ensure()) return;

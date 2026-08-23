@@ -1,1 +1,5 @@
-{"title":"Lumencraft","description":"Light-driven voxel exploration and building."}
+{
+  "title": "Lumencraft",
+  "description": "Light-driven voxel sandbox — now multiplayer: share a room code, build together.",
+  "multiplayer": { "endpoint": "/ws/lumencraft" }
+}

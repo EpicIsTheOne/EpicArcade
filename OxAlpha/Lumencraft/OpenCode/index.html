@@ -85,6 +85,25 @@ select { padding:6px 8px; border-radius:6px; background:#1a1f2c; color:#fff; bor
 .kbd-table td:first-child { color:#8fd4ff; width:130px; }
 .seednote { font-size:11px; color:#889; margin-top:-6px; margin-bottom:8px; }
 
+/* world browser */
+body.pano .screen { background:linear-gradient(180deg, rgba(5,7,12,.46), rgba(5,7,12,.10) 32%, rgba(5,7,12,.14) 62%, rgba(5,7,12,.55));
+  backdrop-filter:none; }
+body.pano .panel { background:rgba(13,15,22,.86); backdrop-filter:blur(2px); }
+.world-list { max-height:52vh; overflow-y:auto; display:flex; flex-direction:column; gap:8px; margin:10px 0 12px; padding-right:4px; }
+.world-entry { display:flex; gap:12px; align-items:center; padding:8px 10px 8px 8px; border-radius:9px;
+  border:2px solid #ffffff14; background:#12151f88; cursor:pointer; transition:border-color .1s, background .1s; text-align:left; width:100%; }
+.world-entry:hover { border-color:#ffffff55; background:#181d2c99; }
+.world-entry.sel { border-color:#ffd76a; background:#26201488; box-shadow:0 0 14px rgba(255,215,106,.16); }
+.world-entry img { width:84px; height:47px; object-fit:cover; border-radius:4px; border:1px solid #ffffff22;
+  background:#000; flex:none; display:block; }
+.wi-col { min-width:0; flex:1; }
+.wi-name { font-weight:700; color:#fff; font-size:14px; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wi-sub { font-size:11.5px; color:#98a2b8; line-height:1.55; }
+.wi-sub b { color:#c8cfdd; font-weight:600; }
+.wb-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.wb-row .btn.small { margin-right:0; }
+.btn.danger:hover:not(:disabled) { background:linear-gradient(#7a2828,#571c1c); border-color:#ff8a6688; transform:translateY(-1px); }
+
 /* inventory windows */
 .invwin { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:45; pointer-events:auto;
   background:linear-gradient(#232839,#1a1e2b); border:1px solid #6a7595aa; border-radius:12px; padding:14px 16px;
@@ -114,6 +133,17 @@ select { padding:6px 8px; border-radius:6px; background:#1a1f2c; color:#fff; bor
 .recipe-item:hover { border-color:#ffd76a; }
 .recipe-item canvas { width:32px; height:32px; image-rendering:pixelated; }
 .recipe-item.no { opacity:.35; }
+
+/* multiplayer */
+#chatlog { position:absolute; left:12px; bottom:96px; display:flex; flex-direction:column; gap:2px;
+  max-width:min(520px,70vw); pointer-events:none; z-index:30; }
+.chat-line { padding:3px 9px; border-radius:6px; background:rgba(8,10,16,.62); color:#e8e8f0;
+  font-size:13px; line-height:1.4; transition:opacity .8s; text-shadow:0 1px 2px #000;
+  white-space:pre-wrap; word-break:break-word; }
+.chat-line b { color:#ffd76a; }
+.chat-line.sys { color:#9fd8a8; font-style:italic; }
+#chat-in { position:absolute; left:12px; bottom:66px; width:min(520px,70vw); z-index:46; display:none;
+  background:rgba(8,10,16,.85); }
 </style>
 </head>
 <body>
@@ -129,6 +159,8 @@ select { padding:6px 8px; border-radius:6px; background:#1a1f2c; color:#fff; bor
   <div id="breathRow" class="bar-row"></div>
   <div id="hotbar"></div>
   <div id="toasts"></div>
+  <div id="chatlog"></div>
+  <input type="text" id="chat-in" maxlength="120" placeholder="Press Enter to chat" autocomplete="off">
   <div id="debug"></div>
   <div id="tooltip"></div>
 </div>
@@ -144,24 +176,54 @@ select { padding:6px 8px; border-radius:6px; background:#1a1f2c; color:#fff; bor
     <h1>LUMENCRAFT</h1>
     <p class="sub">A VOXEL SANDBOX OF LIGHT &amp; DEPTH</p>
     <button class="btn primary" id="btn-continue" disabled>Continue World</button>
-    <button class="btn" id="btn-new">New World…</button>
+    <button class="btn" id="btn-new">Singleplayer…</button>
+    <button class="btn" id="btn-multi">Multiplayer…</button>
     <button class="btn" id="btn-settings-title">Settings</button>
     <button class="btn" id="btn-controls">Controls</button>
     <p class="sub" style="margin-top:16px">OpenCode build · port 8791</p>
   </div>
 </div>
 
+<div class="screen" id="screen-worlds">
+  <div class="panel" style="min-width:min(620px,94vw)">
+    <h2 style="margin-top:0;text-align:center">Select World</h2>
+    <div id="world-list" class="world-list"></div>
+    <p id="worlds-empty" class="hint" style="text-align:center;padding:14px 0;display:none">No worlds yet — create your first one.</p>
+    <div class="wb-row">
+      <button class="btn small primary" id="btn-world-play" disabled>Play Selected World</button>
+      <button class="btn small" id="btn-world-create">Create New World</button>
+      <span style="flex:1"></span>
+      <button class="btn small danger" id="btn-world-delete" disabled>Delete</button>
+      <button class="btn small" id="btn-worlds-back">Back</button>
+    </div>
+  </div>
+</div>
+
 <div class="screen" id="screen-newworld">
   <div class="panel">
     <h2 style="margin-top:0">Create New World</h2>
+    <label style="font-size:13px;color:#aab">World name</label>
+    <input type="text" id="inp-name" placeholder="New World" maxlength="32" value="New World">
     <label style="font-size:13px;color:#aab">World seed (blank = random)</label>
     <input type="text" id="inp-seed" placeholder="e.g. shimmering caves" maxlength="48">
-    <label style="font-size:13px;color:#aab">Save slot</label>
-    <select id="sel-slot" style="width:100%"><option value="0">Slot 1</option><option value="1">Slot 2</option><option value="2">Slot 3</option></select>
     <div style="height:12px"></div>
     <button class="btn primary" id="btn-create">Generate &amp; Play</button>
     <button class="btn" id="btn-new-back">Back</button>
     <p class="seednote">Same seed → same world. Your edits are saved on top.</p>
+  </div>
+</div>
+
+<div class="screen" id="screen-multiplayer">
+  <div class="panel">
+    <h2 style="margin-top:0">Join Multiplayer World</h2>
+    <label style="font-size:13px;color:#aab">Your name</label>
+    <input type="text" id="inp-mp-name" placeholder="Steve" maxlength="16">
+    <label style="font-size:13px;color:#aab">Room code (share it with friends)</label>
+    <input type="text" id="inp-mp-room" placeholder="e.g. CAVES" maxlength="16" style="text-transform:uppercase">
+    <div style="height:12px"></div>
+    <button class="btn primary" id="btn-mp-join">Join World</button>
+    <button class="btn" id="btn-mp-back">Back</button>
+    <p class="seednote">Everyone in a room shares one world (seed + building edits). The first player to join decides the seed.</p>
   </div>
 </div>
 
@@ -181,6 +243,7 @@ select { padding:6px 8px; border-radius:6px; background:#1a1f2c; color:#fff; bor
     <button class="btn" id="btn-settings-pause">Settings</button>
     <button class="btn" id="btn-controls-pause">Controls</button>
     <button class="btn" id="btn-quit">Save &amp; Quit to Title</button>
+    <p class="hint" id="mp-status" style="text-align:center;margin-bottom:0"></p>
   </div>
 </div>
 
@@ -210,6 +273,7 @@ select { padding:6px 8px; border-radius:6px; background:#1a1f2c; color:#fff; bor
     <div class="row"><label>Invert mouse X</label><input type="checkbox" class="chk" id="set-invx"></div>
     <div class="row"><label>Invert mouse Y</label><input type="checkbox" class="chk" id="set-invy"></div>
     <div class="row"><label>Master volume</label><input type="range" id="set-vol" min="0" max="100" step="5"><span class="val" id="set-vol-v"></span></div>
+    <div class="row"><label>Music</label><input type="range" id="set-music" min="0" max="100" step="5"><span class="val" id="set-music-v"></span></div>
     <div class="hint">Presets scale shadows, bloom, water quality, particles and render distance for weaker machines.</div>
     <button class="btn" id="btn-settings-back" style="margin-top:14px">Done</button>
   </div>
@@ -229,6 +293,7 @@ select { padding:6px 8px; border-radius:6px; background:#1a1f2c; color:#fff; bor
       <tr><td>Mouse wheel / 1–9</td><td>Select hotbar slot</td></tr>
       <tr><td>E</td><td>Inventory</td></tr>
       <tr><td>Q</td><td>Drop held item</td></tr>
+      <tr><td>T</td><td>Chat (multiplayer)</td></tr>
       <tr><td>Esc</td><td>Pause / close window / release mouse</td></tr>
       <tr><td>F3</td><td>Debug overlay</td></tr>
     </table>

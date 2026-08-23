@@ -21,6 +21,7 @@ export const defaultSettings = {
   invertX: false,
   invertY: false,
   volume: 60,
+  music: 60,
 };
 
 const PRESETS = {

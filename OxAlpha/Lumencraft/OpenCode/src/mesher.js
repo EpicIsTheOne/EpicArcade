@@ -55,7 +55,7 @@ export function buildChunkGeometry(world, chunk) {
       }
     }
     if (!n) n = 1;
-    return { sky: sk / n / 15, blk: bl / n / 15, ao: AO_FACTORS[aoIdx] };
+    return { sky: Math.min(1, sk / n), blk: Math.min(1, bl / n), ao: AO_FACTORS[aoIdx] };
   }
 
   // Simpler unified emitter: each vertex tuple = [x,y,z,u,v,sky,blk,ao,tintR,tintG,tintB]

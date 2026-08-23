@@ -7,6 +7,7 @@ import { ITEMS, itemName, isBlockItem } from './items.js';
 
 import { World } from './world.js';
 import { buildChunkGeometry } from './mesher.js';
+import { Generator } from './worldgen.js';
 import { buildAtlas, uvRect, avgColor, TILES } from './atlas.js';
 import { createTerrainMaterial, createWaterMaterial, createCrackMaterial, globalUniforms } from './materials.js';
 import { Graphics } from './graphics.js';
@@ -15,11 +16,13 @@ import { Input } from './input.js';
 import { Player } from './player.js';
 import { Interaction, raycastVoxel } from './interaction.js';
 import { EntityManager, MOB_TYPES, Mob } from './entities.js';
+import { Net, resolveWsUrl } from './net.js';
 import { Particles } from './particles.js';
 import { AudioSys } from './audio.js';
 import { UI, Inventory } from './ui.js';
 import { getItemIcon } from './icons.js';
 import * as SaveFile from './save.js';
+import { Panorama } from './panorama.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -43,9 +46,16 @@ const audio = new AudioSys(settings);
 
 // ---------------- game state container ----------------
 let game = null;
+let panorama = null;
 
 function destroyGame() {
+  if (panorama) {
+    panorama.dispose();
+    panorama = null;
+    document.body.classList.remove('pano');
+  }
   if (!game) return;
+  if (game.net) game.net.dispose();
   game.world.destroy();
   // clear scene objects created by game systems
   for (const c of [...graphics.scene.children]) {
@@ -56,17 +66,62 @@ function destroyGame() {
   game = null;
 }
 
+// Deferred saves: performed at the end of a rendered frame so the canvas can be
+// sampled for the world-browser thumbnail without preserveDrawingBuffer.
+function queueSave(g) {
+  if (!g || !g.started || g.net) return; // multiplayer worlds live on the server
+  g._pendingSave = true;
+}
+
+function grabThumbnail(gfx) {
+  try {
+    const src = gfx.canvas;
+    const c = document.createElement('canvas');
+    c.width = 168; c.height = 94;
+    const cx2 = c.getContext('2d');
+    const s = Math.max(c.width / src.width, c.height / src.height);
+    const dw = src.width * s, dh = src.height * s;
+    cx2.drawImage(src, (c.width - dw) / 2, (c.height - dh) / 2, dw, dh);
+    return c.toDataURL('image/jpeg', 0.62);
+  } catch { return null; }
+}
+
+function syncQuitSave(g) {
+  // synchronous path for page-exit flows; reuses most recent thumbnail
+  if (g && g.started && !g.net) SaveFile.saveWorld(g.slot, g, g.lastThumb ?? null);
+}
+
 function startGame(opts) {
   destroyGame();
-  const { seedStr, saved, slot } = opts;
+  const { seedStr, saved, slot, name, mpNet } = opts;
+  const worldId = String(slot ?? SaveFile.newWorldId());
 
   const world = new World(seedStr);
+
+  // multiplayer: bake the server-side edit log in before any chunk generates
+  if (mpNet && mpNet.edits.length) {
+    for (const e of mpNet.edits) {
+      if (!Array.isArray(e) || e.length < 4) continue;
+      const [x, y, z] = e;
+      if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(z)) continue;
+      if (y < 0 || y >= HEIGHT) continue;
+      const id = e[3] & 255, face = (e[4] | 0) & 3;
+      const k = world.key(x >> 4, z >> 4);
+      let em = world.edits.get(k);
+      if (!em) { em = new Map(); world.edits.set(k, em); }
+      em.set((y << 8) | ((z & 15) << 4) | (x & 15), id + (face << 8));
+    }
+  }
+
   const player = new Player(world, null); // input wired below
   const input = new Input($('glcanvas'), settings);
 
   const g = {
     world, player, input, graphics, sky, audio, atlasTexture, settings,
-    slot,
+    slot: worldId,
+    net: mpNet ?? null,
+    worldName: name ?? saved?.meta?.name ?? undefined,
+    lastThumb: saved?.meta?.thumb ?? null,
     timeOfDay: 0.28,
     playTime: 0,
     rainF: 0,
@@ -94,6 +149,13 @@ function startGame(opts) {
   g.particles = particles;
   const interaction = new Interaction(g);
   g.interaction = interaction;
+
+  // ---------- multiplayer ----------
+  if (g.net) {
+    g.net.attachWorld(world);
+    g.net.onChat = addChatLine;
+    g.net.onToast = (m) => ui.toast(m);
+  }
 
   // ---------- world callbacks ----------
   const chunkMeshes = new Map();
@@ -236,7 +298,7 @@ function startGame(opts) {
     if (handMesh) { handGroup.remove(handMesh); handMesh.geometry?.dispose(); handMesh = null; }
     if (held && typeof held.id === 'number' && BLOCKS[held.id]) {
       const geo = buildMiniBlock(BLOCKS[held.id]);
-      handMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: atlasTexture }));
+      handMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: atlasTexture, transparent: true, alphaTest: 0.15 }));
       handMesh.scale.setScalar(0.34);
       handMesh.rotation.set(0.2, -0.6, 0);
     } else if (held) {
@@ -271,6 +333,36 @@ function startGame(opts) {
     return geo;
   }
 
+  // ---------- chat ----------
+  let chatOpen = false;
+  const chatIn = $('chat-in');
+
+  function addChatLine(entry) { pushChatLine(entry); }
+
+  function openChat() {
+    if (chatOpen) return;
+    chatOpen = true;
+    g.chatOpen = true;
+    input.releaseAll();
+    chatIn.value = '';
+    chatIn.style.display = 'block';
+    setTimeout(() => chatIn.focus(), 0);
+  }
+  function closeChat(send) {
+    if (!chatOpen) return;
+    chatOpen = false;
+    g.chatOpen = false;
+    chatIn.blur();
+    chatIn.style.display = 'none';
+    input.releaseAll();
+    const text = chatIn.value.trim();
+    if (send && text && g.net && g.net.sendChat(text)) {
+      addChatLine({ kind: 'chat', name: g.net.myName, text });
+    }
+  }
+  activeCloseChat = closeChat;
+  g._openChat = openChat;
+
   // ---------- input routing ----------
   input.onWheel = (dir) => { if (!g.paused && !ui.openWindow) ui.selectSlot(ui.inv.selected + dir); };
   input.onMouseDown = (btn) => {
@@ -282,6 +374,11 @@ function startGame(opts) {
     if (!game) return;
 
     if (code === 'F3') { e.preventDefault(); ui.toggleDebug(); return; }
+
+    if (g.chatOpen) {
+      if (code === 'Escape') closeChat(false);
+      return;
+    }
 
     if (code === 'Escape') {
       if (ui.openWindow) { ui.closeWindows(); return; }
@@ -311,6 +408,10 @@ function startGame(opts) {
 
     switch (code) {
       case 'KeyE': ui.openInventory(); break;
+      case 'KeyT':
+        e.preventDefault();
+        openChat();
+        break;
       case 'KeyX':
         player.flying = !player.flying;
         ui.toast(player.flying ? 'Fly mode ON (Space up · C down)' : 'Fly mode OFF');
@@ -335,7 +436,15 @@ function startGame(opts) {
     input.releaseLock();
     input.releaseAll();
     ui.showScreen('screen-pause');
-    SaveFile.saveWorld(g.slot, g);
+    const ms = $('mp-status');
+    if (ms) {
+      ms.textContent = g.net
+        ? (g.net.connected
+            ? `Room '${g.net.room}' · ${g.net.peerCount() + 1} player${g.net.peerCount() ? 's' : ''} online · T to chat`
+            : 'Multiplayer offline')
+        : '';
+    }
+    queueSave(g);
   }
   function closePauseOverlays() {
     ['screen-pause', 'screen-settings', 'screen-controls'].forEach(id => $(id).classList.remove('open'));
@@ -399,8 +508,8 @@ function startGame(opts) {
   };
 
   g.saveNow = () => {
-    const ok = SaveFile.saveWorld(g.slot, g);
-    ui.toast(ok ? 'World saved' : 'Save failed (storage full?)');
+    queueSave(g);
+    ui.toast('World saved');
   };
 
   g.trySleep = () => {
@@ -423,6 +532,7 @@ function startGame(opts) {
   // expose for QA/debugging
   window.__game = {
     game: () => game,
+    music: () => audio.music,
     tp: (x, y, z) => { player.pos.set(x, y, z); player.vel.set(0, 0, 0); },
     look: (yawDeg, pitchDeg) => { player.yaw = yawDeg * Math.PI / 180; player.pitch = pitchDeg * Math.PI / 180; },
     aimAt: (x, y, z) => {
@@ -484,6 +594,14 @@ function startGame(opts) {
     },
     setBlock: (x, y, z, id) => world.setBlock(x, y, z, typeof id === 'string' ? B[id.toUpperCase()] : id),
     getBlock: (x, y, z) => world.getBlockRaw(Math.floor(x), Math.floor(y), Math.floor(z)),
+    net: () => g.net,
+    mpPlace: (x, y, z, id) => { if (g.net) g.net.sendBlock(x, y, z, id | 0); },
+    say: (t) => g.net ? g.net.sendChat(t) : false,
+    peers: () => {
+      if (!g.net || !g.net.remotes) return [];
+      return [...g.net.remotes.map.entries()].map(([id, r]) =>
+        ({ id, name: r.name, pos: [r.cur.x, r.cur.y, r.cur.z], yaw: r.cur.yaw }));
+    },
     interactionState: () => ({
       mining: g.interaction.mining,
       progress: g.interaction.mineProgress,
@@ -495,6 +613,34 @@ function startGame(opts) {
     circuitProbe: (x, y, z) => {
       world.updateCircuitsNear(x, y, z);
       return 'done';
+    },
+    scanBiome: (target, maxR = 3000) => {
+      const gen = new Generator(world.seedStr);
+      for (let r = 64; r <= maxR; r += 48) {
+        const steps = Math.max(8, Math.floor((2 * Math.PI * r) / 40));
+        for (let s = 0; s < steps; s++) {
+          const a = (s / steps) * Math.PI * 2;
+          const x = Math.round(player.pos.x + Math.cos(a) * r);
+          const z = Math.round(player.pos.z + Math.sin(a) * r);
+          const info = gen.columnInfo(x, z);
+          if (info.biome === target && info.h > SEA + 1) return [x, info.h, z];
+        }
+      }
+      return null;
+    },
+    scanOcean: (maxR = 3000) => {
+      const gen = new Generator(world.seedStr);
+      for (let r = 96; r <= maxR; r += 64) {
+        const steps = Math.max(8, Math.floor((2 * Math.PI * r) / 56));
+        for (let s = 0; s < steps; s++) {
+          const a = (s / steps) * Math.PI * 2;
+          const x = Math.round(player.pos.x + Math.cos(a) * r);
+          const z = Math.round(player.pos.z + Math.sin(a) * r);
+          const info = gen.columnInfo(x, z);
+          if (info.biome === 0 && info.h < SEA - 5) return [x, info.h, z];
+        }
+      }
+      return null;
     },
     mobsDetail: () => entities.mobs.map(m => ({ type: m.typeName, hp: m.hp, dying: m.dying, dead: m.dead, pos: m.pos.toArray() })),
   };
@@ -536,49 +682,185 @@ function showLoading(on, text = '') {
   } else if (el) el.style.display = 'none';
 }
 
+// chat log lives outside any single game instance
+function pushChatLine(entry) {
+  const log = document.getElementById('chatlog');
+  if (!log) return;
+  const d = document.createElement('div');
+  d.className = 'chat-line' + (entry.kind === 'sys' ? ' sys' : '');
+  if (entry.kind === 'chat') {
+    const b = document.createElement('b');
+    b.textContent = entry.name;
+    d.appendChild(b);
+    d.appendChild(document.createTextNode(': ' + entry.text));
+  } else {
+    d.textContent = entry.text;
+  }
+    log.appendChild(d);
+    while (log.children.length > 8) log.firstChild.remove();
+    setTimeout(() => { d.style.opacity = '0'; }, 7000);
+    setTimeout(() => d.remove(), 8000);
+}
+
+// chat input is a single global element; the running game registers its closer
+let activeCloseChat = null;
+document.getElementById('chat-in')?.addEventListener('keydown', (e) => {
+  e.stopPropagation();
+  if (e.key === 'Enter') { e.preventDefault(); activeCloseChat?.(true); }
+  else if (e.key === 'Escape') { e.preventDefault(); activeCloseChat?.(false); }
+});
+
 // ---------------- title screen wiring ----------------
-$('btn-new').addEventListener('click', () => { audio.ensure(); audio.click(); ui_showNewWorld(); });
+$('btn-new').addEventListener('click', () => { audio.ensure(); audio.click(); openWorldBrowser(); });
+
+// ---------------- multiplayer screen ----------------
+$('btn-multi').addEventListener('click', () => {
+  audio.ensure(); audio.click();
+  ui_show(null);
+  $('screen-multiplayer').classList.add('open');
+  try {
+    $('inp-mp-name').value = localStorage.getItem('lumencraft_mp_name') || '';
+    $('inp-mp-room').value = localStorage.getItem('lumencraft_mp_room') || '';
+  } catch {}
+  setTimeout(() => ($('inp-mp-' + ($('inp-mp-name').value ? 'room' : 'name'))).focus(), 0);
+});
+$('btn-mp-back').addEventListener('click', () => { audio.click(); ui_show('screen-title'); });
+$('btn-mp-join').addEventListener('click', () => {
+  audio.click();
+  const name = $('inp-mp-name').value.trim().slice(0, 16);
+  const room = $('inp-mp-room').value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+  if (!room) { $('inp-mp-room').focus(); $('inp-mp-room').placeholder = 'Room code is required!'; return; }
+  try {
+    localStorage.setItem('lumencraft_mp_name', name);
+    localStorage.setItem('lumencraft_mp_room', room);
+  } catch {}
+  sessionStorage.setItem('lumencraft_boot', JSON.stringify({ mode: 'mp', room, name }));
+  location.reload();
+});
+$('inp-mp-room').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-mp-join').click(); });
+$('inp-mp-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('inp-mp-room').focus(); });
+
+// ---------------- world browser ----------------
+const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmtSize = (n) => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(2)} MB`;
+const fmtPlay = (s) => s < 60 ? `${Math.round(s)}s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`;
+
+let selWorldId = null;
+let deleteArmed = false;
+let deleteTimer = null;
+
+function disarmDelete() {
+  deleteArmed = false;
+  clearTimeout(deleteTimer);
+  $('btn-world-delete').textContent = 'Delete';
+}
+
+function syncWorldButtons() {
+  const has = !!selWorldId;
+  $('btn-world-play').disabled = !has;
+  $('btn-world-delete').disabled = !has;
+  $('btn-world-delete').textContent = deleteArmed ? 'Really delete?' : 'Delete';
+  if (!has) disarmDelete();
+}
+
+function selectWorld(id) {
+  selWorldId = id;
+  document.querySelectorAll('.world-entry').forEach(el => el.classList.toggle('sel', el.dataset.id === id));
+  syncWorldButtons();
+}
+
+function launchWorld(id) {
+  audio.click();
+  sessionStorage.setItem('lumencraft_boot', JSON.stringify({ mode: 'load', id }));
+  location.reload();
+}
+
+function refreshWorldList() {
+  const list = $('world-list');
+  const worlds = SaveFile.listWorlds();
+  list.innerHTML = '';
+  $('worlds-empty').style.display = worlds.length ? 'none' : 'block';
+  if (!worlds.some(w => w.id === selWorldId)) { selWorldId = null; disarmDelete(); }
+  for (const w of worlds) {
+    const entry = document.createElement('div');
+    entry.className = 'world-entry' + (w.id === selWorldId ? ' sel' : '');
+    entry.dataset.id = w.id;
+    const img = document.createElement('img');
+    if (w.thumb) img.src = w.thumb;
+    else img.alt = '';
+    img.loading = 'lazy';
+    entry.appendChild(img);
+    const col = document.createElement('div');
+    col.className = 'wi-col';
+    const posTxt = w.pos ? ` · at ${w.pos[0]}, ${w.pos[1]}, ${w.pos[2]}` : '';
+    col.innerHTML =
+      `<div class="wi-name">${esc(w.name)}</div>` +
+      `<div class="wi-sub"><b>Seed:</b> ${esc(w.seed)}<br>` +
+      `${new Date(w.savedAt).toLocaleString()} · ${fmtSize(w.size)}<br>` +
+      `Played ${fmtPlay(w.playTime)}${posTxt}</div>`;
+    entry.appendChild(col);
+    entry.addEventListener('click', () => { audio.click(); selectWorld(w.id); });
+    entry.addEventListener('dblclick', () => launchWorld(w.id));
+    list.appendChild(entry);
+  }
+  syncWorldButtons();
+}
+
+function openWorldBrowser() {
+  ui_show(null);
+  $('screen-worlds').classList.add('open');
+  refreshWorldList();
+}
+function ui_show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('open'));
+  if (id) $(id).classList.add('open');
+}
+
+$('btn-world-play').addEventListener('click', () => { if (selWorldId) launchWorld(selWorldId); });
+$('btn-world-create').addEventListener('click', () => {
+  audio.click();
+  ui_show(null);
+  $('screen-newworld').classList.add('open');
+  $('inp-name').value = 'New World';
+  $('inp-seed').value = '';
+});
+$('btn-worlds-back').addEventListener('click', () => { audio.click(); ui_show('screen-title'); });
+$('btn-world-delete').addEventListener('click', () => {
+  if (!selWorldId) return;
+  audio.click();
+  if (!deleteArmed) {
+    deleteArmed = true;
+    $('btn-world-delete').textContent = 'Really delete?';
+    clearTimeout(deleteTimer);
+    deleteTimer = setTimeout(disarmDelete, 3000);
+    return;
+  }
+  SaveFile.deleteWorld(selWorldId);
+  selWorldId = null;
+  disarmDelete();
+  refreshWorldList();
+});
+
 $('btn-create').addEventListener('click', () => {
   audio.click();
   const seed = $('inp-seed').value.trim() || String((Math.random() * 1e9) | 0);
-  const slot = parseInt($('sel-slot').value);
-  sessionStorage.setItem('lumencraft_boot', JSON.stringify({ mode: 'new', seed, slot }));
+  const name = ($('inp-name').value.trim() || 'New World').slice(0, 32);
+  sessionStorage.setItem('lumencraft_boot', JSON.stringify({ mode: 'new', seed, id: SaveFile.newWorldId(), name }));
   location.reload();
 });
-$('btn-new-back').addEventListener('click', () => { audio.click(); $('screen-newworld').classList.remove('open'); $('screen-title').classList.add('open'); });
+$('btn-new-back').addEventListener('click', () => { audio.click(); openWorldBrowser(); });
 $('btn-continue').addEventListener('click', () => {
   audio.click();
-  // find first non-empty slot
-  for (let i = 0; i < SaveFile.SLOT_COUNT; i++) {
-    if (SaveFile.slotInfo(i)) {
-      sessionStorage.setItem('lumencraft_boot', JSON.stringify({ mode: 'load', slot: i }));
-      location.reload();
-      return;
-    }
-  }
+  const mostRecent = SaveFile.listWorlds()[0];
+  if (mostRecent) launchWorld(mostRecent.id);
 });
-
-function ui_showNewWorld() {
-  $('screen-title').classList.remove('open');
-  $('screen-newworld').classList.add('open');
-  // populate slot labels
-  const sel = $('sel-slot');
-  sel.innerHTML = '';
-  for (let i = 0; i < SaveFile.SLOT_COUNT; i++) {
-    const info = SaveFile.slotInfo(i);
-    const opt = document.createElement('option');
-    opt.value = i;
-    opt.textContent = `Slot ${i + 1}${info ? ` — ${info.seed} (${new Date(info.savedAt).toLocaleDateString()})` : ' — empty'}`;
-    sel.appendChild(opt);
-  }
-}
 
 // pause buttons
 $('btn-resume').addEventListener('click', () => { audio.click(); game && game._closePauseOverlays(); });
 $('btn-save').addEventListener('click', () => { audio.click(); game && game.saveNow(); });
 $('btn-quit').addEventListener('click', () => {
   audio.click();
-  if (game) SaveFile.saveWorld(game.slot, game);
+  syncQuitSave(game);
   sessionStorage.removeItem('lumencraft_boot');
   location.reload();
 });
@@ -590,7 +872,7 @@ $('btn-respawn').addEventListener('click', () => {
   game.input.requestLock();
 });
 $('btn-death-quit').addEventListener('click', () => {
-  if (game) SaveFile.saveWorld(game.slot, game);
+  syncQuitSave(game);
   sessionStorage.removeItem('lumencraft_boot');
   location.reload();
 });
@@ -611,12 +893,14 @@ function bindSettings() {
   const ix = $('set-invx'); ix.checked = s.invertX;
   const iy = $('set-invy'); iy.checked = s.invertY;
   const vol = $('set-vol'); vol.value = s.volume;
+  const mus = $('set-music'); mus.value = s.music ?? 60;
   const syncLabels = () => {
     $('set-rd-v').textContent = rd.value;
     $('set-fov-v').textContent = fov.value;
     $('set-sens-v').textContent = sens.value + '%';
     $('set-res-v').textContent = res.value + '%';
     $('set-vol-v').textContent = vol.value + '%';
+    $('set-music-v').textContent = mus.value + '%';
   };
   syncLabels();
 
@@ -625,14 +909,16 @@ function bindSettings() {
       quality: q.value, renderDistance: +rd.value, fov: +fov.value, sensitivity: +sens.value,
       resScale: +res.value, shadows: sh.checked, bloom: bl.checked, fancyWater: wa.checked,
       clouds: cl.checked, invertX: ix.checked, invertY: iy.checked, volume: +vol.value,
+      music: +mus.value,
     });
     saveSettings(s);
     graphics.applySettings(s);
     audio.setVolume(s.volume);
+    audio.setMusicVolume(s.music);
     if (game) game.input.settings = s;
     syncLabels();
   };
-  [rd, fov, sens, res, vol].forEach(el => el.addEventListener('input', apply));
+  [rd, fov, sens, res, vol, mus].forEach(el => el.addEventListener('input', apply));
   [q, sh, bl, wa, cl, ix, iy].forEach(el => el.addEventListener('change', apply));
 
   $('btn-settings-back').addEventListener('click', () => {
@@ -681,13 +967,42 @@ const bootFlag = (() => {
 if (bootFlag) {
   sessionStorage.removeItem('lumencraft_boot');
   if (bootFlag.mode === 'new') {
-    game = startGame({ seedStr: bootFlag.seed, slot: bootFlag.slot });
+    const id = String(bootFlag.id ?? bootFlag.slot ?? SaveFile.newWorldId());
+    game = startGame({ seedStr: bootFlag.seed, slot: id, name: bootFlag.name });
   } else if (bootFlag.mode === 'load') {
-    const data = SaveFile.loadWorld(bootFlag.slot);
-    if (data) game = startGame({ seedStr: data.meta.seed, saved: data, slot: bootFlag.slot });
+    const id = String(bootFlag.id ?? bootFlag.slot);
+    const data = SaveFile.loadWorld(id);
+    if (data) game = startGame({ seedStr: data.meta.seed, saved: data, slot: id });
     else {
       $('screen-title').querySelector('.panel p.sub').textContent = 'Save missing — create a new world';
     }
+  } else if (bootFlag.mode === 'mp') {
+    // Multiplayer: connect first (server owns the seed), then build the world.
+    const net = new Net({
+      url: resolveWsUrl(),
+      room: bootFlag.room,
+      name: bootFlag.name,
+      scene: graphics.scene,
+      onToast: (m) => {
+        const t = document.createElement('div');
+        t.className = 'toast';
+        t.textContent = m;
+        document.getElementById('toasts')?.appendChild(t);
+        setTimeout(() => t.remove(), 3200);
+      },
+      onChat: pushChatLine,
+    });
+    showLoading(true, `Connecting to room '${net.room}'…`);
+    net.connect().then((welcome) => {
+      if (game) return;
+      game = startGame({ seedStr: welcome.seed, mpNet: net, name: 'MP · ' + welcome.room });
+    }).catch((err) => {
+      showLoading(false);
+      net.dispose();
+      const sub = $('screen-title').querySelector('.panel p.sub');
+      if (sub) sub.textContent = `Multiplayer unavailable — ${err.message}`;
+      $('screen-title').classList.add('open');
+    });
   }
 } else {
   // title screen defaults
@@ -711,11 +1026,17 @@ function frame(now) {
   }
 
   if (!game) {
-    // idle render behind title screen
+    // rotating live-world panorama behind the title screen
+    if (!panorama) {
+      panorama = new Panorama(graphics.scene, atlasTexture);
+      document.body.classList.add('pano');
+    }
     globalUniforms.uTime.value += dt;
-    sky.update(0.32, 0, new THREE.Vector3(0, 70, 0), { coverage: 0.2 });
+    globalUniforms.uFogDensity.value = 0.0046;
+    sky.update(0.38, 0, panorama.center, { coverage: 0.16 });
+    panorama.update(dt, graphics.camera);
     graphics.renderFrame({
-      playerPos: new THREE.Vector3(0, 70, 0),
+      playerPos: panorama.center,
       sunDir: globalUniforms.uSunDir.value,
       underwater: false,
     });
@@ -724,7 +1045,7 @@ function frame(now) {
 
   const g = game;
   const player = g.player, world = g.world, ui = g.ui, input = g.input;
-  const playing = g.started && !g.paused && !g.sleeping && !ui.anyScreenOpen() && !player.dead;
+  const playing = g.started && !g.paused && !g.sleeping && !ui.anyScreenOpen() && !player.dead && !g.chatOpen;
 
   // ---- streaming ----
   const pcx = Math.floor(player.pos.x / CHUNK), pcz = Math.floor(player.pos.z / CHUNK);
@@ -792,6 +1113,13 @@ function frame(now) {
 
   // time of day
   if (!g.paused) g.timeOfDay = (g.timeOfDay + dt / DAY_LENGTH) % 1;
+  // multiplayer: everyone follows the server's shared clock
+  if (g.net) {
+    g.net.sendState(player.pos, player.yaw, player.pitch);
+    g.net.update(dt);
+    const sharedT = g.net.dayT();
+    if (sharedT !== null) g.timeOfDay = sharedT;
+  }
   globalUniforms.uTime.value += dt;
 
   // weather machine
@@ -906,7 +1234,7 @@ function frame(now) {
   autosaveT += dt;
   if (autosaveT > 45) {
     autosaveT = 0;
-    if (g.started) SaveFile.saveWorld(g.slot, g);
+    if (g.started) queueSave(g);
   }
 
   // ---- render ----
@@ -915,10 +1243,19 @@ function frame(now) {
     sunDir: globalUniforms.uSunDir.value,
     underwater,
   });
+
+  // deferred saves run here, immediately after a render, so the canvas can be
+  // sampled for the world-browser thumbnail within the same frame task
+  if (g._pendingSave) {
+    g._pendingSave = false;
+    const thumb = grabThumbnail(g.graphics);
+    if (thumb) g.lastThumb = thumb;
+    SaveFile.saveWorld(g.slot, g, thumb);
+  }
 }
 
 requestAnimationFrame(frame);
 
 window.addEventListener('beforeunload', () => {
-  if (game && game.started) SaveFile.saveWorld(game.slot, game);
+  syncQuitSave(game);
 });

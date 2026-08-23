@@ -170,6 +170,7 @@ export class Interaction {
     this.world.containers.delete(x + ',' + y + ',' + z);
 
     this.world.setBlock(x, y, z, B.AIR);
+    if (this.game.net) this.game.net.sendBlock(x, y, z, B.AIR);
 
     // drops
     if (this.canHarvest(bd)) {
@@ -243,6 +244,7 @@ export class Interaction {
       const top = this.world.getBlockRaw(hit.x, hit.y, hit.z);
       if ((top === B.GRASS || top === B.DIRT) && hit.face[1] === 1) {
         this.world.setBlock(hit.x, hit.y, hit.z, B.FARMLAND);
+        if (this.game.net) this.game.net.sendBlock(hit.x, hit.y, hit.z, B.FARMLAND);
         if (this.game.audio) this.game.audio.dig(B.FARMLAND);
         held.dur = (held.dur ?? ITEMS[held.id].durability) - 1;
         if (held.dur <= 0) this.game.ui.replaceHotbarSlot(null);
@@ -286,6 +288,7 @@ export class Interaction {
     }
 
     this.world.setBlock(px, py, pz, bid, opts);
+    if (this.game.net) this.game.net.sendBlock(px, py, pz, bid, opts.face ?? 0);
     if (this.game.audio) this.game.audio.place(bid);
     if (this.onSwing) this.onSwing(false);
     held.count--;
@@ -304,6 +307,10 @@ export class Interaction {
       case 'bed': this.game.trySleep(); return true;
       case 'lever': {
         this.world.toggleLever(hit.x, hit.y, hit.z);
+        if (this.game.net) {
+          const now = this.world.getBlockRaw(hit.x, hit.y, hit.z);
+          if (now !== undefined) this.game.net.sendBlock(hit.x, hit.y, hit.z, now);
+        }
         if (this.game.audio) this.game.audio.click();
         return true;
       }

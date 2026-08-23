@@ -18,7 +18,12 @@ export class Input {
     this.onWheel = null;     // (deltaY)
     this.onLockChange = null;
 
+    const isTextField = (e) => {
+      const t = e.target;
+      return t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    };
     window.addEventListener('keydown', (e) => {
+      if (isTextField(e)) return; // typing in menus/chat must not hit gameplay
       if (e.repeat) {
         // still preventDefault for gameplay keys
         if (this._isGameKey(e.code)) e.preventDefault();
@@ -29,6 +34,7 @@ export class Input {
       if (this.onKeyDown) this.onKeyDown(e.code, e);
     });
     window.addEventListener('keyup', (e) => {
+      if (isTextField(e)) return;
       this.keys.delete(e.code);
       if (this.onKeyUp) this.onKeyUp(e.code, e);
     });

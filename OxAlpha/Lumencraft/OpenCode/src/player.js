@@ -153,11 +153,24 @@ export class Player {
     }
 
     // fall peak tracking (for fall damage)
-    if (!this.flying && !this.inWater) {
-      if (this.vel.y <= 0) {
-        if (this.fallPeakY === null) this.fallPeakY = this.pos.y;
-        else if (this.pos.y > this.fallPeakY) this.fallPeakY = this.pos.y;
-      } else if (this.vel.y > 0.5) this.fallPeakY = null;
+    const airEligible = !this.flying && !this.inWater && !this.onLadder;
+    if (airEligible) {
+      if (this.onGround) {
+        // leaving ground this frame starts a fresh tracked fall
+        if (!(this.vel.y > 0)) {
+          if (this.fallPeakY === null) this.fallPeakY = this.pos.y;
+        }
+      } else {
+        if (this.fallPeakY === null || this._fallFresh !== true) {
+          this.fallPeakY = this.pos.y;
+          this._fallFresh = true;
+        } else if (this.pos.y > this.fallPeakY) {
+          this.fallPeakY = this.pos.y;
+        }
+      }
+    } else {
+      this.fallPeakY = null;
+      this._fallFresh = false;
     }
 
     // ---- integrate + collide axis-separated ----
@@ -171,13 +184,13 @@ export class Player {
       if (this.fallPeakY !== null) {
         const dist = this.fallPeakY - this.pos.y;
         this.fallPeakY = null;
+        this._fallFresh = false;
         if (dist > 3.4 && !this.flying) {
           this.damage(Math.floor(dist - 3), 'fall');
         }
-      } else if (this.vel.y < -9) {
-        // safety net
       }
-      if (Math.abs(this.vel.y) > 2) this._landedHard = true;
+      this.fallPeakY = null;
+      this._fallFresh = false;
     }
 
     // footsteps
