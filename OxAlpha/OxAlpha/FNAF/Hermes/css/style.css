@@ -1,0 +1,112 @@
+/* Wonderdrome UI */
+:root{
+  --fg:#cfd6d4; --dim:#7a8482; --accent:#8fe0b8; --warn:#ffb040; --bad:#ff5040;
+  --bg:#05070a; --panel:#0a0e12ee; --line:#22303a;
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ width:100%; height:100%; overflow:hidden; background:var(--bg);
+  font-family:"Consolas","Cascadia Mono",monospace; color:var(--fg); user-select:none; }
+.hidden{ display:none !important; }
+#game{ position:fixed; inset:0; width:100%; height:100%; display:block; }
+
+button{ font-family:inherit; background:#0c1418; color:var(--fg);
+  border:1px solid var(--line); padding:10px 22px; cursor:pointer; letter-spacing:0.12em;
+  transition:border-color .15s, background .15s, transform .05s; }
+button:hover{ border-color:var(--accent); color:var(--accent); }
+button:active{ transform:translateY(1px); }
+button.locked, button:disabled{ opacity:0.35; cursor:not-allowed; }
+
+/* ---------- MENU ---------- */
+#menu{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  background:radial-gradient(ellipse at 50% 30%, #0a1016cc 0%, #04060acc 70%); z-index:40; }
+.menu-inner{ text-align:center; }
+.menu-title{ font-size:min(9vw,84px); letter-spacing:0.28em; color:#e8f2ec;
+  text-shadow:0 0 24px #16302a, 0 2px 0 #000; font-weight:700; }
+.menu-sub{ color:var(--dim); margin:14px 0 38px; letter-spacing:0.18em; font-size:13px; }
+.menu-buttons{ display:flex; flex-direction:column; gap:12px; align-items:center; }
+.menu-buttons button{ min-width:340px; font-size:15px; }
+.menu-foot{ margin-top:42px; color:#4a5452; font-size:12px; letter-spacing:0.2em; }
+.panel{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  background:var(--panel); border:1px solid var(--line); padding:26px 34px; z-index:41;
+  max-width:680px; max-height:82vh; overflow:auto; backdrop-filter:blur(4px); }
+.panel h3{ letter-spacing:0.2em; margin-bottom:18px; color:var(--accent); }
+.panel .how p{ margin-bottom:12px; line-height:1.55; font-size:13.5px; color:#b8c4c0; }
+.panel label{ display:block; margin:14px 0; }
+.panel select, .panel input[type=range]{ margin-left:12px; background:#0c1418; color:var(--fg);
+  border:1px solid var(--line); padding:4px 8px; }
+.panel .back{ margin-top:16px; }
+
+/* ---------- HUD ---------- */
+#hud{ position:fixed; inset:0; pointer-events:none; z-index:20; opacity:0; transition:opacity .4s; }
+.hud-label{ font-size:10px; letter-spacing:0.25em; color:var(--dim); }
+#hudPower{ position:absolute; left:22px; bottom:20px; }
+#powerBar,#boxBar{ width:190px; height:10px; background:#0a0f13; border:1px solid var(--line);
+  margin-top:5px; }
+#powerFill{ height:100%; width:100%; background:linear-gradient(90deg,#3f7f63,#8fe0b8); transition:width .3s; }
+#powerFill.low{ background:linear-gradient(90deg,#7f2020,#ff5040); animation:pulse 0.8s infinite; }
+@keyframes pulse{ 50%{ opacity:0.55; } }
+#usage{ margin-top:8px; }
+#hudClock{ position:absolute; right:26px; bottom:20px; text-align:right; }
+#clockTime{ font-size:30px; color:#e8f2ec; letter-spacing:0.1em; }
+#clockNight{ color:var(--dim); letter-spacing:0.3em; font-size:11px; margin-top:2px; }
+#hudBox{ position:absolute; left:22px; bottom:86px; display:none; }
+#boxFill{ height:100%; width:100%; background:linear-gradient(90deg,#7a5a20,#ffd070); transition:width .3s; }
+#boxFill.low{ background:linear-gradient(90deg,#7f2020,#ff5040); animation:pulse 0.5s infinite; }
+#hudHints{ position:absolute; top:14px; left:50%; transform:translateX(-50%); display:flex;
+  gap:18px; color:#54605e; font-size:11px; letter-spacing:0.14em; }
+#crosshair{ position:absolute; left:50%; top:50%; width:4px; height:4px; margin:-2px;
+  border-radius:50%; background:#ffffff33; }
+#toast{ position:absolute; top:64px; left:50%; transform:translateX(-50%);
+  background:#0a0e12dd; border:1px solid var(--line); color:var(--accent);
+  padding:9px 20px; font-size:13px; letter-spacing:0.08em; opacity:0; transition:opacity .3s; }
+#toast.show{ opacity:1; }
+#pauseHint{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  color:#8fa39e; background:#00000088; padding:12px 24px; border:1px solid var(--line);
+  letter-spacing:0.15em; font-size:13px; }
+
+/* ---------- MONITOR ---------- */
+#monitor{ position:fixed; inset:0; z-index:25; display:flex; align-items:center;
+  justify-content:center; gap:26px; background:#020305ee; }
+#camWrap{ position:relative; border:1px solid var(--line); box-shadow:0 0 60px #000 inset; }
+#camCanvas{ display:block; width:min(62vw,960px); height:auto; background:#000; }
+#camStatic{ position:absolute; inset:0; pointer-events:none; mix-blend-mode:screen; }
+#camLabel{ position:absolute; left:12px; top:10px; display:flex; gap:14px; align-items:baseline; }
+#camName{ color:#baffdf; letter-spacing:0.2em; font-size:15px; text-shadow:0 0 8px #0a4; }
+#camNum{ color:#5a8a78; font-size:12px; letter-spacing:0.2em; }
+#camRec{ position:absolute; right:14px; top:12px; color:#ff6050; font-size:12px;
+  letter-spacing:0.2em; animation:pulse 1.6s infinite; }
+#mapWrap{ position:relative; }
+#mapCanvas{ background:#060a0dcc; border:1px solid var(--line); display:block; }
+#mapButtons{ display:flex; flex-wrap:wrap; gap:6px; width:300px; margin-top:10px; }
+.camBtn{ flex:1 0 28%; font-size:11px; padding:8px 2px; letter-spacing:0.08em; }
+.camBtn.active{ border-color:var(--accent); color:var(--accent); background:#0c2018; }
+#boxControls{ margin-top:14px; border:1px solid var(--line); padding:12px; text-align:center; }
+#btnWind{ width:100%; font-size:13px; }
+#btnWind:active{ background:#221a08; border-color:var(--warn); color:var(--warn); }
+
+/* ---------- DEATH / WIN / PAUSE / FILES ---------- */
+#death,#win,#pause,#filesPanel{ position:fixed; inset:0; z-index:50; display:flex;
+  align-items:center; justify-content:center; background:#000000e8; }
+.death-inner,.win-inner,.pause-inner,.files-inner{ text-align:center; max-width:720px; padding:30px; }
+.death-title{ font-size:44px; letter-spacing:0.3em; color:#a03028; text-shadow:0 0 30px #400; }
+.death-by{ margin-top:18px; color:#d0d8d4; letter-spacing:0.2em; }
+.death-quote{ margin:16px 0 30px; color:#6a7472; font-style:italic; }
+.win-title{ font-size:64px; letter-spacing:0.3em; color:#cfeee0; text-shadow:0 0 40px #17453a; }
+.win-sub{ margin-top:12px; color:var(--accent); letter-spacing:0.25em; }
+.win-tape{ margin:26px auto; text-align:left; background:var(--panel); border:1px solid var(--line);
+  padding:18px 22px; max-width:600px; }
+.tape-from{ color:var(--warn); font-size:12px; letter-spacing:0.18em; margin-bottom:10px; }
+.tape-text{ color:#c2ccc8; line-height:1.6; font-size:14px; }
+.win-inner button,.death-inner button{ margin:6px; min-width:240px; }
+.pause-inner h3{ margin-bottom:20px; letter-spacing:0.3em; }
+.pause-inner button{ display:block; width:280px; margin:10px auto; }
+.files-inner h3{ letter-spacing:0.25em; color:var(--accent); margin-bottom:16px; }
+#filesList{ display:flex; flex-direction:column; gap:8px; margin-bottom:18px; }
+.fileBtn{ text-align:left; font-size:13px; }
+.fileText{ text-align:left; background:var(--panel); border:1px solid var(--line);
+  padding:18px 22px; line-height:1.65; font-size:14px; color:#c2ccc8; max-width:600px; }
+.fileText.dim{ color:#5a6462; font-style:italic; }
+.files-inner .back{ display:block; margin:0 auto; }
+@media (max-width:1100px){
+  #monitor{ flex-direction:column; }
+}

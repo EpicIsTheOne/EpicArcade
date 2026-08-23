@@ -1,0 +1,7 @@
+0s play|training|0
+15s results|training|0
+18s play|resistance|1
+43s results|resistance|1
+45s play|slums|2
+116s results|slums|2
+118s play|paradise|3

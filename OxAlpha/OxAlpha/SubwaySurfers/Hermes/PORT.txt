@@ -1,0 +1,7 @@
+SKYLINE RUSH - localhost port record
+Port: 8642 (127.0.0.1 bind only)
+Chosen: verified free at first boot via netstat; re-verify before reuse.
+Serve from this directory:
+  python -m http.server 8642 --bind 127.0.0.1
+URL: http://127.0.0.1:8642/
+QA flag: append ?qa=1 for reduced graphics mode.

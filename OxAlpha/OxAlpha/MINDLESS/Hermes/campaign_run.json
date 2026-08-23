@@ -1,0 +1,18 @@
+{
+  "ok": true,
+  "finalState": "results",
+  "cleared": [
+    "training",
+    "resistance",
+    "slums",
+    "slums",
+    "paradise"
+  ],
+  "rescues": 0,
+  "bestTimes": {
+    "oblitus_slums": 0,
+    "ruined_paradise": 0
+  },
+  "errors": 0,
+  "elapsedSec": "503"
+}

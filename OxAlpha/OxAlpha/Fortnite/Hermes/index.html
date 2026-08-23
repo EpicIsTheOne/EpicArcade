@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%230a0e14'/><path d='M3 12 L8 3 L13 12 Z' fill='%2359c8ff'/></svg>">
+<title>ISLEBREAK — Battle for Kestrel Isle</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- HUD -->
+<div id="hud" class="hidden"></div>
+
+<!-- heal progress -->
+<div id="healBar" style="display:none"><div></div></div>
+
+<!-- LOBBY -->
+<div id="lobby">
+  <div class="panel">
+    <h1>ISLEBREAK</h1>
+    <p class="tagline">48 drop onto Kestrel Isle. One walks away.</p>
+    <button id="btnPlay">BOARD THE SKYBARGE</button>
+    <button id="btnSettings" class="ghost">SETTINGS</button>
+    <div id="settings" class="hidden">
+      <label>Quality
+        <select id="quality">
+          <option value="low">Low (QA / integrated GPUs)</option>
+          <option value="high" selected>High (recommended)</option>
+          <option value="ultra">Ultra (make the GPU sweat)</option>
+        </select>
+      </label>
+      <label>Sensitivity
+        <input type="range" id="sens" min="0.3" max="2.5" step="0.05" value="1">
+      </label>
+      <label class="chk"><input type="checkbox" id="invertX"> Invert mouse X (OFF by default)</label>
+      <label class="chk"><input type="checkbox" id="invertY"> Invert mouse Y (OFF by default)</label>
+      <div class="controls-list">
+        <b>CONTROLS</b>
+        <span>WASD move · Shift sprint · Space jump · C slide/crouch</span>
+        <span>LMB fire/place · RMB aim · R reload · E interact</span>
+        <span>B build mode · 1-4 wall/floor/ramp/cone · T tier · R rotate · G edit wall</span>
+        <span>Mouse wheel / 1-5 weapon slots · Esc pause</span>
+      </div>
+    </div>
+  </div>
+  <div class="credit">An original battle royale · Kestrel Isle · built with three.js</div>
+</div>
+
+<!-- PAUSE -->
+<div id="pausemenu" class="hidden">
+  <div class="panel small">
+    <h2>PAUSED</h2>
+    <button id="btnResume">RESUME</button>
+    <button id="btnQuit" class="ghost">QUIT TO DESKTOP</button>
+    <p class="hint">Tip: press B to build. Walls win fights.</p>
+  </div>
+</div>
+
+<!-- END SCREEN -->
+<div id="endscreen" class="hidden">
+  <div class="panel">
+    <h1 id="endTitle">VICTORY KESTREL</h1>
+    <p id="endStats"></p>
+    <button id="btnPlayAgain">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./node_modules/three/build/three.module.js",
+               "three/addons/": "./vendor/addons/" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+window.THREE = THREE;
+window.__charMod = await import('./src/character.js');
+const { Game } = await import('./src/game.js');
+window.__gameInstance = new Game();
+</script>
+</body>
+</html>
+

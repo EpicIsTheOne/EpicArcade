@@ -1,0 +1,4 @@
+slums -> TIMEOUT-FIGHTING | phases: [ 1 ] | rescues: 0
+paradise -> TIMEOUT-FIGHTING | phases: [ 1 ] | rescues: 0
+facility -> TIMEOUT-FIGHTING | phases: [ 1 ] | rescues: 0
+SUMMARY: {"slums":{"killed":false,"sawBoss":true,"phases":[1],"rescued":0},"paradise":{"killed":false,"sawBoss":true,"phases":[1],"rescued":0},"facility":{"killed":false,"sawBoss":true,"phases":[1],"rescued":0}}

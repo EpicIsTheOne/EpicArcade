@@ -1,0 +1,50 @@
+{
+  "results": [
+    {
+      "name": "RIGHT key moves right",
+      "pass": true,
+      "detail": "30->57"
+    },
+    {
+      "name": "LEFT key moves left",
+      "pass": true,
+      "detail": "->40"
+    },
+    {
+      "name": "stage \"training\" completes",
+      "pass": true,
+      "detail": "11s"
+    },
+    {
+      "name": "stage \"resistance\" completes",
+      "pass": true,
+      "detail": "25s"
+    },
+    {
+      "name": "stage \"slums\" completes",
+      "pass": true,
+      "detail": "68s (boss seen)"
+    },
+    {
+      "name": "stage \"paradise\" completes",
+      "pass": false,
+      "detail": "261s (boss seen)"
+    },
+    {
+      "name": "stage \"facility\" completes",
+      "pass": true,
+      "detail": "82s (boss seen)"
+    },
+    {
+      "name": "progress save exists",
+      "pass": true,
+      "detail": "{\"best_times\":{\"oblitus_slums\":0,\"mind_facility\":0},\"viewed_story\":[\"training:op"
+    },
+    {
+      "name": "zero runtime errors across all runs",
+      "pass": true,
+      "detail": "0 errors"
+    }
+  ],
+  "errors": 0
+}

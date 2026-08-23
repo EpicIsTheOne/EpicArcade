@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LIMINAL DYNAMICS — Aperture Research Annex</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cellipse cx='8' cy='8' rx='5' ry='7' fill='%233fa9ff'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --hud-fg: #cfe8ff;
+    --hud-dim: #6d8aa8;
+    --blue: #3fa9ff;
+    --orange: #ff9a3c;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05070a; }
+  body { font-family: "Segoe UI", "Inter", system-ui, sans-serif; color: var(--hud-fg); }
+  #app { position: fixed; inset: 0; }
+  canvas { display: block; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+
+  #crosshair {
+    position: absolute; left: 50%; top: 50%; width: 26px; height: 26px;
+    transform: translate(-50%, -50%);
+  }
+  #crosshair .dot {
+    position: absolute; left: 50%; top: 50%; width: 3px; height: 3px;
+    background: rgba(255,255,255,.85); border-radius: 50%; transform: translate(-50%,-50%);
+    box-shadow: 0 0 4px rgba(120,190,255,.8);
+  }
+  #crosshair .seg {
+    position: absolute; background: rgba(210,235,255,.9); transition: all .12s ease-out;
+  }
+  #crosshair .seg.tl { left: 1px;  top: 1px;    width: 7px; height: 2px; }
+  #crosshair .seg.tr { right: 1px; top: 1px;    width: 7px; height: 2px; }
+  #crosshair .seg.bl { left: 1px;  bottom: 1px; width: 7px; height: 2px; }
+  #crosshair .seg.br { right: 1px; bottom: 1px; width: 7px; height: 2px; }
+  #crosshair .seg.vt { left: 50%; top: 1px; width: 2px; height: 6px; transform: translateX(-50%); }
+  #crosshair .seg.vb { left: 50%; bottom: 1px; width: 2px; height: 6px; transform: translateX(-50%); }
+  #crosshair.blue  .seg { background: var(--blue);   box-shadow: 0 0 6px var(--blue); }
+  #crosshair.orange .seg { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+
+  #chamber-label {
+    position: absolute; top: 26px; left: 34px;
+    font-size: 15px; letter-spacing: .35em; color: var(--hud-fg);
+    text-shadow: 0 0 12px rgba(80,160,255,.35);
+  }
+  #chamber-label small { display: block; letter-spacing: .18em; color: var(--hud-dim); font-size: 10px; margin-top: 5px; }
+
+  #subtitle {
+    position: absolute; bottom: 12%; left: 50%; transform: translateX(-50%);
+    max-width: 720px; text-align: center; font-size: 17px; line-height: 1.55;
+    color: #e8f2ff; text-shadow: 0 2px 8px rgba(0,0,0,.9);
+    opacity: 0; transition: opacity .5s ease; padding: 0 20px;
+  }
+  #subtitle.show { opacity: 1; }
+  #subtitle .who { color: #7fd4ff; letter-spacing: .12em; font-size: 12px; display: block; margin-bottom: 6px; }
+
+  #hint {
+    position: absolute; bottom: 34px; left: 50%; transform: translateX(-50%);
+    font-size: 12.5px; letter-spacing: .14em; color: var(--hud-dim); text-align: center;
+    text-shadow: 0 1px 4px #000;
+  }
+  #hint b { color: #bcd9f5; font-weight: 600; }
+
+  #held {
+    position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
+    font-size: 12px; letter-spacing: .2em; color: #9fd0a8; display: none;
+    text-shadow: 0 0 8px rgba(120,220,150,.4);
+  }
+
+  #vignette { position: fixed; inset: 0; pointer-events: none; z-index: 5;
+    background: radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,.38) 100%); }
+  #damage { position: fixed; inset: 0; pointer-events: none; z-index: 6; opacity: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(255,40,30,.45) 100%);
+    transition: opacity .25s ease; }
+
+  /* ---------- Menus ---------- */
+  .screen {
+    position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    background: radial-gradient(ellipse at 50% 35%, rgba(14,26,44,.92), rgba(3,5,9,.97));
+    backdrop-filter: blur(6px); transition: opacity .45s ease; 
+  }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+  .screen h1 {
+    font-size: 54px; font-weight: 200; letter-spacing: .42em; text-indent: .42em;
+    color: #eaf4ff; margin-bottom: 8px;
+    text-shadow: 0 0 30px rgba(70,150,255,.45);
+  }
+  .screen h2 { font-size: 15px; font-weight: 400; letter-spacing: .5em; color: var(--hud-dim); margin-bottom: 46px; }
+  .screen .panel { max-width: 660px; padding: 0 30px; }
+  .screen p.lead { font-size: 15px; line-height: 1.8; color: #a9c2da; margin-bottom: 34px; }
+  .btn {
+    pointer-events: auto; cursor: pointer; display: inline-block;
+    padding: 14px 52px; margin: 6px; font-size: 14px; letter-spacing: .3em; text-indent:.3em;
+    color: #dceeff; background: rgba(40,80,130,.25); border: 1px solid rgba(110,180,255,.4);
+    transition: all .2s ease; user-select: none;
+  }
+  .btn:hover { background: rgba(70,140,220,.35); border-color: rgba(150,210,255,.8); box-shadow: 0 0 24px rgba(80,160,255,.25); }
+  .btn.primary { border-color: rgba(150,210,255,.75); background: rgba(50,100,160,.35); }
+  .controls-grid {
+    display: grid; grid-template-columns: auto auto; gap: 7px 26px; margin: 0 auto 36px;
+    font-size: 13px; color: #9db8d2; text-align: left;
+  }
+  .controls-grid b { color: #e2eefc; font-weight: 600; letter-spacing: .06em; }
+  .screen .foot { margin-top: 40px; font-size: 11px; letter-spacing: .25em; color: #44597a; }
+
+  #pause-screen .panel h1 { font-size: 34px; }
+  .chk { display:flex; gap:10px; align-items:center; font-size:13px; color:#9db8d2; margin-top:8px;}
+  #settings-screen .row { display:flex; align-items:center; gap:18px; margin:10px 0; font-size:13px; color:#9db8d2;}
+  #settings-screen select, #settings-screen input[type=range] { pointer-events:auto; accent-color:#5aa8ff; }
+  #settings-screen select { background:#0d1622; color:#dceeff; border:1px solid #2a4a70; padding:6px 10px; font-family:inherit; }
+
+  /* Loading */
+  #loading { position: fixed; inset: 0; z-index: 90; background: #04060a; display: flex;
+    flex-direction: column; align-items: center; justify-content: center; transition: opacity .6s; }
+  #loading .bar { width: 300px; height: 2px; background: #14202f; margin-top: 26px; }
+  #loading .bar i { display: block; height: 100%; width: 0%; background: #5aa8ff; transition: width .3s; }
+  #loading .t { font-size: 12px; letter-spacing: .4em; color: #5d7a9c; }
+  #loading h3 { font-weight: 200; letter-spacing: .5em; font-size: 20px; color: #9cc4ee; }
+
+  #perf { position: fixed; right: 12px; top: 10px; font-size: 11px; color: #5d7a9c;
+    letter-spacing: .1em; z-index: 20; text-align: right; text-shadow: 0 1px 3px #000; display:none;}
+  #toast { position: fixed; top: 18%; left: 50%; transform: translateX(-50%); z-index: 30;
+    padding: 10px 26px; background: rgba(10,20,35,.85); border: 1px solid rgba(110,180,255,.35);
+    font-size: 13px; letter-spacing: .18em; color: #cfe8ff; opacity: 0; transition: opacity .4s; pointer-events:none;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="hud">
+  <div id="crosshair">
+    <div class="seg tl"></div><div class="seg tr"></div><div class="seg bl"></div><div class="seg br"></div>
+    <div class="seg vt"></div><div class="seg vb"></div><div class="dot"></div>
+  </div>
+  <div id="chamber-label">CHAMBER 00<small id="chamber-sub">CALIBRATION</small></div>
+  <div id="subtitle"></div>
+  <div id="hint"></div>
+  <div id="held">CARRYING — [E] DROP · [LMB THROW? NO — E ONLY]</div>
+  <div id="perf"></div>
+</div>
+<div id="vignette"></div>
+<div id="damage"></div>
+<div id="toast"></div>
+
+<div id="loading"><h3>LIMINAL DYNAMICS</h3><div class="t" id="load-text">INITIALIZING RENDERER</div><div class="bar"><i id="load-bar"></i></div></div>
+
+<div id="menu-screen" class="screen hidden">
+  <div class="panel">
+    <h1>LIMINAL DYNAMICS</h1>
+    <h2>APERTURE RESEARCH ANNEX · SITE C</h2>
+    <p class="lead">The Annex studies what happens to space when you disagree with it.
+      You are today's disagreement. Place paired rifts, keep your momentum, and try
+      to leave through the doors we lock behind you.</p>
+    <div class="controls-grid">
+      <span><b>W A S D</b></span><span>move (W = forward, A = left)</span>
+      <span><b>MOUSE</b></span><span>look (standard, non-inverted)</span>
+      <span><b>LEFT CLICK</b></span><span>blue rift</span>
+      <span><b>RIGHT CLICK</b></span><span>amber rift</span>
+      <span><b>SPACE</b></span><span>jump</span>
+      <span><b>E</b></span><span>pick up / drop / use</span>
+      <span><b>R</b></span><span>reset chamber</span>
+      <span><b>ESC</b></span><span>pause</span>
+    </div>
+    <div class="btn primary" id="btn-start">BEGIN ORIENTATION</div>
+    <div class="btn" id="btn-settings">SETTINGS</div>
+    <div class="foot">A REIKA / HERMES ORIGINAL · NO PORTAL GUNS WERE LICENSED</div>
+  </div>
+</div>
+
+<div id="pause-screen" class="screen hidden">
+  <div class="panel">
+    <h1>PAUSED</h1>
+    <h2 id="pause-sub">SIMULATION SUSPENDED</h2>
+    <div class="btn primary" id="btn-resume">RESUME</div>
+    <div class="btn" id="btn-restart-chamber">RESTART CHAMBER</div>
+    <div class="btn" id="btn-settings2">SETTINGS</div>
+    <div class="chk"><input type="checkbox" id="chk-invert-y" style="pointer-events:auto"> <label for="chk-invert-y">Invert mouse Y</label></div>
+    <div class="chk"><input type="checkbox" id="chk-invert-x" style="pointer-events:auto"> <label for="chk-invert-x">Invert mouse X</label></div>
+    <div class="foot">ESC OR RESUME TO CONTINUE</div>
+  </div>
+</div>
+
+<div id="settings-screen" class="screen hidden">
+  <div class="panel">
+    <h1 style="font-size:30px">SETTINGS</h1>
+    <h2>RENDERING &amp; INPUT</h2>
+    <div class="row"><span style="width:150px">Quality</span>
+      <select id="sel-quality">
+        <option value="ultra">ULTRA — full portal recursion, shadows, bloom</option>
+        <option value="high">HIGH — recursion 2, shadows</option>
+        <option value="medium">MEDIUM — recursion 1, soft shadows</option>
+        <option value="qa">QA MINIMUM — no recursion (automated testing)</option>
+      </select>
+    </div>
+    <div class="row"><span style="width:150px">Render scale</span><input type="range" id="rng-scale" min="50" max="150" step="5" value="100"><span id="scale-val">100%</span></div>
+    <div class="row"><span style="width:150px">FOV</span><input type="range" id="rng-fov" min="60" max="100" step="1" value="80"><span id="fov-val">80°</span></div>
+    <div class="row"><span style="width:150px">Mouse sensitivity</span><input type="range" id="rng-sens" min="20" max="200" step="5" value="100"><span id="sens-val">1.00</span></div>
+    <div class="row"><span style="width:150px">Audio</span><input type="checkbox" id="chk-audio" checked style="pointer-events:auto"></div>
+    <div class="btn primary" id="btn-settings-back" style="margin-top:26px">BACK</div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./src/vendor/three.module.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+0s play -- -- -- --
+5s play A- -- -- --
+15s play AC A- -- --
+25s play AC AC A- --
+40s play AC AC AC --
+45s play AC AC AC A-
+>>> slums FULLY CLEARED in 150s

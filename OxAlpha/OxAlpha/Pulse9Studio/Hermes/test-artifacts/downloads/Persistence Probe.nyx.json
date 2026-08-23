@@ -1,0 +1,1271 @@
+{
+ "app": "nyx-daw",
+ "version": 1,
+ "name": "Persistence Probe",
+ "bpm": 124,
+ "swing": 0,
+ "patterns": [
+  {
+   "id": "pt_52_d5mtj",
+   "name": "Drums A",
+   "length": 64,
+   "color": "#e05656",
+   "notes": {
+    "ch_40_5jbhw": [
+     {
+      "key": 0,
+      "step": 0,
+      "len": 1,
+      "vel": 1
+     },
+     {
+      "key": 0,
+      "step": 7,
+      "len": 1,
+      "vel": 0.8
+     },
+     {
+      "key": 0,
+      "step": 10,
+      "len": 1,
+      "vel": 0.92
+     },
+     {
+      "key": 0,
+      "step": 16,
+      "len": 1,
+      "vel": 1
+     },
+     {
+      "key": 0,
+      "step": 23,
+      "len": 1,
+      "vel": 0.8
+     },
+     {
+      "key": 0,
+      "step": 26,
+      "len": 1,
+      "vel": 0.92
+     },
+     {
+      "key": 0,
+      "step": 30,
+      "len": 1,
+      "vel": 0.7
+     },
+     {
+      "key": 0,
+      "step": 32,
+      "len": 1,
+      "vel": 1
+     },
+     {
+      "key": 0,
+      "step": 39,
+      "len": 1,
+      "vel": 0.8
+     },
+     {
+      "key": 0,
+      "step": 42,
+      "len": 1,
+      "vel": 0.92
+     },
+     {
+      "key": 0,
+      "step": 48,
+      "len": 1,
+      "vel": 1
+     },
+     {
+      "key": 0,
+      "step": 55,
+      "len": 1,
+      "vel": 0.8
+     },
+     {
+      "key": 0,
+      "step": 58,
+      "len": 1,
+      "vel": 0.92
+     },
+     {
+      "key": 0,
+      "step": 62,
+      "len": 1,
+      "vel": 0.7
+     }
+    ],
+    "ch_41_f63pl": [
+     {
+      "key": 0,
+      "step": 4,
+      "len": 1,
+      "vel": 0.9
+     },
+     {
+      "key": 0,
+      "step": 12,
+      "len": 1,
+      "vel": 0.95
+     },
+     {
+      "key": 0,
+      "step": 20,
+      "len": 1,
+      "vel": 0.9
+     },
+     {
+      "key": 0,
+      "step": 28,
+      "len": 1,
+      "vel": 0.95
+     },
+     {
+      "key": 0,
+      "step": 36,
+      "len": 1,
+      "vel": 0.9
+     },
+     {
+      "key": 0,
+      "step": 44,
+      "len": 1,
+      "vel": 0.95
+     },
+     {
+      "key": 0,
+      "step": 52,
+      "len": 1,
+      "vel": 0.9
+     },
+     {
+      "key": 0,
+      "step": 60,
+      "len": 1,
+      "vel": 0.95
+     }
+    ],
+    "ch_42_xd6s5": [
+     {
+      "key": 0,
+      "step": 0,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 2,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 4,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 6,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 8,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 10,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 12,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 14,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 16,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 18,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 20,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 22,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 24,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 26,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 28,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 30,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 32,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 34,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 36,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 38,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 40,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 42,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 44,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 46,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 48,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 50,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 52,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 54,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 56,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 58,
+      "len": 1,
+      "vel": 0.5
+     },
+     {
+      "key": 0,
+      "step": 60,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 0,
+      "step": 62,
+      "len": 1,
+      "vel": 0.5
+     }
+    ],
+    "ch_43_7iynx": [
+     {
+      "key": 0,
+      "step": 62,
+      "len": 2,
+      "vel": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "id": "pt_53_qgj78",
+   "name": "Bassline",
+   "length": 64,
+   "color": "#4ad0a8",
+   "notes": {
+    "ch_45_6bc57": [
+     {
+      "key": 33,
+      "step": 0,
+      "len": 1,
+      "vel": 0.95
+     },
+     {
+      "key": 33,
+      "step": 3,
+      "len": 1,
+      "vel": 0.6
+     },
+     {
+      "key": 33,
+      "step": 6,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 45,
+      "step": 8,
+      "len": 1,
+      "vel": 0.7
+     },
+     {
+      "key": 33,
+      "step": 11,
+      "len": 1,
+      "vel": 0.65
+     },
+     {
+      "key": 40,
+      "step": 13,
+      "len": 1,
+      "vel": 0.8
+     },
+     {
+      "key": 29,
+      "step": 16,
+      "len": 1,
+      "vel": 0.95
+     },
+     {
+      "key": 29,
+      "step": 19,
+      "len": 1,
+      "vel": 0.6
+     },
+     {
+      "key": 29,
+      "step": 22,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 41,
+      "step": 24,
+      "len": 1,
+      "vel": 0.7
+     },
+     {
+      "key": 29,
+      "step": 27,
+      "len": 1,
+      "vel": 0.65
+     },
+     {
+      "key": 36,
+      "step": 29,
+      "len": 1,
+      "vel": 0.8
+     },
+     {
+      "key": 36,
+      "step": 32,
+      "len": 1,
+      "vel": 0.95
+     },
+     {
+      "key": 36,
+      "step": 35,
+      "len": 1,
+      "vel": 0.6
+     },
+     {
+      "key": 36,
+      "step": 38,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 48,
+      "step": 40,
+      "len": 1,
+      "vel": 0.7
+     },
+     {
+      "key": 36,
+      "step": 43,
+      "len": 1,
+      "vel": 0.65
+     },
+     {
+      "key": 43,
+      "step": 45,
+      "len": 1,
+      "vel": 0.8
+     },
+     {
+      "key": 31,
+      "step": 48,
+      "len": 1,
+      "vel": 0.95
+     },
+     {
+      "key": 31,
+      "step": 51,
+      "len": 1,
+      "vel": 0.6
+     },
+     {
+      "key": 31,
+      "step": 54,
+      "len": 1,
+      "vel": 0.85
+     },
+     {
+      "key": 43,
+      "step": 56,
+      "len": 1,
+      "vel": 0.7
+     },
+     {
+      "key": 31,
+      "step": 59,
+      "len": 1,
+      "vel": 0.65
+     },
+     {
+      "key": 38,
+      "step": 61,
+      "len": 1,
+      "vel": 0.8
+     }
+    ]
+   }
+  },
+  {
+   "id": "pt_54_c8nqy",
+   "name": "Chords",
+   "length": 64,
+   "color": "#7ba7ff",
+   "notes": {
+    "ch_47_ih1kz": [
+     {
+      "key": 57,
+      "step": 2,
+      "len": 2.5,
+      "vel": 0.7
+     },
+     {
+      "key": 60,
+      "step": 2,
+      "len": 2.5,
+      "vel": 0.6
+     },
+     {
+      "key": 64,
+      "step": 2,
+      "len": 2.5,
+      "vel": 0.6
+     },
+     {
+      "key": 57,
+      "step": 9,
+      "len": 2,
+      "vel": 0.6
+     },
+     {
+      "key": 60,
+      "step": 9,
+      "len": 2,
+      "vel": 0.55
+     },
+     {
+      "key": 64,
+      "step": 9,
+      "len": 2,
+      "vel": 0.55
+     },
+     {
+      "key": 53,
+      "step": 18,
+      "len": 2.5,
+      "vel": 0.7
+     },
+     {
+      "key": 57,
+      "step": 18,
+      "len": 2.5,
+      "vel": 0.6
+     },
+     {
+      "key": 60,
+      "step": 18,
+      "len": 2.5,
+      "vel": 0.6
+     },
+     {
+      "key": 53,
+      "step": 25,
+      "len": 2,
+      "vel": 0.6
+     },
+     {
+      "key": 57,
+      "step": 25,
+      "len": 2,
+      "vel": 0.55
+     },
+     {
+      "key": 60,
+      "step": 25,
+      "len": 2,
+      "vel": 0.55
+     },
+     {
+      "key": 55,
+      "step": 34,
+      "len": 2.5,
+      "vel": 0.7
+     },
+     {
+      "key": 60,
+      "step": 34,
+      "len": 2.5,
+      "vel": 0.6
+     },
+     {
+      "key": 64,
+      "step": 34,
+      "len": 2.5,
+      "vel": 0.6
+     },
+     {
+      "key": 55,
+      "step": 41,
+      "len": 2,
+      "vel": 0.6
+     },
+     {
+      "key": 60,
+      "step": 41,
+      "len": 2,
+      "vel": 0.55
+     },
+     {
+      "key": 64,
+      "step": 41,
+      "len": 2,
+      "vel": 0.55
+     },
+     {
+      "key": 55,
+      "step": 50,
+      "len": 2.5,
+      "vel": 0.7
+     },
+     {
+      "key": 59,
+      "step": 50,
+      "len": 2.5,
+      "vel": 0.6
+     },
+     {
+      "key": 62,
+      "step": 50,
+      "len": 2.5,
+      "vel": 0.6
+     },
+     {
+      "key": 55,
+      "step": 57,
+      "len": 2,
+      "vel": 0.6
+     },
+     {
+      "key": 59,
+      "step": 57,
+      "len": 2,
+      "vel": 0.55
+     },
+     {
+      "key": 62,
+      "step": 57,
+      "len": 2,
+      "vel": 0.55
+     }
+    ]
+   }
+  },
+  {
+   "id": "pt_55_0i7j3",
+   "name": "Lead Melody",
+   "length": 64,
+   "color": "#ff7bd5",
+   "notes": {
+    "ch_51_c0zdt": [
+     {
+      "key": 72,
+      "step": 0,
+      "len": 2,
+      "vel": 0.8
+     },
+     {
+      "key": 76,
+      "step": 4,
+      "len": 2,
+      "vel": 0.8
+     }
+    ],
+    "ch_40_5jbhw": [
+     {
+      "key": 60,
+      "step": 4,
+      "len": 1,
+      "vel": 0.85
+     }
+    ]
+   }
+  },
+  {
+   "id": "pt_56_kruk2",
+   "name": "Breakdown",
+   "length": 64,
+   "color": "#b07bff",
+   "notes": {
+    "ch_49_hmdxu": [
+     {
+      "key": 45,
+      "step": 0,
+      "len": 16,
+      "vel": 0.7
+     },
+     {
+      "key": 48,
+      "step": 0,
+      "len": 16,
+      "vel": 0.6
+     },
+     {
+      "key": 52,
+      "step": 0,
+      "len": 16,
+      "vel": 0.6
+     },
+     {
+      "key": 57,
+      "step": 16,
+      "len": 16,
+      "vel": 0.7
+     },
+     {
+      "key": 60,
+      "step": 16,
+      "len": 16,
+      "vel": 0.6
+     },
+     {
+      "key": 64,
+      "step": 16,
+      "len": 16,
+      "vel": 0.6
+     },
+     {
+      "key": 41,
+      "step": 32,
+      "len": 16,
+      "vel": 0.7
+     },
+     {
+      "key": 45,
+      "step": 32,
+      "len": 16,
+      "vel": 0.6
+     },
+     {
+      "key": 48,
+      "step": 32,
+      "len": 16,
+      "vel": 0.6
+     },
+     {
+      "key": 53,
+      "step": 48,
+      "len": 16,
+      "vel": 0.7
+     },
+     {
+      "key": 57,
+      "step": 48,
+      "len": 16,
+      "vel": 0.6
+     },
+     {
+      "key": 60,
+      "step": 48,
+      "len": 16,
+      "vel": 0.6
+     }
+    ],
+    "ch_47_ih1kz": [
+     {
+      "key": 76,
+      "step": 8,
+      "len": 4,
+      "vel": 0.5
+     },
+     {
+      "key": 72,
+      "step": 40,
+      "len": 4,
+      "vel": 0.5
+     }
+    ]
+   }
+  }
+ ],
+ "channels": [
+  {
+   "id": "ch_40_5jbhw",
+   "type": "drum",
+   "sample": "kick",
+   "name": "Kick",
+   "color": "#e05656",
+   "volume": 1,
+   "pan": 0,
+   "mute": false,
+   "solo": false,
+   "mixerTrack": 1,
+   "params": {}
+  },
+  {
+   "id": "ch_41_f63pl",
+   "type": "drum",
+   "sample": "clap",
+   "name": "Clap",
+   "color": "#e08b3a",
+   "volume": 0.8,
+   "pan": 0,
+   "mute": false,
+   "solo": false,
+   "mixerTrack": 2,
+   "params": {}
+  },
+  {
+   "id": "ch_42_xd6s5",
+   "type": "drum",
+   "sample": "hatClosed",
+   "name": "Hat Closed",
+   "color": "#d8cf4a",
+   "volume": 0.62,
+   "pan": 0.12,
+   "mute": false,
+   "solo": false,
+   "mixerTrack": 3,
+   "params": {}
+  },
+  {
+   "id": "ch_43_7iynx",
+   "type": "drum",
+   "sample": "hatOpen",
+   "name": "Hat Open",
+   "color": "#b9d84a",
+   "volume": 0.5,
+   "pan": -0.1,
+   "mute": false,
+   "solo": false,
+   "mixerTrack": 3,
+   "params": {}
+  },
+  {
+   "id": "ch_45_6bc57",
+   "type": "synth",
+   "name": "Deep Bass",
+   "color": "#4ad0a8",
+   "volume": 0.95,
+   "pan": 0,
+   "mute": false,
+   "solo": false,
+   "mixerTrack": 4,
+   "params": {
+    "wave": "sawtooth",
+    "wave2": "square",
+    "wave2Level": 0.5,
+    "detune": 4,
+    "attack": 0.002,
+    "decay": 0.22,
+    "sustain": 0.35,
+    "release": 0.12,
+    "cutoff": 900,
+    "resonance": 9,
+    "filterEnv": 1600,
+    "octave": -1,
+    "glide": 0
+   }
+  },
+  {
+   "id": "ch_47_ih1kz",
+   "type": "synth",
+   "name": "Glass Keys",
+   "color": "#7ba7ff",
+   "volume": 0.62,
+   "pan": -0.18,
+   "mute": false,
+   "solo": false,
+   "mixerTrack": 5,
+   "params": {
+    "wave": "sawtooth",
+    "wave2": "square",
+    "wave2Level": 0.6,
+    "detune": 6,
+    "attack": 0.01,
+    "decay": 0.5,
+    "sustain": 0.25,
+    "release": 0.6,
+    "cutoff": 6500,
+    "resonance": 2,
+    "filterEnv": 1200,
+    "octave": 0,
+    "glide": 0
+   }
+  },
+  {
+   "id": "ch_49_hmdxu",
+   "type": "synth",
+   "name": "Velvet Pad",
+   "color": "#b07bff",
+   "volume": 0.42,
+   "pan": 0.15,
+   "mute": false,
+   "solo": false,
+   "mixerTrack": 6,
+   "params": {
+    "wave": "sawtooth",
+    "wave2": "square",
+    "wave2Level": 0.8,
+    "detune": 14,
+    "attack": 0.6,
+    "decay": 1,
+    "sustain": 0.75,
+    "release": 1.2,
+    "cutoff": 2400,
+    "resonance": 3,
+    "filterEnv": 800,
+    "octave": 0,
+    "glide": 0
+   }
+  },
+  {
+   "id": "ch_51_c0zdt",
+   "type": "synth",
+   "name": "Neon Lead",
+   "color": "#ff7bd5",
+   "volume": 0.58,
+   "pan": 0.2,
+   "mute": false,
+   "solo": false,
+   "mixerTrack": 7,
+   "params": {
+    "wave": "sawtooth",
+    "wave2": "square",
+    "wave2Level": 0.45,
+    "detune": 10,
+    "attack": 0.004,
+    "decay": 0.25,
+    "sustain": 0.45,
+    "release": 0.28,
+    "cutoff": 4200,
+    "resonance": 12,
+    "filterEnv": 2600,
+    "octave": 0,
+    "glide": 0
+   }
+  }
+ ],
+ "mixer": [
+  {
+   "index": 0,
+   "name": "Master",
+   "volume": 0.85,
+   "pan": 0,
+   "mute": false,
+   "effects": []
+  },
+  {
+   "index": 1,
+   "name": "Kick",
+   "volume": 1.1315625,
+   "pan": 0.5,
+   "mute": false,
+   "effects": []
+  },
+  {
+   "index": 2,
+   "name": "Clap",
+   "volume": 0.78,
+   "pan": 0,
+   "mute": false,
+   "effects": [
+    {
+     "type": "reverb",
+     "enabled": true,
+     "params": {
+      "size": 0.35,
+      "mix": 0.22
+     }
+    }
+   ]
+  },
+  {
+   "index": 3,
+   "name": "Hats",
+   "volume": 0.78,
+   "pan": 0,
+   "mute": false,
+   "effects": []
+  },
+  {
+   "index": 4,
+   "name": "Bass",
+   "volume": 0.78,
+   "pan": 0,
+   "mute": false,
+   "effects": [
+    {
+     "type": "compressor",
+     "enabled": true,
+     "params": {
+      "threshold": -26,
+      "ratio": 5,
+      "attack": 0.004,
+      "release": 0.12
+     }
+    }
+   ]
+  },
+  {
+   "index": 5,
+   "name": "Keys",
+   "volume": 0.78,
+   "pan": 0,
+   "mute": false,
+   "effects": [
+    {
+     "type": "chorus",
+     "enabled": true,
+     "params": {
+      "rate": 1.2,
+      "depth": 0.004,
+      "mix": 0.35
+     }
+    },
+    {
+     "type": "delay",
+     "enabled": true,
+     "params": {
+      "time": 0.242,
+      "feedback": 0.3,
+      "mix": 0.18
+     }
+    },
+    {
+     "type": "delay",
+     "enabled": true,
+     "params": {
+      "time": 0.28,
+      "feedback": 0.35,
+      "mix": 0.3
+     }
+    }
+   ]
+  },
+  {
+   "index": 6,
+   "name": "Pad",
+   "volume": 0.78,
+   "pan": 0,
+   "mute": false,
+   "effects": [
+    {
+     "type": "reverb",
+     "enabled": true,
+     "params": {
+      "size": 0.72,
+      "mix": 0.38
+     }
+    }
+   ]
+  },
+  {
+   "index": 7,
+   "name": "Lead",
+   "volume": 0.78,
+   "pan": 0,
+   "mute": false,
+   "effects": [
+    {
+     "type": "delay",
+     "enabled": true,
+     "params": {
+      "time": 0.242,
+      "feedback": 0.42,
+      "mix": 0.3
+     }
+    },
+    {
+     "type": "distortion",
+     "enabled": true,
+     "params": {
+      "drive": 0.14,
+      "mix": 1
+     }
+    }
+   ]
+  }
+ ],
+ "tracks": [
+  {
+   "id": "tk_60_5qkn5",
+   "name": "Pad",
+   "color": "#b07bff",
+   "clips": [
+    {
+     "id": "cl_62_6xnuy",
+     "patternId": "pt_56_kruk2",
+     "start": 0,
+     "length": 64
+    },
+    {
+     "id": "cl_64_dtc1r",
+     "patternId": "pt_56_kruk2",
+     "start": 64,
+     "length": 128
+    },
+    {
+     "id": "cl_69_e16xr",
+     "patternId": "pt_56_kruk2",
+     "start": 192,
+     "length": 64
+    },
+    {
+     "id": "cl_72_3hoeq",
+     "patternId": "pt_56_kruk2",
+     "start": 256,
+     "length": 128
+    }
+   ]
+  },
+  {
+   "id": "tk_59_hgtao",
+   "name": "Keys",
+   "color": "#7ba7ff",
+   "clips": [
+    {
+     "id": "cl_63_vtd5p",
+     "patternId": "pt_54_c8nqy",
+     "start": 0,
+     "length": 64
+    },
+    {
+     "id": "cl_65_2wjic",
+     "patternId": "pt_54_c8nqy",
+     "start": 64,
+     "length": 128
+    },
+    {
+     "id": "cl_70_41hsv",
+     "patternId": "pt_54_c8nqy",
+     "start": 192,
+     "length": 64
+    },
+    {
+     "id": "cl_73_8kwfo",
+     "patternId": "pt_54_c8nqy",
+     "start": 256,
+     "length": 128
+    }
+   ]
+  },
+  {
+   "id": "tk_58_oz61u",
+   "name": "Bass",
+   "color": "#4ad0a8",
+   "clips": [
+    {
+     "id": "cl_66_m26ni",
+     "patternId": "pt_53_qgj78",
+     "start": 64,
+     "length": 128
+    },
+    {
+     "id": "cl_74_3gm9d",
+     "patternId": "pt_53_qgj78",
+     "start": 256,
+     "length": 128
+    }
+   ]
+  },
+  {
+   "id": "tk_57_yo2ow",
+   "name": "Drums",
+   "color": "#e05656",
+   "clips": [
+    {
+     "id": "cl_67_tk6cb",
+     "patternId": "pt_52_d5mtj",
+     "start": 64,
+     "length": 128
+    },
+    {
+     "id": "cl_75_2es4x",
+     "patternId": "pt_52_d5mtj",
+     "start": 256,
+     "length": 128
+    }
+   ]
+  },
+  {
+   "id": "tk_61_f3hcn",
+   "name": "Lead",
+   "color": "#ff7bd5",
+   "clips": [
+    {
+     "id": "cl_71_8jkl9",
+     "patternId": "pt_55_0i7j3",
+     "start": 192,
+     "length": 64
+    },
+    {
+     "id": "cl_76_10cas",
+     "patternId": "pt_55_0i7j3",
+     "start": 256,
+     "length": 128
+    },
+    {
+     "id": "cl_mt3l5s35kuqqq",
+     "patternId": "pt_55_0i7j3",
+     "start": 0,
+     "length": 64
+    }
+   ]
+  },
+  {
+   "id": "tk_79_z6w9w",
+   "name": "Track 6",
+   "color": "#3d4657",
+   "clips": [
+    {
+     "id": "cl_68_d1cch",
+     "patternId": "pt_55_0i7j3",
+     "start": 32,
+     "length": 128
+    }
+   ]
+  }
+ ],
+ "automation": [
+  {
+   "id": "au_77_o0t72",
+   "target": {
+    "channelId": "ch_49_hmdxu",
+    "mixerTrack": null,
+    "param": "cutoff"
+   },
+   "points": [
+    {
+     "step": 0,
+     "value": 2
+    },
+    {
+     "step": 48,
+     "value": 2
+    },
+    {
+     "step": 64,
+     "value": 2
+    }
+   ]
+  },
+  {
+   "id": "au_78_18k3b",
+   "target": {
+    "channelId": "ch_51_c0zdt",
+    "mixerTrack": null,
+    "param": "volume"
+   },
+   "points": [
+    {
+     "step": 192,
+     "value": 0.05
+    },
+    {
+     "step": 240,
+     "value": 0.6
+    }
+   ]
+  }
+ ],
+ "songLength": 384
+}

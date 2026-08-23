@@ -1,0 +1,18 @@
+0s play -- -- -- --
+5s play A- -- -- --
+15s play AC A- -- --
+25s play AC AC -- --
+30s play AC AC A- --
+45s play AC AC AC --
+50s play AC AC AC A-
+81s play AC AC AC AC
+86s play -- --
+91s play A- --
+101s play AC A-
+111s play -- -- -- --
+116s play A- -- -- --
+121s play AC -- -- --
+126s play AC A- -- --
+136s play AC AC A- --
+151s play AC AC AC --
+156s play AC AC AC A-

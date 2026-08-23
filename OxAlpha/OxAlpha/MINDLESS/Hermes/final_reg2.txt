@@ -1,0 +1,5 @@
+PASS - RIGHT key moves right :: 30->57
+PASS - LEFT key moves left :: ->39
+PASS - stage "training" completes :: 11s
+PASS - stage "resistance" completes :: 24s
+PASS - stage "slums" completes :: 140s (boss seen)
