@@ -6,7 +6,7 @@ import { plantTree } from './worldgen.js';
 import { hashSeed, mulberry32 } from './noise.js';
 import { SMELTING, fuelSeconds } from './recipes.js';
 
-const WORKER_URL = '/src/workers/gen.worker.js';
+const WORKER_URL = new URL('./workers/gen.worker.js', import.meta.url).href;
 
 export class LightQueue {
   constructor(cap = 1 << 16) {
