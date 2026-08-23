@@ -173,6 +173,14 @@ function start(opts = {}) {
 
   const server = http.createServer(async (req, res) => {
     let url = new URL(req.url, "http://x");
+    // Canonical shell URL ends with "/" so the document's relative asset
+    // links resolve inside the base path (e.g. /OxArcade -> /OxArcade/).
+    if (basePath && url.pathname === basePath) {
+      res.writeHead(301, { Location: basePath + "/" });
+      res.end();
+      return;
+    }
+
     // Reverse-proxy subpath support: strip BASE_PATH ("/OxArcade") so the
     // app always sees root-relative paths internally.
     if (basePath && (url.pathname === basePath || url.pathname.startsWith(basePath + "/"))) {

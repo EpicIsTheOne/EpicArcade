@@ -136,3 +136,30 @@ test("sync mode serves repo games at /Model/Project/Harness/", async (t) => {
     assert.equal(s.status, 200);
   } finally { await srv.close(); }
 });
+
+test("basePath: /base redirects to /base/ and shell assets are relative", async (t) => {
+  const root = await makeRoot(t);
+  const http = require("node:http");
+  const srv = await start({ root, port: 0, basePath: "/OxArcade" });
+  try {
+    const base = `http://127.0.0.1:${srv.port}`;
+    const loc = await new Promise((resolve, reject) => {
+      http.get(`${base}/OxArcade`, (r) => { r.resume(); resolve({ status: r.statusCode, location: r.headers.location }); })
+        .on("error", reject);
+    });
+    assert.equal(loc.status, 301);
+    assert.equal(loc.location, "/OxArcade/");
+    const shell = await (await fetch(`${base}/OxArcade/`)).text();
+    assert.ok(shell.includes('href="style.css"'), "stylesheet link relative");
+    assert.ok(shell.includes('src="config.js"'), "config script relative");
+    assert.ok(shell.includes('src="app.js"'), "app script relative");
+    assert.ok(!shell.includes('href="/style.css"'), "no root-absolute stylesheet");
+    for (const p of ["/OxArcade/style.css", "/OxArcade/config.js", "/OxArcade/app.js"]) {
+      const r = await fetch(`${base}${p}`);
+      assert.equal(r.status, 200, `${p} must be served`);
+    }
+    // non-base paths unaffected
+    const direct = await fetch(`${base}/OxArcade/api/builds`);
+    assert.equal(direct.status, 200);
+  } finally { await srv.close(); }
+});
