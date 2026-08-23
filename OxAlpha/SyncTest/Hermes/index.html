@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orb Sprint</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #07080f; color: #cfd6ff;
+    font-family: "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #wrap { position: fixed; inset: 0; display: grid; place-items: center; }
+  #hud { position: absolute; top: 12px; left: 16px; font-size: 15px; letter-spacing: .5px; }
+  #hud b { color: #7df9ff; }
+  #msg { position: absolute; text-align: center; pointer-events: none; }
+  #msg h1 { margin: 0 0 8px; font-size: 42px; letter-spacing: 2px; color: #fff;
+    text-shadow: 0 0 18px #7df9ff88; }
+  #msg p { margin: 4px 0; opacity: .75; }
+  canvas { background: radial-gradient(circle at 50% 40%, #101528 0%, #07080f 75%);
+    border: 1px solid #2a3357; box-shadow: 0 0 40px #0009 inset, 0 0 24px #1b2547; max-width: 96vw; max-height: 82vh; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="cv" width="900" height="600"></canvas>
+  <div id="hud">SCORE <b id="score">0</b> &nbsp;·&nbsp; TIME <b id="time">30</b>s &nbsp;·&nbsp; BEST <b id="best">0</b></div>
+  <div id="msg"><h1>ORB SPRINT</h1><p>Arrows / WASD to move</p><p>Grab orbs before the clock runs out</p><p>Press any key to start</p></div>
+</div>
+<script>
+"use strict";
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const hudScore = document.getElementById("score"), hudTime = document.getElementById("time"),
+      hudBest = document.getElementById("best"), msg = document.getElementById("msg");
+const W = cv.width, H = cv.height;
+const START_TIME = 30;
+let player, orbs, score, timeLeft, playing, started = false, keys = {}, last = 0;
+
+function reset() {
+  player = { x: W / 2, y: H / 2, r: 14, vx: 0, vy: 0 };
+  orbs = []; score = 0; timeLeft = START_TIME; playing = true;
+  for (let i = 0; i < 6; i++) spawnOrb();
+  hudScore.textContent = "0"; hudTime.textContent = START_TIME;
+}
+
+function spawnOrb() {
+  orbs.push({ x: 40 + Math.random() * (W - 80), y: 40 + Math.random() * (H - 80),
+    r: 8 + Math.random() * 5, t: Math.random() * Math.PI * 2 });
+}
+
+addEventListener("keydown", (e) => {
+  keys[e.key.toLowerCase()] = true;
+  if (!started) { started = true; reset(); msg.style.display = "none"; last = performance.now(); }
+});
+addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+
+function step(dt) {
+  if (!playing) return;
+  const sp = 340;
+  let ax = (keys["arrowright"] || keys["d"] ? 1 : 0) - (keys["arrowleft"] || keys["a"] ? 1 : 0);
+  let ay = (keys["arrowdown"] || keys["s"] ? 1 : 0) - (keys["arrowup"] || keys["w"] ? 1 : 0);
+  if (ax && ay) { ax *= Math.SQRT1_2; ay *= Math.SQRT1_2; }
+  player.x = Math.max(player.r, Math.min(W - player.r, player.x + ax * sp * dt));
+  player.y = Math.max(player.r, Math.min(H - player.r, player.y + ay * sp * dt));
+  for (const o of orbs) {
+    o.t += dt * 4;
+    const dx = o.x - player.x, dy = o.y - player.y;
+    if (dx * dx + dy * dy < (o.r + player.r) ** 2) {
+      score++; hudScore.textContent = score;
+      o.x = 40 + Math.random() * (W - 80); o.y = 40 + Math.random() * (H - 80);
+    }
+  }
+  timeLeft -= dt;
+  hudTime.textContent = Math.max(0, Math.ceil(timeLeft));
+  if (timeLeft <= 0) end();
+}
+
+function end() {
+  playing = false;
+  const best = Number(localStorage.getItem("orbsprint.best") || 0);
+  if (score > best) localStorage.setItem("orbsprint.best", String(score));
+  hudBest.textContent = Math.max(best, score);
+  msg.innerHTML = "<h1>TIME!</h1><p>Final score: " + score + "</p><p>Press any key to play again</p>";
+  msg.style.display = "";
+  setTimeout(() => { addEventListener("keydown", () => location.reload(), { once: true }); }, 400);
+}
+
+function draw(now) {
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = "#141a30"; ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+  for (let y = 0; y < H; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+  const pulse = 1 + Math.sin(now / 200) * 0.15;
+  for (const o of orbs) {
+    ctx.beginPath(); ctx.arc(o.x, o.y + Math.sin(o.t) * 3, o.r * pulse, 0, 7);
+    ctx.fillStyle = "#ffd166"; ctx.shadowColor = "#ffd166"; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
+  }
+  if (player) {
+    ctx.beginPath(); ctx.arc(player.x, player.y, player.r, 0, 7);
+    ctx.fillStyle = "#7df9ff"; ctx.shadowColor = "#7df9ff"; ctx.shadowBlur = 18; ctx.fill(); ctx.shadowBlur = 0;
+  }
+}
+
+hudBest.textContent = localStorage.getItem("orbsprint.best") || 0;
+(function loop(now) {
+  const dt = Math.min(0.05, (now - last) / 1000 || 0);
+  if (started && playing) last = now;
+  step(started && playing ? dt : 0);
+  draw(now);
+  requestAnimationFrame(loop);
+})(0);
+</script>
+</body>
+</html>
