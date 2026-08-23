@@ -290,3 +290,30 @@ test("multiplayer overrides: force-on (declared) and force-off win over scans", 
     assert.equal(ep.endpoint, "/ws/lobby");
   } finally { await fs.rm(tmp, { recursive: true, force: true }); }
 });
+
+test("scanBuilds honors arcade.json multiplayer declarations (dashboard path)", async (t) => {
+  const root = await buildFixture(t);
+  // declared via arcade.json object form (endpoint included), no netcode in source
+  await put(path.join(root, "Fake Game", "arcade.json"),
+    JSON.stringify({ title: "Fake Game", multiplayer: { endpoint: "/ws/net" } }));
+  // declared false via arcade.json wins even though the build has a websocket
+  await put(path.join(root, "Pubbuild", "arcade.json"), JSON.stringify({ multiplayer: false }));
+
+  const builds = await scanBuilds(root);
+  const declared = builds.find((b) => b.id === "fake-game");
+  assert.equal(declared.multiplayer.supported, true);
+  assert.equal(declared.multiplayer.endpoint, "/ws/net");
+  assert.equal(declared.multiplayer.source, "override");
+
+  await put(path.join(root, "Pubbuild", "js", "net.js"), "new WebSocket('ws://x');");
+  const offBuilds = await scanBuilds(root);
+  const forcedOff = offBuilds.find((b) => b.id === "pubbuild");
+  assert.equal(forcedOff.multiplayer.supported, false);
+  assert.equal(forcedOff.multiplayer.source, "override");
+
+  // .archive-overrides.json still beats arcade.json
+  await put(path.join(root, ".archive-overrides.json"),
+    JSON.stringify({ "fake-game": { multiplayer: false } }));
+  const finalBuilds = await scanBuilds(root);
+  assert.equal(finalBuilds.find((b) => b.id === "fake-game").multiplayer.supported, false);
+});

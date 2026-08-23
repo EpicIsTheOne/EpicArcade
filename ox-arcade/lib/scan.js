@@ -262,8 +262,7 @@ async function detectNetcode(dir) {
   return [...hits];
 }
 
-function multiplayerFor(dir, ov = {}) {
-  const endpoint = typeof ov.endpoint === "string" ? ov.endpoint : null;
+function multiplayerFor(dir, ov = {}) {  const endpoint = typeof ov.endpoint === "string" ? ov.endpoint : null;
   if (ov.multiplayer === false) {
     return Promise.resolve({ supported: false, signals: [], endpoint, source: "override" });
   }
@@ -278,6 +277,29 @@ function multiplayerFor(dir, ov = {}) {
   return detectNetcode(dir).then((signals) => ({
     supported: signals.length > 0, signals, endpoint, source: "scan",
   }));
+}
+
+// Per-game arcade.json declaration: {"multiplayer": true|false|{"endpoint": "/ws/..."}}
+// (same contract the repo-export path in arcade.js honors).
+async function readArcadeMeta(dir) {
+  try { return JSON.parse(await fs.readFile(path.join(dir, "arcade.json"), "utf8")) || {}; }
+  catch { return {}; }
+}
+
+// Merge order for multiplayer: .archive-overrides.json beats the game's own
+// arcade.json beats the netcode scan.
+function mpOverrideFor(ov, gameMeta) {
+  if (ov.multiplayer !== undefined || ov.endpoint !== undefined) return ov;
+  const mp = gameMeta.multiplayer;
+  const merged = { ...ov };
+  if (mp === undefined) {
+    if (typeof gameMeta.multiplayerEndpoint === "string") merged.endpoint = gameMeta.multiplayerEndpoint;
+    return merged;
+  }
+  merged.multiplayer = typeof mp === "object" && mp !== null ? true : mp;
+  if (typeof mp === "object" && mp !== null && typeof mp.endpoint === "string") merged.endpoint = mp.endpoint;
+  else if (typeof gameMeta.multiplayerEndpoint === "string") merged.endpoint = gameMeta.multiplayerEndpoint;
+  return merged;
 }
 
 async function scanBuilds(root, opts = {}) {
@@ -297,10 +319,11 @@ async function scanBuilds(root, opts = {}) {
     const id = slugify(c.name);
     if (!id) return null;
 
-    const [entry, readme, stats] = await Promise.all([
+    const [entry, readme, stats, gameMeta] = await Promise.all([
       findEntry(dir),
       readReadme(dir),
       walkStats(dir),
+      readArcadeMeta(dir),
     ]);
     const ov = overrides[id] || {};
     const meta = parseFolderMeta(c.name);
@@ -323,7 +346,7 @@ async function scanBuilds(root, opts = {}) {
       fileCount: stats.fileCount,
       tags: ov.tags || tagFor(c.name, !!entry),
       shots: await collectShots(dir, id),
-      multiplayer: await multiplayerFor(dir, ov),
+      multiplayer: await multiplayerFor(dir, mpOverrideFor(ov, gameMeta)),
       buildStatus: await readBuildStatus(dir),
       thumbWaitMs: Number(ov.thumbWaitMs) || undefined,
       harness: deriveHarness(c.name, ov.harness),
@@ -334,4 +357,4 @@ async function scanBuilds(root, opts = {}) {
   return clean;
 }
 
-module.exports = { scanBuilds, slugify, findEntry, resolveEntry, deriveHarness, parseFolderMeta, HARNESS_META, detectNetcode, multiplayerFor, readBuildStatus };
+module.exports = { scanBuilds, slugify, findEntry, resolveEntry, deriveHarness, parseFolderMeta, HARNESS_META, detectNetcode, multiplayerFor, readArcadeMeta, mpOverrideFor, readBuildStatus };
