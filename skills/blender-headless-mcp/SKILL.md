@@ -40,6 +40,27 @@ Other useful ones: `generate_blender_script` (NL → bpy, needs LLM backend),
 `blender_render`, `blender_export`, `blender_batch`, `agentic_blender_workflow`,
 `blender_status`. Call `tools/list` if unsure.
 
+## Multi-agent safety (built-in)
+
+The server caps total running Blender subprocesses **machine-wide**, so several
+agents can hammer it without nuking the PC:
+
+- **Slot gate**: every `script_execute`/export/render must acquire one of
+  `BLENDER_MCP_MAX_CONCURRENT` slots (default **2**) via OS file locks before a
+  Blender process spawns; extra requests queue politely and fail with an
+  explicit "all N slots busy — retry" message after
+  `BLENDER_MCP_QUEUE_TIMEOUT_S` (default 240s) instead of stacking processes.
+  Locks die with their process — a killed agent can never wedge the gate.
+- **Below-normal child priority**: spawned Blender processes run at below-normal
+  priority so renders don't starve your foreground apps
+  (`BLENDER_MCP_CHILD_PRIORITY=normal` opts out).
+- **Per-process temp dirs + UUID-suffixed script IDs**: no file collisions
+  between concurrent servers.
+
+Tune for weak machines: set `BLENDER_MCP_MAX_CONCURRENT=1` in the MCP env block.
+When you see "All N Blender execution slot(s) busy", just retry later — another
+agent's render is finishing.
+
 ## Hard-won gotchas (these WILL bite)
 
 1. **Windows charmap crash**: without `PYTHONUTF8=1` the server dies at startup
@@ -96,6 +117,8 @@ All stdio, same command shape (swap paths):
   }
 }
 ```
+
+Optional env knobs: `BLENDER_MCP_MAX_CONCURRENT` (default 2), `BLENDER_MCP_QUEUE_TIMEOUT_S` (default 240), `BLENDER_MCP_CHILD_PRIORITY=normal`, `BLENDER_MCP_GATE_DIR`.
 
 - Claude Desktop: `%APPDATA%\Claude\claude_desktop_config.json` (or drag the
   release `.mcpb`)
