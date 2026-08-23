@@ -250,8 +250,9 @@ function start(opts = {}) {
   return new Promise((resolve, reject) => {
     server.once("error", reject);
     const wantPort = opts.port ?? Number(process.env.ARCHIVE_PORT || 8795);
+    const host = opts.host ?? (process.env.ARCHIVE_HOST || "127.0.0.1");
     let port = wantPort;
-    server.listen(port, "127.0.0.1", async () => {
+    server.listen(port, host, async () => {
       const addr = server.address();
       state.port = typeof addr === "object" && addr ? addr.port : port;
       state.server = server;
@@ -259,7 +260,7 @@ function start(opts = {}) {
         if (arcadeState.timer) clearInterval(arcadeState.timer);
         server.close(done);
       });
-      console.log(`ox-arcade running at http://127.0.0.1:${state.port}  (games root: ${root}${syncEnabled ? ", sync: on" : ""})`);
+      console.log(`ox-arcade running at http://${host}:${state.port}  (games root: ${root}${syncEnabled ? ", sync: on" : ""})`);
       // prime the scan cache so the first page load is already warm
       buildsCache.get().catch(() => {});
       if (syncEnabled) {
@@ -273,7 +274,7 @@ function start(opts = {}) {
     server.on("error", (err) => {
       if (err.code === "EADDRINUSE" && wantPort === 8795) {
         port = 8796;
-        server.listen(port, "127.0.0.1");
+        server.listen(port, host);
       }
     });
   });
