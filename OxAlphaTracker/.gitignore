@@ -1,0 +1,7 @@
+# runtime state (server-writable, never commit)
+runs.json
+# secrets
+.env
+# python
+__pycache__/
+*.pyc
