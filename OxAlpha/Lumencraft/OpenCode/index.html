@@ -215,15 +215,19 @@ body.pano .panel { background:rgba(13,15,22,.86); backdrop-filter:blur(2px); }
 
 <div class="screen" id="screen-multiplayer">
   <div class="panel">
-    <h2 style="margin-top:0">Join Multiplayer World</h2>
+    <h2 style="margin-top:0">Multiplayer</h2>
     <label style="font-size:13px;color:#aab">Your name</label>
     <input type="text" id="inp-mp-name" placeholder="Steve" maxlength="16">
-    <label style="font-size:13px;color:#aab">Room code (share it with friends)</label>
+    <div style="height:6px"></div>
+    <button class="btn primary" id="btn-mp-smp">Join the Site SMP World</button>
+    <p class="seednote" style="text-align:center">One persistent world shared with everyone on the site.</p>
+    <div style="height:10px;border-top:1px solid #ffffff18;padding-top:12px"></div>
+    <label style="font-size:13px;color:#aab">…or a private room (share the code)</label>
     <input type="text" id="inp-mp-room" placeholder="e.g. CAVES" maxlength="16" style="text-transform:uppercase">
     <div style="height:12px"></div>
-    <button class="btn primary" id="btn-mp-join">Join World</button>
+    <button class="btn" id="btn-mp-join">Join Private Room</button>
     <button class="btn" id="btn-mp-back">Back</button>
-    <p class="seednote">Everyone in a room shares one world (seed + building edits). The first player to join decides the seed.</p>
+    <p class="seednote">Private rooms: the first player to join decides the seed. The SMP world is permanent.</p>
   </div>
 </div>
 

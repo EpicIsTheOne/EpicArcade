@@ -44,6 +44,8 @@ export class Net {
     this.t0 = 0;
     this.clockOffset = 0;
     this.edits = [];              // [[x,y,z,id,face]...] applied at world boot
+    this.spawnNear = null;        // [x,z] suggested spawn (SMP)
+    this.isSmp = false;
     this.remotes = null;          // created once we have the scene + welcome
     this._welcomeResolvers = [];
     this._retries = 0;
@@ -88,11 +90,22 @@ export class Net {
           fail(new Error(msg.reason || 'denied'));
           return;
         }
-        if (msg.op === 'welcome' && !settled) {
-          settled = true;
-          clearTimeout(timer);
-          this._onWelcome(msg);
-          resolve(msg);
+        if (msg.op === 'welcome') {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            this._onWelcome(msg);
+            resolve(msg);
+          } else {
+            this._rewelcome(msg);
+          }
+          return;
+        }
+        if (msg.op === 'rejoin') {
+          // handler swap under a live socket — re-join with the same identity
+          if (this.you !== null && this.ws === ws && ws.readyState === 1) {
+            try { ws.send(JSON.stringify({ op: 'join', room: this.room, name: this.myName })); } catch {}
+          }
           return;
         }
         this._onMsg(msg);
@@ -107,12 +120,45 @@ export class Net {
     this.t0 = m.t0;
     this.clockOffset = m.now - Date.now();
     this.edits = Array.isArray(m.edits) ? m.edits : [];
+    this.spawnNear = Array.isArray(m.spawnNear) ? m.spawnNear : null;
+    this.isSmp = !!m.smp;
     this._retries = 0;
     this.status = 'online';
     this.onStatus(this.status);
     if (!this.remotes) this.remotes = new RemotePlayers(this.scene);
     for (const p of (m.players || [])) this.remotes.add(p[0], p[1], p.slice(2));
-    this.onToast(`Online in '${m.room}' — ${this.remotes.count()} other player${this.remotes.count() === 1 ? '' : 's'} here`);
+    const where = this.isSmp ? 'the site SMP world' : `'${m.room}'`;
+    this.onToast(`Online in ${where} — ${this.remotes.count()} other player${this.remotes.count() === 1 ? '' : 's'} here`);
+  }
+
+  /** server swapped handlers under us and we re-joined: resync everything */
+  _rewelcome(m) {
+    this.you = m.you;
+    this.t0 = m.t0;
+    this.clockOffset = m.now - Date.now();
+    if (this.remotes) {
+      for (const id of [...this.remotes.map.keys()]) this.remotes.remove(id);
+      for (const p of (m.players || [])) this.remotes.add(p[0], p[1], p.slice(2));
+    }
+    // bake any edits that landed while we were desynced; visible ones apply live
+    const w = this.world;
+    if (w && Array.isArray(m.edits)) {
+      for (const e of m.edits) {
+        if (!Array.isArray(e) || e.length < 4) continue;
+        const [x, y, z] = e;
+        if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(z) || y < 0 || y >= 128) continue;
+        const bid = e[3] & 255, face = (e[4] | 0) & 3;
+        if (w.getChunk(x >> 4, z >> 4)) w.setBlock(x, y, z, bid, { face });
+        else {
+          const k = (x >> 4) + ',' + (z >> 4);
+          let em = w.edits.get(k);
+          if (!em) { em = new Map(); w.edits.set(k, em); }
+          em.set((y << 8) | ((z & 15) << 4) | (x & 15), (bid & 255) + ((face & 3) << 8));
+        }
+      }
+    }
+    this.onChat({ kind: 'sys', text: 'Resynced with the server' });
+    this.onToast('Rejoined the world');
   }
 
   _dropped() {
@@ -161,6 +207,9 @@ export class Net {
       case 'chat':
         this.onChat({ kind: 'chat', name: m.name, text: m.text });
         break;
+      case 'sys':
+        this.onChat({ kind: 'sys', text: String(m.text || '').slice(0, 140) });
+        break;
       default:
         break;
     }
@@ -205,6 +254,11 @@ export class Net {
     if (!t) return false;
     this.ws.send(JSON.stringify({ op: 'chat', text: t }));
     return true;
+  }
+
+  sendDied(cause) {
+    if (!this.connected) return;
+    this.ws.send(JSON.stringify({ op: 'died', c: String(cause || '').slice(0, 16) }));
   }
 
   /** shared day fraction while online (else null → caller keeps local clock) */

@@ -2,7 +2,13 @@
 // Run: node --test tests/mp-server.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import mod from '../server.mjs';
+
+// keep the SMP store out of the repo during tests
+process.env.SMP_STORE = join(mkdtempSync(join(tmpdir(), 'lumen-mp-test-')), 'smp-world.json');
 
 function fakeWs(id, query = {}) {
   return {
@@ -95,12 +101,13 @@ test('invalid block ops are rejected', async () => {
   assert.equal(b.sent.filter((m) => m.op === 'block').length, 0);
 });
 
-test('messages before join are ignored', async () => {
+test('messages before join are ignored (except the rejoin prompt)', async () => {
   const { handler } = await makeHandler();
   const a = fakeWs(1);
   handler.message(a, { op: 'state', s: [1, 2, 3, 4, 5] });
   handler.message(a, { op: 'chat', text: 'hi' });
-  assert.equal(a.sent.length, 0);
+  assert.equal(a.sent.length, 1);
+  assert.equal(a.sent[0].op, 'rejoin');
 });
 
 test('leave notifies peers and reclaims empty rooms', async () => {
@@ -173,4 +180,85 @@ test('stop clears all state', async () => {
   const a = fakeWs(1);
   handler.message(a, joinMsg);
   handler.stop?.();
+});
+
+// ---- SMP world ----
+
+function freshStore() {
+  process.env.SMP_STORE = join(mkdtempSync(join(tmpdir(), 'lumen-mp-')), 'smp-world.json');
+  return process.env.SMP_STORE;
+}
+
+test('SMP room has a fixed seed and persists edits across handlers', async () => {
+  const store = freshStore();
+
+  const h1 = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h1.message(a, { op: 'join', room: 'SMP', name: 'Ana' });
+  const w1 = a.sent[0];
+  assert.equal(w1.seed, 'site-smp');
+  assert.equal(w1.smp, true);
+
+  h1.message(a, { op: 'block', x: 100, y: 64, z: -50, b: 12, f: 0 });
+  h1.stop?.(); // triggers save
+
+  assert.ok(existsSync(store), 'store file written on stop');
+
+  const h2 = (await makeHandler()).handler;
+  const b = fakeWs(2);
+  h2.message(b, { op: 'join', room: 'SMP', name: 'Ben' });
+  const w2 = b.sent[0];
+  assert.equal(w2.seed, 'site-smp');
+  assert.deepEqual(w2.edits, [[100, 64, -50, 12, 0]]);
+  h2.stop?.();
+});
+
+test('SMP join suggests spawning near an existing player', async () => {
+  const { handler } = await makeHandler();
+  const a = fakeWs(1);
+  handler.message(a, { op: 'join', room: 'SMP', name: 'Anchor' });
+  handler.message(a, { op: 'state', s: [500.4, 70, -300.6, 0, 0] });
+  const b = fakeWs(2);
+  handler.message(b, { op: 'join', room: 'SMP', name: 'Newbie' });
+  const wb = b.sent[0];
+  assert.ok(Array.isArray(wb.spawnNear), 'spawnNear provided');
+  assert.deepEqual(wb.spawnNear, [500, -301]); // rounded anchor x/z
+  // private rooms never get spawnNear
+  const c = fakeWs(3), d = fakeWs(4);
+  handler.message(c, { op: 'join', room: 'PRIVY', name: 'C' });
+  handler.message(d, { op: 'join', room: 'PRIVY', name: 'D' });
+  assert.equal(d.sent[0].spawnNear, null);
+});
+
+test('SMP world is not reclaimed when empty; private rooms are', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const a = fakeWs(1);
+  handler.message(a, { op: 'join', room: 'SMP', name: 'A' });
+  handler.message(a, { op: 'block', x: 3, y: 60, z: 4, b: 1, f: 0 });
+  handler.close(a);
+  const b = fakeWs(2);
+  handler.message(b, { op: 'join', room: 'SMP', name: 'B' });
+  assert.deepEqual(b.sent[0].edits, [[3, 60, 4, 1, 0]], 'SMP edits survive empty period');
+});
+
+test('death notices are relayed as system chat', async () => {
+  const { handler } = await makeHandler();
+  const a = fakeWs(1), b = fakeWs(2);
+  handler.message(a, { op: 'join', room: 'SMP', name: 'A' });
+  handler.message(b, { op: 'join', room: 'SMP', name: 'B' });
+  a.sent.length = 0;
+  handler.message(b, { op: 'died', c: 'lava' });
+  const sys = a.sent.find((m) => m.op === 'sys');
+  assert.equal(sys.text, 'B died (lava)');
+});
+
+test('unknown-socket ops trigger a rejoin prompt (hot reload recovery)', async () => {
+  const { handler } = await makeHandler();
+  const stale = fakeWs(7); // never joined this handler instance
+  handler.message(stale, { op: 'state', s: [1, 60, 1, 0, 0] });
+  const prompt = stale.sent.find((m) => m.op === 'rejoin');
+  assert.ok(prompt, 'rejoin prompt sent');
+  handler.message(stale, { op: 'block', x: 0, y: 60, z: 0, b: 1, f: 0 });
+  assert.equal(stale.sent.filter((m) => m.op === 'rejoin').length, 1, 'prompt is rate-limited');
 });

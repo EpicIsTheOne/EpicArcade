@@ -155,6 +155,7 @@ function startGame(opts) {
     g.net.attachWorld(world);
     g.net.onChat = addChatLine;
     g.net.onToast = (m) => ui.toast(m);
+    if (g.net.spawnNear) g._smpSpawnNear = g.net.spawnNear;
   }
 
   // ---------- world callbacks ----------
@@ -232,6 +233,7 @@ function startGame(opts) {
     g.damageFlash = Math.min(1, g.damageFlash + 0.55);
   };
   player.onDeath = (cause) => {
+    if (g.net) g.net.sendDied(cause);
     $('death-msg').textContent = ({
       fall: 'You fell from a great height.',
       lava: 'The floor was lava.',
@@ -440,7 +442,7 @@ function startGame(opts) {
     if (ms) {
       ms.textContent = g.net
         ? (g.net.connected
-            ? `Room '${g.net.room}' · ${g.net.peerCount() + 1} player${g.net.peerCount() ? 's' : ''} online · T to chat`
+            ? `${g.net.isSmp ? 'Site SMP world' : `Room '${g.net.room}'`} · ${g.net.peerCount() + 1} player${g.net.peerCount() ? 's' : ''} online · T to chat`
             : 'Multiplayer offline')
         : '';
     }
@@ -725,20 +727,24 @@ $('btn-multi').addEventListener('click', () => {
   setTimeout(() => ($('inp-mp-' + ($('inp-mp-name').value ? 'room' : 'name'))).focus(), 0);
 });
 $('btn-mp-back').addEventListener('click', () => { audio.click(); ui_show('screen-title'); });
+function mpLaunch(room) {
+  const name = $('inp-mp-name').value.trim().slice(0, 16);
+  const code = String(room).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+  if (!code) return;
+  try { localStorage.setItem('lumencraft_mp_name', name); } catch {}
+  sessionStorage.setItem('lumencraft_boot', JSON.stringify({ mode: 'mp', room: code, name }));
+  location.reload();
+}
+$('btn-mp-smp').addEventListener('click', () => { audio.click(); mpLaunch('SMP'); });
 $('btn-mp-join').addEventListener('click', () => {
   audio.click();
-  const name = $('inp-mp-name').value.trim().slice(0, 16);
   const room = $('inp-mp-room').value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
   if (!room) { $('inp-mp-room').focus(); $('inp-mp-room').placeholder = 'Room code is required!'; return; }
-  try {
-    localStorage.setItem('lumencraft_mp_name', name);
-    localStorage.setItem('lumencraft_mp_room', room);
-  } catch {}
-  sessionStorage.setItem('lumencraft_boot', JSON.stringify({ mode: 'mp', room, name }));
-  location.reload();
+  try { localStorage.setItem('lumencraft_mp_room', room); } catch {}
+  mpLaunch(room);
 });
 $('inp-mp-room').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-mp-join').click(); });
-$('inp-mp-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('inp-mp-room').focus(); });
+$('inp-mp-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-mp-smp').focus(); });
 
 // ---------------- world browser ----------------
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1089,9 +1095,20 @@ function frame(now) {
   if (g._loadPhase) {
     const centerReady = !!g.chunkMeshes.get(world.key(pcx, pcz));
     if (centerReady && world.pendingCount() < 20) {
+      // multiplayer: hop the stream center next to an existing player first
+      if (g._smpSpawnNear && !g._smpSpawnDone) {
+        const [sx, sz] = g._smpSpawnNear;
+        player.pos.set(sx + 0.5, 90, sz + 0.5);
+        lastViewCx = 1e9; lastViewCz = 1e9;
+        g._smpSpawnDone = true;
+        return; // keep the loading overlay up while chunks stream in there
+      }
       g._loadPhase = false;
       if (!g.player.placed) {
-        if (!g._restoredPos) {
+        if (g._smpSpawnDone) {
+          player.pos.y = world.surfaceY(Math.floor(player.pos.x), Math.floor(player.pos.z)) + 2.5;
+          player.spawnPoint = { x: player.pos.x, y: player.pos.y, z: player.pos.z };
+        } else if (!g._restoredPos) {
           const sp = world.findSpawn();
           player.pos.set(sp.x, sp.y, sp.z);
           player.spawnPoint = { x: sp.x, y: sp.y, z: sp.z };

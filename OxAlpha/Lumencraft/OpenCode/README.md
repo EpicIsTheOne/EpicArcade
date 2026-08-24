@@ -64,12 +64,15 @@ then **Enter World** to capture the mouse. Continue resumes your last save.
   in-world; separate Music volume setting.
 - **Persistence:** 3 save slots (localStorage): seed + block edits + containers +
   player state + time/weather; autosave every 45 s and on quit.
-- **Multiplayer:** shared rooms over WebSocket (ox-live backend, `server.mjs`).
-  Title screen → **Multiplayer…** → pick a name + room code and share the code;
-  the first player in decides the seed, everyone shares one world. Synced:
-  block place/break (with a server edit log so late joiners catch up), player
-  positions/avatars with name tags, chat (T), shared day/night clock. Local-only
-  by design: mobs, drops, inventory and containers.
+- **Multiplayer:** two modes over WebSocket (ox-live backend, `server.mjs`).
+  **Site SMP world** — one persistent world shared with everyone on the site;
+  the edit log is saved to disk (debounced) and survives server restarts, and
+  new joiners spawn next to an existing player. **Private rooms** — pick a
+  room code and share it; first player in decides the seed. Synced: block
+  place/break, player positions/avatars with name tags, chat (T), death
+  notices, shared day/night clock. Local-only by design: mobs, drops,
+  inventory and containers. Server handler hot-reloads resync live clients
+  automatically (rejoin prompt).
 
 ### Multiplayer backend
 
@@ -106,5 +109,5 @@ biome scenes and performance snapshots (headless software rendering).
 Known limitations: flowing-water CA is simplified (finite spread levels);
 mobs are not individually persisted across saves. Multiplayer: mobs/drops/
 containers are local-only; block *face* metadata for furnaces/chests defaults
-on late join; worlds reset when the ox-live process restarts (rooms are
-in-memory per the platform contract).
+on late join; private rooms reset on ox-live restart (only the SMP world is
+persisted); SMP edit log caps at 200k edits (oldest dropped after that).

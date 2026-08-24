@@ -1,5 +1,5 @@
 {
   "title": "Lumencraft",
-  "description": "Light-driven voxel sandbox — now multiplayer: share a room code, build together.",
+  "description": "Voxel sandbox with a persistent site-wide SMP world plus private room codes. Build together.",
   "multiplayer": { "endpoint": "/ws/lumencraft" }
 }
