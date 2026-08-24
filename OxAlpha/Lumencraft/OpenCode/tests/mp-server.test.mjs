@@ -497,6 +497,119 @@ test('unpin on a name without a PIN is denied; works without joining a room', as
   h.stop?.();
 });
 
+// ---- shared chests ----
+
+test('chest ops are relayed to peers and stored for late joiners', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  b.sent.length = 0;
+  const slots = [[0, 4, 10], [5, 'iron_ingot', 3, 20]];
+  handler.message(a, { op: 'chest', x: 12, y: 65, z: 34, slots });
+  const relay = b.sent.find((m) => m.op === 'chest');
+  assert.ok(relay, 'relay sent');
+  assert.deepEqual(relay.slots, slots);
+  assert.equal(a.sent.filter((m) => m.op === 'chest').length, 0, 'sender gets no echo');
+
+  const c = fakeWs(3);
+  handler.message(c, { op: 'join', room: 'SMP', name: 'Late' });
+  const wc = c.sent[0];
+  assert.ok(Array.isArray(wc.containers), 'containers in welcome');
+  assert.deepEqual(wc.containers, [[12, 65, 34, slots]]);
+});
+
+test('chest contents persist across handlers (SMP)', async () => {
+  freshStore();
+  const h1 = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h1.message(a, { op: 'join', room: 'SMP', name: 'A' });
+  h1.message(a, { op: 'chest', x: 1, y: 60, z: 2, slots: [[3, 'diamond', 5]] });
+  h1.stop?.();
+
+  const h2 = (await makeHandler()).handler;
+  const b = fakeWs(2);
+  h2.message(b, { op: 'join', room: 'SMP', name: 'B' });
+  assert.deepEqual(b.sent[0].containers, [[1, 60, 2, [[3, 'diamond', 5]]]]);
+  h2.stop?.();
+});
+
+test('breaking a chest clears its synced contents', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  handler.message(a, { op: 'chest', x: 7, y: 60, z: 7, slots: [[0, 1, 1]] });
+  handler.message(a, { op: 'block', x: 7, y: 60, z: 7, b: AIR, f: 0 });
+  const c = fakeWs(3);
+  handler.message(c, { op: 'join', room: 'SMP', name: 'C' });
+  assert.deepEqual(c.sent[0].containers, [], 'container gone after chest break');
+});
+
+test('malformed chest ops are rejected', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  b.sent.length = 0;
+  for (const bad of [
+    { op: 'chest', x: 1, y: 60, z: 1, slots: [[27, 1, 1]] },          // idx out of range
+    { op: 'chest', x: 1, y: 60, z: 1, slots: [[-1, 1, 1]] },          // negative idx
+    { op: 'chest', x: 1, y: 60, z: 1, slots: [[0, 999, 1]] },         // bad block id
+    { op: 'chest', x: 1, y: 60, z: 1, slots: [[0, 'bad id!', 1]] },   // bad item id
+    { op: 'chest', x: 1, y: 60, z: 1, slots: [[0, 1, 0]] },           // count < 1
+    { op: 'chest', x: 1, y: 60, z: 1, slots: [[0, 1, 65]] },          // count > 64
+    { op: 'chest', x: 1, y: 60, z: 1, slots: [[0, 1, 1, -5]] },       // bad dur
+    { op: 'chest', x: 1, y: 60, z: 1, slots: new Array(28).fill([0, 1, 1]) }, // too many
+    { op: 'chest', x: 1, y: 60, z: 1 },                                // no slots
+    { op: 'chest', x: 1, y: 999, z: 1, slots: [] },                    // bad y
+  ]) {
+    handler.message(a, bad);
+  }
+  assert.equal(b.sent.filter((m) => m.op === 'chest').length, 0, 'no relays for malformed ops');
+});
+
+test('container cap: new chests rejected past the limit, existing still updatable', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  for (let i = 0; i < 5; i++) {
+    handler.message(a, { op: 'chest', x: 100 + i, y: 60, z: 100, slots: [[0, 1, 1]] });
+  }
+  // shrink the cap by flooding a tiny-room variant is not testable here; use
+  // the SMP limit directly via a room with MAX_CONTAINERS — instead verify
+  // updates to existing keys still work and new keys beyond cap are denied by
+  // monkey-testing the documented limit through repeated ops on distinct keys.
+  // (MAX_CONTAINERS is 300 in prod; here we just prove the deny path exists by
+  // filling a room to its limit with distinct keys.)
+  const limit = 300;
+  for (let i = 5; i < limit; i++) {
+    handler.message(a, { op: 'chest', x: 100 + i, y: 60, z: 100, slots: [[0, 1, 1]] });
+  }
+  a.sent.length = 0;
+  handler.message(a, { op: 'chest', x: 999, y: 60, z: 100, slots: [[0, 1, 1]] });
+  const deny = a.sent.find((m) => m.op === 'deny' && /container sync limit/.test(m.reason || ''));
+  assert.ok(deny, 'deny past cap');
+  a.sent.length = 0;
+  handler.message(a, { op: 'chest', x: 100, y: 60, z: 100, slots: [[0, 2, 2]] }); // existing key
+  assert.ok(!a.sent.some((m) => m.op === 'deny'), 'existing chest still updatable');
+});
+
+test('private rooms sync chests but do not persist them', async () => {
+  freshStore();
+  const h1 = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h1.message(a, { op: 'join', room: 'PRIVC', name: 'A' });
+  h1.message(a, { op: 'chest', x: 5, y: 60, z: 5, slots: [[0, 'bread', 2]] });
+  const b = fakeWs(2);
+  h1.message(b, { op: 'join', room: 'PRIVC', name: 'B' });
+  assert.deepEqual(b.sent[0].containers, [[5, 60, 5, [[0, 'bread', 2]]]], 'synced within room');
+  h1.stop?.();
+
+  const h2 = (await makeHandler()).handler;
+  const c = fakeWs(3);
+  h2.message(c, { op: 'join', room: 'PRIVC', name: 'C' });
+  assert.deepEqual(c.sent[0].containers, [], 'not persisted for private rooms');
+  h2.stop?.();
+});
+
 test('short PINs are rejected with a reason; pinless names stay open', async () => {
   freshStore(); freshPins();
   const h = (await makeHandler()).handler;

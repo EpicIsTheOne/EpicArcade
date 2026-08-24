@@ -19,6 +19,7 @@ const NAME_RE = /[^\x20-\x7e]/g;
 const CLAIM_TOTEM_ID = 60;   // keep in sync with src/blocks.js B.CLAIM_TOTEM
 const CLAIM_RANGE = 1;       // chunks each direction → 3×3 chunk claim
 const MAX_CLAIMS_PER_PLAYER = 2;
+const MAX_CONTAINERS = 300;  // synced chests per room
 
 function smpStorePath() {
   return process.env.SMP_STORE ||
@@ -71,6 +72,26 @@ function validBlockOp(m) {
     Number.isInteger(m.f | 0);
 }
 
+// chest slots wire format: [[idx,id,count,dur?],...] — sparse, non-null slots only
+function validChestOp(m) {
+  if (!Number.isInteger(m.x) || !Number.isInteger(m.y) || !Number.isInteger(m.z)) return false;
+  if (m.y < 0 || m.y >= 128 || Math.abs(m.x) > 1e6 || Math.abs(m.z) > 1e6) return false;
+  if (!Array.isArray(m.slots) || m.slots.length > 27) return false;
+  for (const s of m.slots) {
+    if (!Array.isArray(s) || s.length < 3 || s.length > 4) return false;
+    const [idx, id, count, dur] = s;
+    if (!Number.isInteger(idx) || idx < 0 || idx > 26) return false;
+    if (typeof id === 'number') {
+      if (!Number.isInteger(id) || id < 0 || id > 255) return false;
+    } else if (typeof id === 'string') {
+      if (!/^[\w-]{1,24}$/.test(id)) return false;
+    } else return false;
+    if (!Number.isInteger(count) || count < 1 || count > 64) return false;
+    if (s.length === 4 && (!Number.isInteger(dur) || dur < -1 || dur > 100000)) return false;
+  }
+  return true;
+}
+
 export default {
   maxSockets: 96,
   tickMs: 100,
@@ -119,7 +140,7 @@ export default {
 
     function loadSmp() {
       if (smpLoaded) return smpLoaded;
-      smpLoaded = { seed: SMP_SEED, t0: Date.now(), edits: new Map() };
+      smpLoaded = { seed: SMP_SEED, t0: Date.now(), edits: new Map(), containers: new Map() };
       try {
         const raw = JSON.parse(readFileSync(smpStorePath(), 'utf8'));
         if (raw && typeof raw.seed === 'string' && Array.isArray(raw.edits)) {
@@ -131,6 +152,18 @@ export default {
                 Number.isInteger(e[3]) && e[3] >= 0 && e[3] < 256) {
               smpLoaded.edits.set(e[0] + ',' + e[1] + ',' + e[2], [e[3] & 255, (e[4] | 0) & 3]);
             }
+          }
+          if (Array.isArray(raw.containers)) {
+            let n = 0;
+            for (const c of raw.containers) {
+              if (!Array.isArray(c) || c.length < 4) continue;
+              const [x, y, z, slots] = c;
+              const probe = { x, y, z, slots };
+              if (!validChestOp(probe)) continue;
+              smpLoaded.containers.set(x + ',' + y + ',' + z, { slots, at: 0 });
+              if (++n >= MAX_CONTAINERS) break;
+            }
+            if (n) ctx.log(`SMP containers loaded: ${n}`);
           }
           if (Array.isArray(raw.claims)) {
             for (const c of raw.claims) {
@@ -167,10 +200,16 @@ export default {
         savedAt: Date.now(),
         edits: [],
         claims: [],
+        containers: [],
       };
       for (const [k, v] of edits) {
         const [x, y, z] = k.split(',').map(Number);
         out.edits.push([x, y, z, v[0], v[1]]);
+      }
+      const conts = smp ? smp.containers : loadSmp().containers;
+      for (const [k, c] of conts) {
+        const [x, y, z] = k.split(',').map(Number);
+        out.containers.push([x, y, z, c.slots]);
       }
       for (const [k, c] of claims) {
         const [cx, cz] = k.split(',').map(Number);
@@ -203,6 +242,7 @@ export default {
             seed: saved.seed,
             t0: saved.t0,
             edits: saved.edits,
+            containers: saved.containers,
             peers: new Map(),
           };
         } else {
@@ -211,6 +251,7 @@ export default {
             seed: seedReq || ('mp-' + code.toLowerCase()),
             t0: Date.now(),
             edits: new Map(),
+            containers: new Map(),
             peers: new Map(),
           };
         }
@@ -309,10 +350,17 @@ export default {
               if (claimsOut.length >= 2000) break;
             }
           }
+          // shared container snapshot (sparse slots)
+          const containersOut = [];
+          for (const [k, c] of room.containers) {
+            const [cx, cy, cz] = k.split(',').map(Number);
+            containersOut.push([cx, cy, cz, c.slots]);
+            if (containersOut.length >= MAX_CONTAINERS) break;
+          }
           ws.send({
             op: 'welcome', you: ws.id, room: room.code, seed: room.seed,
             t0: room.t0, now: Date.now(), players: playerList(room, ws.id), edits,
-            smp: !!room.smp, spawnNear, claims: claimsOut,
+            smp: !!room.smp, spawnNear, claims: claimsOut, containers: containersOut,
           });
           broadcast(room, ws.id, { op: 'joined', id: ws.id, name, s: peer.s });
           ctx.log(`room ${room.code}: ${name} joined (${room.peers.size} online)`);
@@ -445,6 +493,12 @@ export default {
             }
           }
 
+          // chest broken → its synced contents go with it
+          if (room.containers && room.containers.size && msg.b === 0) {
+            const ck2 = msg.x + ',' + msg.y + ',' + msg.z;
+            if (room.containers.delete(ck2) && room.smp) scheduleSmpSave();
+          }
+
           room.edits.set(msg.x + ',' + msg.y + ',' + msg.z, [msg.b, msg.f | 0]);
           const capEdits = room.smp ? SMP_MAX_EDITS : MAX_EDITS;
           if (room.edits.size > capEdits) {
@@ -454,6 +508,20 @@ export default {
           }
           if (room.smp) scheduleSmpSave();
           broadcast(room, ws.id, { op: 'block', x: msg.x, y: msg.y, z: msg.z, b: msg.b, f: msg.f | 0 });
+          return;
+        }
+
+        if (msg.op === 'chest') {
+          if (!validChestOp(msg)) return;
+          const key = msg.x + ',' + msg.y + ',' + msg.z;
+          if (!room.containers.has(key) && room.containers.size >= MAX_CONTAINERS) {
+            ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: 'server', reason: 'container sync limit reached' });
+            return;
+          }
+          const slots = msg.slots.map((s) => (s.length === 4 ? [s[0], s[1], s[2], s[3]] : [s[0], s[1], s[2]]));
+          room.containers.set(key, { slots, at: Date.now() });
+          if (room.smp) scheduleSmpSave();
+          broadcast(room, ws.id, { op: 'chest', x: msg.x, y: msg.y, z: msg.z, slots });
           return;
         }
 

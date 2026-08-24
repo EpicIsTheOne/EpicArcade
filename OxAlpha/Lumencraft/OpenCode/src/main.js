@@ -153,6 +153,7 @@ function startGame(opts) {
   // ---------- multiplayer ----------
   if (g.net) {
     g.net.attachWorld(world);
+    g.net.attachUi(ui);
     g.net.onChat = addChatLine;
     g.net.onToast = (m) => ui.toast(m);
     if (g.net.spawnNear) g._smpSpawnNear = g.net.spawnNear;

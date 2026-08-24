@@ -22,6 +22,30 @@ function sanitizeName(raw, fallback) {
   return n || fallback;
 }
 
+// sparse wire slots [[idx,id,count,dur?],...] -> {type:'chest', slots: Array(27)}
+function chestWireToContainer(slots) {
+  if (!Array.isArray(slots) || slots.length > 27) return null;
+  const out = { type: 'chest', slots: new Array(27).fill(null) };
+  for (const s of slots) {
+    if (!Array.isArray(s) || s.length < 3) continue;
+    const [idx, id, count, dur] = s;
+    if (!Number.isInteger(idx) || idx < 0 || idx > 26) continue;
+    out.slots[idx] = { id, count, dur: dur === undefined || dur === -1 ? undefined : dur };
+  }
+  return out;
+}
+
+// full 27-slot container -> sparse wire
+function containerToChestWire(slots) {
+  const out = [];
+  for (let i = 0; i < slots.length && i < 27; i++) {
+    const s = slots[i];
+    if (!s) continue;
+    out.push(s.dur === undefined ? [i, s.id, s.count] : [i, s.id, s.count, s.dur]);
+  }
+  return out;
+}
+
 export class Net {
   /**
    * opts: { url, room, name, scene, world,
@@ -49,6 +73,10 @@ export class Net {
     this.isSmp = false;
     this.claims = new Map();      // "cx,cz" -> owner (SMP)
     this._localEdits = new Map(); // "x,y,z" -> prevId for deny-revert (cap 256)
+    this.containers = [];         // welcome snapshot: [[x,y,z,slots]...]
+    this.ui = null;               // attached for chest poll sync
+    this._chestWire = new Map();  // "x,y,z" -> last sent JSON (dedup)
+    this._chestPollT = 0;
     this.remotes = null;          // created once we have the scene + welcome
     this._welcomeResolvers = [];
     this._retries = 0;
@@ -151,6 +179,9 @@ export class Net {
     for (const c of (m.claims || [])) {
       if (Array.isArray(c) && c.length >= 3) this.claims.set(c[0] + ',' + c[1], String(c[2]));
     }
+    this.containers = Array.isArray(m.containers) ? m.containers : [];
+    this._applyContainers();
+    this._chestWire.clear();
     // bake any edits that landed while we were desynced; visible ones apply live
     const w = this.world;
     if (w && Array.isArray(m.edits)) {
@@ -214,6 +245,11 @@ export class Net {
         break;
       case 'block':
         this._applyBlock(m.x, m.y, m.z, m.b, m.f | 0);
+        if (m.b === 0 && this.world) {
+          const bk = m.x + ',' + m.y + ',' + m.z;
+          this.world.containers.delete(bk);
+          this._chestWire.delete(bk);
+        }
         break;
       case 'deny': {
         // server rejected an edit we applied optimistically — revert it
@@ -239,6 +275,16 @@ export class Net {
         for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
           this.claims.delete((m.cx + dx) + ',' + (m.cz + dz));
         }
+        break;
+      }
+      case 'chest': {
+        if (!this.world) break;
+        const key = m.x + ',' + m.y + ',' + m.z;
+        const cont = chestWireToContainer(m.slots);
+        if (!cont) break;
+        this.world.containers.set(key, cont);
+        this._chestWire.set(key, JSON.stringify(m.slots));
+        if (this.ui && this.ui.currentContainerKey === key) this.ui.refreshOpenWindow();
         break;
       }
       case 'chat':
@@ -292,6 +338,23 @@ export class Net {
       }
       return orig(x, y, z, id, opts);
     };
+    this._applyContainers();
+  }
+
+  attachUi(ui) {
+    this.ui = ui;
+  }
+
+  /** bake the welcome/rewelcome container snapshot into the world */
+  _applyContainers() {
+    if (!this.world || !Array.isArray(this.containers)) return;
+    for (const c of this.containers) {
+      if (!Array.isArray(c) || c.length < 4) continue;
+      const [x, y, z] = c;
+      if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(z)) continue;
+      const cont = chestWireToContainer(c[3]);
+      if (cont) this.world.containers.set(x + ',' + y + ',' + z, cont);
+    }
   }
 
   peerCount() { return this.remotes ? this.remotes.count() : 0; }
@@ -338,7 +401,27 @@ export class Net {
       const r = (v) => Math.round(v * 100) / 100;
       this.ws.send(JSON.stringify({ op: 'state', s: [r(s[0]), r(s[1]), r(s[2]), r(s[3]), r(s[4])] }));
     }
+    this._pollChest(dt);
     if (this.remotes) this.remotes.update(dt);
+  }
+
+  /** while a chest window is open, push local changes to the server (0.5s poll) */
+  _pollChest(dt) {
+    if (!this.ui || !this.world) return;
+    this._chestPollT -= dt;
+    if (this._chestPollT > 0) return;
+    this._chestPollT = 0.5;
+    if (this.ui.extType !== 'chest' || !this.ui.currentContainerKey || this.ui.openWindow == null) return;
+    const key = this.ui.currentContainerKey;
+    const cont = this.world.containers.get(key);
+    if (!cont || cont.type !== 'chest') return;
+    const wire = containerToChestWire(cont.slots);
+    const s = JSON.stringify(wire);
+    if (this._chestWire.get(key) === s) return; // unchanged since last send
+    this._chestWire.set(key, s);
+    if (this._chestWire.size > 64) this._chestWire.delete(this._chestWire.keys().next().value);
+    const [x, y, z] = key.split(',').map(Number);
+    this.ws.send(JSON.stringify({ op: 'chest', x, y, z, slots: wire }));
   }
 
   dispose() {
