@@ -50,6 +50,18 @@ FL 2025: Options → MIDI Settings → Input `loopMIDI Port` → Controller type
 autocreates at logon.) Piano roll → scripts → **ComposeWithLLM** selected for
 note-writing tools. FL 2026 has the same binding but prefer 2025.
 
+**After every FL (re)start**, the script instance needs one nudge to attach
+(FL 2025.2 auto-attach is racy). Run the attach script IMMEDIATELY after
+launching FL, while FL still owns the foreground:
+
+```powershell
+& C:\Users\Epic\mcp-servers\FLStudioMCP\fl_attach_bridge.ps1
+```
+
+It focuses FL, sends F10, toggles the Enable switch off→on at the dialog's
+fixed position, and closes the dialog. Verify with the smoke test below.
+If it fails, retry once — foreground races with other apps are the usual cause.
+
 ## Gotchas — all verified the hard way on this machine
 
 1. **Threads are banned in FL scripts**: FL 2025.2+/2026 sub-interpreters
@@ -76,6 +88,18 @@ note-writing tools. FL 2026 has the same binding but prefer 2025.
    'python%'" | ? CommandLine -match flmcp_relay` → kill by PID.
 8. **Multiple FL instances fight over MIDI ports** — keep exactly one FL
    running.
+9. **`project_save` on an untitled project pops a MODAL dialog** (name +
+   location) that blocks every subsequent API call with "Operation unsafe at
+   current time". Either never save untitled projects, or use
+   `project_save_as` with an explicit path, or dismiss the modal via GUI.
+10. **"Operation unsafe at current time" from any tool = a modal dialog is
+    open in FL** (save prompt, welcome window, etc.). Screenshot FL, dismiss
+    the dialog, retry. `ui.openPianoRoll` and pitched piano-roll tools are
+    also focus-gated by FL's design — keep FL foregrounded for those.
+11. **Working bass without the pyscript**: step-sequence the FLEX Bass
+    channel + `channels.setPitch` (constant root-pedal bassline — trap-
+    appropriate). Pitched note variety requires the ComposeWithLLM pyscript
+    armed (one-time per FL install: piano roll → scripts dropdown).
 
 ## Operations
 
