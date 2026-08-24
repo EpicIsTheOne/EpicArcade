@@ -74,7 +74,11 @@ then **Enter World** to capture the mouse. Continue resumes your last save.
   place/break, player positions/avatars with name tags, chat (T), death
   notices, shared day/night clock. Land claims: craft a **Claim Totem**
   (4 stone + gold ingot) to protect 3×3 chunks in the SMP world — the server
-  rejects other players' edits there and clients revert with a toast. Local-only
+  rejects other players' edits there and clients revert with a toast.
+  **Shared chests** — chest contents sync between all players (last-write-wins,
+  0.5 s push while the chest is open); contents persist in the SMP world and
+  survive restarts; breaking a chest clears its synced contents. Furnaces and
+  inventories stay local. Local-only
   by design: mobs, drops, inventory and containers. Server handler hot-reloads
   resync live clients automatically (rejoin prompt).
 
