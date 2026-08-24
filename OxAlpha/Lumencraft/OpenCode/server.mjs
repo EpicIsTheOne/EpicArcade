@@ -319,6 +319,32 @@ export default {
           return;
         }
 
+        // identity op: release a name's PIN (works joined or not)
+        if (msg.op === 'unpin') {
+          const name = cleanName(msg.name, '');
+          const pin = cleanPin(msg.pin);
+          const rec = name ? pins.get(name) : null;
+          if (!rec) {
+            ws.send({ op: 'denied', reason: name ? `name "${name}" has no PIN` : 'missing name' });
+            return;
+          }
+          if (!pin || pinHash(name, rec.salt, pin) !== rec.hash) {
+            ws._pinFails = (ws._pinFails || 0) + 1;
+            if (ws._pinFails >= 5) {
+              ctx.log(`pin: ${ws.ip || '?'} locked out after 5 failed attempts for "${name}"`);
+              try { ws.close(1008); } catch {}
+              return;
+            }
+            ws.send({ op: 'denied', reason: 'wrong PIN' });
+            return;
+          }
+          pins.delete(name);
+          savePins();
+          ws.send({ op: 'unpinned', name });
+          ctx.log(`pin: name "${name}" unlocked`);
+          return;
+        }
+
         // Ops from a socket the current handler doesn't know (hot reload
         // swapped handlers under a live socket): ask the client to re-join.
         if (!code) {

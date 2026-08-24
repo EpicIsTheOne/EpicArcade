@@ -456,6 +456,47 @@ test('PINs persist across handlers and are per-name', async () => {
   h2.stop?.();
 });
 
+test('unpin with correct PIN releases the name; wrong PIN is blocked', async () => {
+  freshStore(); freshPins();
+  const h = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h.message(a, { op: 'join', room: 'SMP', name: 'Steve', pin: 'hunter2' });
+  h.stop?.();
+
+  const h2 = (await makeHandler()).handler;
+  // wrong PIN: denied + lockout counter shared with join failures
+  const b = fakeWs(2); b.ip = 'evil'; b.closed = null;
+  for (let i = 0; i < 4; i++) {
+    h2.message(b, { op: 'unpin', name: 'Steve', pin: 'nope' });
+    assert.equal(b.sent[i].op, 'denied');
+  }
+  h2.message(b, { op: 'unpin', name: 'Steve', pin: 'nope' });
+  assert.equal(b.closed, 1008, '5 unpin failures close the socket');
+
+  // correct PIN unlocks; name reverts to open
+  const c = fakeWs(3);
+  h2.message(c, { op: 'unpin', name: 'Steve', pin: 'hunter2' });
+  assert.equal(c.sent[0].op, 'unpinned');
+  assert.equal(c.sent[0].name, 'Steve');
+  h2.stop?.();
+
+  const h3 = (await makeHandler()).handler;
+  const d = fakeWs(4);
+  h3.message(d, { op: 'join', room: 'SMP', name: 'Steve' });
+  assert.equal(d.sent[0].op, 'welcome', 'name is open again after unpin (persisted)');
+  h3.stop?.();
+});
+
+test('unpin on a name without a PIN is denied; works without joining a room', async () => {
+  freshStore(); freshPins();
+  const h = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h.message(a, { op: 'unpin', name: 'Nobody', pin: 'whatever' });
+  assert.equal(a.sent[0].op, 'denied');
+  assert.ok(/no PIN/.test(a.sent[0].reason));
+  h.stop?.();
+});
+
 test('short PINs are rejected with a reason; pinless names stay open', async () => {
   freshStore(); freshPins();
   const h = (await makeHandler()).handler;
