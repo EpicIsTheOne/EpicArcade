@@ -7,6 +7,7 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash, randomBytes } from 'node:crypto';
 
 const SMP_ROOM = 'SMP';
 const SMP_SEED = 'site-smp';
@@ -22,6 +23,15 @@ const MAX_CLAIMS_PER_PLAYER = 2;
 function smpStorePath() {
   return process.env.SMP_STORE ||
     fileURLToPath(new URL('../../../../smp-world.json', import.meta.url));
+}
+
+function pinStorePath() {
+  return process.env.PIN_STORE ||
+    fileURLToPath(new URL('../../../../lumencraft-pins.json', import.meta.url));
+}
+
+function pinHash(name, salt, pin) {
+  return createHash('sha256').update(name + '|' + salt + '|' + pin).digest('hex');
 }
 
 function cleanName(raw, fallback) {
@@ -40,6 +50,10 @@ function cleanSeed(raw) {
 }
 
 function cleanCause(raw) {
+  return String(raw ?? '').replace(NAME_RE, ' ').trim().slice(0, 16);
+}
+
+function cleanPin(raw) {
   return String(raw ?? '').replace(NAME_RE, ' ').trim().slice(0, 16);
 }
 
@@ -63,6 +77,36 @@ export default {
   create(ctx) {
     const rooms = new Map();     // code -> room
     const peerRoom = new Map();  // ws.id -> code
+
+    // ---- name PINs (opt-in identity lock; global across rooms) ----
+    // name -> {salt, hash}; a name with a registered PIN only joins with it.
+    const pins = new Map();
+    try {
+      const raw = JSON.parse(readFileSync(pinStorePath(), 'utf8'));
+      if (raw && typeof raw === 'object') {
+        for (const [name, rec] of Object.entries(raw)) {
+          if (rec && typeof rec.salt === 'string' && typeof rec.hash === 'string') {
+            pins.set(cleanName(name, ''), rec);
+          }
+        }
+        if (pins.size) ctx.log(`name PINs loaded: ${pins.size}`);
+      }
+    } catch (e) {
+      if (e && e.code !== 'ENOENT') ctx.log('PIN store unreadable, starting fresh: ' + e.message);
+    }
+
+    function savePins() {
+      try {
+        mkdirSync(dirname(pinStorePath()), { recursive: true });
+        const tmp = pinStorePath() + '.tmp';
+        const out = {};
+        for (const [name, rec] of pins) out[name] = rec;
+        writeFileSync(tmp, JSON.stringify(out));
+        renameSync(tmp, pinStorePath());
+      } catch (e) {
+        ctx.log('PIN save failed: ' + e.message);
+      }
+    }
 
     // ---- SMP persistence ----
     let smpLoaded = null;        // {seed, t0, edits: Map} from disk (once)
@@ -202,13 +246,39 @@ export default {
         const code = peerRoom.get(ws.id);
 
         if (msg.op === 'join' && !code) {
+          const name = cleanName(msg.name, 'Player' + ws.id);
+          const pin = cleanPin(msg.pin);
+
+          // PIN-protected names: prove ownership or stay out
+          const pinRec = pins.get(name);
+          if (pinRec) {
+            if (!pin || pinHash(name, pinRec.salt, pin) !== pinRec.hash) {
+              ws._pinFails = (ws._pinFails || 0) + 1;
+              if (ws._pinFails >= 5) {
+                ctx.log(`pin: ${ws.ip || '?'} locked out after 5 failed attempts for "${name}"`);
+                try { ws.close(1008); } catch {}
+                return;
+              }
+              ws.send({ op: 'denied', reason: `name "${name}" is PIN-protected — enter your PIN` });
+              return;
+            }
+          } else if (pin) {
+            if (pin.length < 4) {
+              ws.send({ op: 'denied', reason: 'PIN must be at least 4 characters' });
+              return;
+            }
+            const salt = randomBytes(8).toString('hex');
+            pins.set(name, { salt, hash: pinHash(name, salt, pin) });
+            savePins();
+            ctx.log(`pin: name "${name}" is now PIN-protected`);
+          }
+
           const room = getRoom(cleanRoom(msg.room), cleanSeed(msg.seed));
           const cap = room.smp ? SMP_MAX_PEERS : ROOM_MAX_PEERS;
           if (room.peers.size >= cap) {
             ws.send({ op: 'denied', reason: room.smp ? 'SMP world full' : 'room full' });
             return;
           }
-          const name = cleanName(msg.name, 'Player' + ws.id);
           const peer = { name, s: [0.5, -100, 0.5, 0, 0], ws, blockT: [], chatT: [] };
           room.peers.set(ws.id, peer);
           peerRoom.set(ws.id, room.code);
@@ -285,22 +355,19 @@ export default {
 
           // ---- SMP claim enforcement ----
           if (room.smp) {
-            const ck = (msg.x >> 4) + ',' + (msg.z >> 4);
-            const claim = claims.get(ck);
-            if (claim && claim.owner !== peer.name) {
-              ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: claim.owner });
-              return;
-            }
             const key = msg.x + ',' + msg.y + ',' + msg.z;
+            const ck = (msg.x >> 4) + ',' + (msg.z >> 4);
+            const here = claims.get(ck);
+            const isTotemPlace = msg.b === CLAIM_TOTEM_ID;
 
-            // placing a totem → register a claim (or deny with reason)
-            if (msg.b === CLAIM_TOTEM_ID) {
-              const ccx = msg.x >> 4, ccz = msg.z >> 4;
+            if (isTotemPlace) {
+              // overlap check first so a totem inside someone's claim gets a
+              // specific reason instead of the generic ownership deny
               for (let dz = -CLAIM_RANGE; dz <= CLAIM_RANGE; dz++) {
                 for (let dx = -CLAIM_RANGE; dx <= CLAIM_RANGE; dx++) {
-                  const other = claims.get((ccx + dx) + ',' + (ccz + dz));
+                  const other = claims.get(((msg.x >> 4) + dx) + ',' + ((msg.z >> 4) + dz));
                   if (other) {
-                    ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: other.owner, reason: 'overlaps an existing claim' });
+                    ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: other.owner, reason: `overlaps ${other.owner}'s claim` });
                     return;
                   }
                 }
@@ -310,6 +377,14 @@ export default {
                 ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: peer.name, reason: `claim limit reached (${MAX_CLAIMS_PER_PLAYER})` });
                 return;
               }
+            } else if (here && here.owner !== peer.name) {
+              ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: here.owner });
+              return;
+            }
+
+            // placing a totem → register the claim (checks passed above)
+            if (isTotemPlace) {
+              const ccx = msg.x >> 4, ccz = msg.z >> 4;
               const rec = { owner: peer.name, totem: key, placedAt: now, lastSeen: now };
               for (let dz = -CLAIM_RANGE; dz <= CLAIM_RANGE; dz++) {
                 for (let dx = -CLAIM_RANGE; dx <= CLAIM_RANGE; dx++) {

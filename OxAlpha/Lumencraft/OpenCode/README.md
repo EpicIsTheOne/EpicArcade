@@ -68,11 +68,15 @@ then **Enter World** to capture the mouse. Continue resumes your last save.
   **Site SMP world** — one persistent world shared with everyone on the site;
   the edit log is saved to disk (debounced) and survives server restarts, and
   new joiners spawn next to an existing player. **Private rooms** — pick a
-  room code and share it; first player in decides the seed. Synced: block
+  room code and share it; first player in decides the seed. **Name PINs** —
+  optionally lock your name with a 4+ character PIN so only you can use it
+  (salted-hash server store; 5 wrong attempts = lockout). Synced: block
   place/break, player positions/avatars with name tags, chat (T), death
-  notices, shared day/night clock. Local-only by design: mobs, drops,
-  inventory and containers. Server handler hot-reloads resync live clients
-  automatically (rejoin prompt).
+  notices, shared day/night clock. Land claims: craft a **Claim Totem**
+  (4 stone + gold ingot) to protect 3×3 chunks in the SMP world — the server
+  rejects other players' edits there and clients revert with a toast. Local-only
+  by design: mobs, drops, inventory and containers. Server handler hot-reloads
+  resync live clients automatically (rejoin prompt).
 
 ### Multiplayer backend
 
@@ -109,5 +113,6 @@ biome scenes and performance snapshots (headless software rendering).
 Known limitations: flowing-water CA is simplified (finite spread levels);
 mobs are not individually persisted across saves. Multiplayer: mobs/drops/
 containers are local-only; block *face* metadata for furnaces/chests defaults
-on late join; private rooms reset on ox-live restart (only the SMP world is
-persisted); SMP edit log caps at 200k edits (oldest dropped after that).
+on late join; private rooms reset on ox-live restart (only the SMP world and
+name PINs are persisted); SMP edit log caps at 200k edits (oldest dropped
+after that).

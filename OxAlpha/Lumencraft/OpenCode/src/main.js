@@ -729,10 +729,11 @@ $('btn-multi').addEventListener('click', () => {
 $('btn-mp-back').addEventListener('click', () => { audio.click(); ui_show('screen-title'); });
 function mpLaunch(room) {
   const name = $('inp-mp-name').value.trim().slice(0, 16);
+  const pin = $('inp-mp-pin').value.trim().slice(0, 16);
   const code = String(room).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
   if (!code) return;
   try { localStorage.setItem('lumencraft_mp_name', name); } catch {}
-  sessionStorage.setItem('lumencraft_boot', JSON.stringify({ mode: 'mp', room: code, name }));
+  sessionStorage.setItem('lumencraft_boot', JSON.stringify({ mode: 'mp', room: code, name, pin }));
   location.reload();
 }
 $('btn-mp-smp').addEventListener('click', () => { audio.click(); mpLaunch('SMP'); });
@@ -988,6 +989,7 @@ if (bootFlag) {
       url: resolveWsUrl(),
       room: bootFlag.room,
       name: bootFlag.name,
+      pin: bootFlag.pin,
       scene: graphics.scene,
       onToast: (m) => {
         const t = document.createElement('div');

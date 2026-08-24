@@ -340,13 +340,14 @@ test('claims reject overlap and enforce the 2-claim cap, with reasons', async ()
   const { a, b } = smpPair(handler);
   handler.message(a, { op: 'block', x: 40, y: 70, z: -8, b: TOTEM, f: 0 });   // Alice claim @ 2,-1
 
-  // Bob's totem overlapping (chunk 3,-1 is inside Alice's 1..3 range) — the
-  // chunk-ownership check fires first: plain deny, no totem registered
+  // Bob's totem overlapping (chunk 3,-1 is inside Alice's 1..3 range) — totem
+  // placements check overlap first and get the specific reason
   handler.message(b, { op: 'block', x: 50, y: 70, z: -8, b: TOTEM, f: 0 });
-  assert.ok(b.sent.some((m) => m.op === 'deny' && m.owner === 'Alice'), 'overlap denied by ownership check');
+  let deny = b.sent.filter((m) => m.op === 'deny').pop();
+  assert.ok(deny && deny.owner === 'Alice' && /overlap/i.test(deny.reason), 'overlap denied with reason');
   handler.message(b, { op: 'state', s: [51, 70, -8, 0, 0] }); // Bob stands just outside
   handler.message(b, { op: 'block', x: 64, y: 70, z: -8, b: TOTEM, f: 0 });   // chunk 4,-1 → adjacent, still overlaps range 3..5 × -2..0
-  let deny = b.sent.filter((m) => m.op === 'deny').pop();
+  deny = b.sent.filter((m) => m.op === 'deny').pop();
   assert.ok(deny && /overlap/i.test(deny.reason), 'adjacent overlap denied with reason');
 
   // Alice claims two more spots (2nd ok, 3rd capped)
@@ -385,4 +386,93 @@ test('private rooms have no claim logic', async () => {
   handler.message(a, { op: 'block', x: 40, y: 70, z: -8, b: TOTEM, f: 0 }); // just a block
   assert.ok(!a.sent.some((m) => m.op === 'claim'), 'no claim broadcast');
   assert.ok(b.sent.some((m) => m.op === 'block' && m.b === TOTEM), 'totem relays as a normal block');
+});
+
+// ---- name PINs ----
+
+function freshPins() {
+  process.env.PIN_STORE = join(mkdtempSync(join(tmpdir(), 'lumen-pin-')), 'pins.json');
+  return process.env.PIN_STORE;
+}
+
+test('first join with a PIN registers it; the name becomes protected', async () => {
+  freshStore(); freshPins();
+  const store = process.env.PIN_STORE;
+  const h1 = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h1.message(a, { op: 'join', room: 'SMP', name: 'Steve', pin: 'hunter2' });
+  assert.equal(a.sent[0].op, 'welcome');
+  h1.stop?.();
+  assert.ok(existsSync(store), 'pin store written');
+
+  const h2 = (await makeHandler()).handler;
+  const impostor = fakeWs(2);
+  impostor.ip = 'evil';
+  h2.message(impostor, { op: 'join', room: 'SMP', name: 'Steve' });
+  assert.equal(impostor.sent[0].op, 'denied');
+  assert.ok(/PIN-protected/.test(impostor.sent[0].reason));
+  h2.stop?.();
+});
+
+test('correct PIN joins; wrong PIN denied; 5 failures close the socket', async () => {
+  freshStore(); freshPins();
+  const h = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h.message(a, { op: 'join', room: 'SMP', name: 'Steve', pin: 'hunter2' });
+
+  const b = fakeWs(2); b.ip = 'evil'; b.closed = null;
+  for (let i = 0; i < 4; i++) {
+    b.sent.length = 0;
+    h.message(b, { op: 'join', room: 'SMP', name: 'Steve', pin: 'wrong' });
+    assert.equal(b.sent[0].op, 'denied', `attempt ${i + 1} denied`);
+    assert.equal(b.closed, null, 'not closed before 5');
+  }
+  h.message(b, { op: 'join', room: 'SMP', name: 'Steve', pin: 'wrong' });
+  assert.equal(b.closed, 1008, 'socket closed after 5 failures');
+
+  const c = fakeWs(3);
+  h.message(c, { op: 'join', room: 'SMP', name: 'Steve', pin: 'hunter2' });
+  assert.equal(c.sent[0].op, 'welcome', 'correct PIN still joins');
+  h.stop?.();
+});
+
+test('PINs persist across handlers and are per-name', async () => {
+  freshStore(); freshPins();
+  const h1 = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h1.message(a, { op: 'join', room: 'SMP', name: 'Steve', pin: 'hunter2' });
+  h1.stop?.();
+
+  const h2 = (await makeHandler()).handler;
+  const b = fakeWs(2);
+  h2.message(b, { op: 'join', room: 'SMP', name: 'Steve', pin: 'hunter2' });
+  assert.equal(b.sent[0].op, 'welcome', 'same PIN after reload');
+  const c = fakeWs(3);
+  h2.message(c, { op: 'join', room: 'SMP', name: 'Alex', pin: 'hunter2' });
+  assert.equal(c.sent[0].op, 'welcome', 'same PIN on a different name is fine');
+  const d = fakeWs(4);
+  h2.message(d, { op: 'join', room: 'SMP', name: 'Steve', pin: 'hunter3' });
+  assert.equal(d.sent[0].op, 'denied', 'wrong PIN on protected name');
+  h2.stop?.();
+});
+
+test('short PINs are rejected with a reason; pinless names stay open', async () => {
+  freshStore(); freshPins();
+  const h = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h.message(a, { op: 'join', room: 'SMP', name: 'Steve', pin: 'abc' });
+  assert.equal(a.sent[0].op, 'denied');
+  assert.ok(/4 characters/.test(a.sent[0].reason));
+
+  const b = fakeWs(2);
+  h.message(b, { op: 'join', room: 'SMP', name: 'Pinless' });
+  assert.equal(b.sent[0].op, 'welcome', 'no PIN = open name (backward compat)');
+
+  const c = fakeWs(3);
+  h.message(c, { op: 'join', room: 'SMP', name: 'Pinless', pin: 'abcd' });
+  assert.equal(c.sent[0].op, 'welcome', 'can still be claimed later with a PIN');
+  const d = fakeWs(4);
+  h.message(d, { op: 'join', room: 'SMP', name: 'Pinless' });
+  assert.equal(d.sent[0].op, 'denied', 'once claimed, PIN required');
+  h.stop?.();
 });

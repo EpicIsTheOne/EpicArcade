@@ -31,6 +31,7 @@ export class Net {
     this.url = opts.url;
     this.room = String(opts.room || '').toUpperCase();
     this.myName = sanitizeName(opts.name, 'Player');
+    this.pin = String(opts.pin || '').slice(0, 16);
     this.scene = opts.scene;
     this.world = null;
     this.onToast = opts.onToast || (() => {});
@@ -74,7 +75,7 @@ export class Net {
       };
       const timer = setTimeout(() => fail(new Error('connect timeout')), 8000);
       ws.onopen = () => {
-        ws.send(JSON.stringify({ op: 'join', room: this.room, name: this.myName }));
+        ws.send(JSON.stringify({ op: 'join', room: this.room, name: this.myName, pin: this.pin || undefined }));
       };
       ws.onerror = () => { clearTimeout(timer); fail(new Error('websocket error')); };
       ws.onclose = () => {
@@ -106,7 +107,7 @@ export class Net {
         if (msg.op === 'rejoin') {
           // handler swap under a live socket — re-join with the same identity
           if (this.you !== null && this.ws === ws && ws.readyState === 1) {
-            try { ws.send(JSON.stringify({ op: 'join', room: this.room, name: this.myName })); } catch {}
+            try { ws.send(JSON.stringify({ op: 'join', room: this.room, name: this.myName, pin: this.pin || undefined })); } catch {}
           }
           return;
         }
