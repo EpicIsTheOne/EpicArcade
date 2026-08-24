@@ -46,6 +46,8 @@ export class Net {
     this.edits = [];              // [[x,y,z,id,face]...] applied at world boot
     this.spawnNear = null;        // [x,z] suggested spawn (SMP)
     this.isSmp = false;
+    this.claims = new Map();      // "cx,cz" -> owner (SMP)
+    this._localEdits = new Map(); // "x,y,z" -> prevId for deny-revert (cap 256)
     this.remotes = null;          // created once we have the scene + welcome
     this._welcomeResolvers = [];
     this._retries = 0;
@@ -122,6 +124,10 @@ export class Net {
     this.edits = Array.isArray(m.edits) ? m.edits : [];
     this.spawnNear = Array.isArray(m.spawnNear) ? m.spawnNear : null;
     this.isSmp = !!m.smp;
+    this.claims = new Map();
+    for (const c of (m.claims || [])) {
+      if (Array.isArray(c) && c.length >= 3) this.claims.set(c[0] + ',' + c[1], String(c[2]));
+    }
     this._retries = 0;
     this.status = 'online';
     this.onStatus(this.status);
@@ -139,6 +145,10 @@ export class Net {
     if (this.remotes) {
       for (const id of [...this.remotes.map.keys()]) this.remotes.remove(id);
       for (const p of (m.players || [])) this.remotes.add(p[0], p[1], p.slice(2));
+    }
+    this.claims = new Map();
+    for (const c of (m.claims || [])) {
+      if (Array.isArray(c) && c.length >= 3) this.claims.set(c[0] + ',' + c[1], String(c[2]));
     }
     // bake any edits that landed while we were desynced; visible ones apply live
     const w = this.world;
@@ -204,6 +214,32 @@ export class Net {
       case 'block':
         this._applyBlock(m.x, m.y, m.z, m.b, m.f | 0);
         break;
+      case 'deny': {
+        // server rejected an edit we applied optimistically — revert it
+        const key = m.x + ',' + m.y + ',' + m.z;
+        if (this._localEdits.has(key) && this.world) {
+          const prev = this._localEdits.get(key);
+          this._localEdits.delete(key);
+          if (this.world.getChunk(m.x >> 4, m.z >> 4)) {
+            this.world.setBlock(m.x, m.y, m.z, prev);
+          }
+        }
+        this.onToast(m.reason ? `${m.owner}: ${m.reason}` : `Protected by ${m.owner || 'a claim'}`);
+        break;
+      }
+      case 'claim': {
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+          this.claims.set((m.cx + dx) + ',' + (m.cz + dz), String(m.owner));
+        }
+        this.onChat({ kind: 'sys', text: `${m.owner} claimed land near ${m.cx * 16}, ${m.cz * 16}` });
+        break;
+      }
+      case 'unclaim': {
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+          this.claims.delete((m.cx + dx) + ',' + (m.cz + dz));
+        }
+        break;
+      }
       case 'chat':
         this.onChat({ kind: 'chat', name: m.name, text: m.text });
         break;
@@ -222,20 +258,40 @@ export class Net {
     if (Math.abs(x) > 1e6 || Math.abs(z) > 1e6) return;
     const w = this.world;
     if (!w) return;
-    if (w.getChunk(x >> 4, z >> 4)) {
-      w.setBlock(x, y, z, bid, face !== undefined ? { face } : {});
-    } else {
-      // chunk not streamed yet — record so generation bakes it in
-      const k = (x >> 4) + ',' + (z >> 4);
-      let em = w.edits.get(k);
-      if (!em) { em = new Map(); w.edits.set(k, em); }
-      em.set((y << 8) | ((z & 15) << 4) | (x & 15), (bid & 255) + ((face & 3) << 8));
+    this._applyingRemote = true;
+    try {
+      if (w.getChunk(x >> 4, z >> 4)) {
+        w.setBlock(x, y, z, bid, face !== undefined ? { face } : {});
+      } else {
+        // chunk not streamed yet — record so generation bakes it in
+        const k = (x >> 4) + ',' + (z >> 4);
+        let em = w.edits.get(k);
+        if (!em) { em = new Map(); w.edits.set(k, em); }
+        em.set((y << 8) | ((z & 15) << 4) | (x & 15), (bid & 255) + ((face & 3) << 8));
+      }
+    } finally {
+      this._applyingRemote = false;
     }
   }
 
   get connected() { return this.status === 'online' && this.ws && this.ws.readyState === 1; }
 
-  attachWorld(world) { this.world = world; }
+  attachWorld(world) {
+    this.world = world;
+    // capture pre-edit block ids so a server deny can revert the optimistic
+    // local apply precisely (interaction.js applies before it sends)
+    const orig = world.setBlock.bind(world);
+    world.setBlock = (x, y, z, id, opts) => {
+      if (!this._applyingRemote && this.connected) {
+        const key = x + ',' + y + ',' + z;
+        this._localEdits.set(key, world.getBlockRaw(x, y, z));
+        if (this._localEdits.size > 256) {
+          this._localEdits.delete(this._localEdits.keys().next().value);
+        }
+      }
+      return orig(x, y, z, id, opts);
+    };
+  }
 
   peerCount() { return this.remotes ? this.remotes.count() : 0; }
 
@@ -245,7 +301,12 @@ export class Net {
 
   sendBlock(x, y, z, bid, face = 0) {
     if (!this.connected) return;
-    this.ws.send(JSON.stringify({ op: 'block', x: Math.floor(x), y: Math.floor(y), z: Math.floor(z), b: bid & 255, f: face & 3 }));
+    const fx = Math.floor(x), fy = Math.floor(y), fz = Math.floor(z);
+    this.ws.send(JSON.stringify({ op: 'block', x: fx, y: fy, z: fz, b: bid & 255, f: face & 3 }));
+  }
+
+  claimOwnerAt(x, z) {
+    return this.claims.get((x >> 4) + ',' + (z >> 4)) || null;
   }
 
   sendChat(text) {

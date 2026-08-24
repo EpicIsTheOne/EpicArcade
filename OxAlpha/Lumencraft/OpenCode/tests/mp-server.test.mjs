@@ -262,3 +262,127 @@ test('unknown-socket ops trigger a rejoin prompt (hot reload recovery)', async (
   handler.message(stale, { op: 'block', x: 0, y: 60, z: 0, b: 1, f: 0 });
   assert.equal(stale.sent.filter((m) => m.op === 'rejoin').length, 1, 'prompt is rate-limited');
 });
+
+// ---- land claims (SMP only) ----
+const TOTEM = 60;
+const AIR = 0;
+
+function smpPair(handler) {
+  const a = fakeWs(1), b = fakeWs(2);
+  handler.message(a, { op: 'join', room: 'SMP', name: 'Alice' });
+  handler.message(b, { op: 'join', room: 'SMP', name: 'Bob' });
+  return { a, b };
+}
+
+test('placing a totem claims 3×3 chunks and broadcasts it', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  b.sent.length = 0;
+  handler.message(a, { op: 'block', x: 40, y: 70, z: -8, b: TOTEM, f: 0 }); // chunk 2,-1
+  const claim = b.sent.find((m) => m.op === 'claim');
+  assert.ok(claim, 'claim broadcast');
+  assert.equal(claim.owner, 'Alice');
+  assert.equal(claim.cx, 2);
+  assert.equal(claim.cz, -1);
+  // totem edit itself is relayed like any block
+  assert.ok(b.sent.some((m) => m.op === 'block' && m.b === TOTEM), 'totem block relayed');
+});
+
+test('non-owner edits inside a claim are denied with revert info', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  handler.message(a, { op: 'block', x: 40, y: 70, z: -8, b: TOTEM, f: 0 }); // Alice claims
+  b.sent.length = 0;
+  handler.message(b, { op: 'block', x: 45, y: 70, z: -10, b: 4, f: 0 });    // Bob builds nearby
+  const deny = b.sent.find((m) => m.op === 'deny');
+  assert.ok(deny, 'deny sent');
+  assert.equal(deny.owner, 'Alice');
+  assert.equal(deny.x, 45);
+  // nothing relayed to Alice, nothing recorded
+  assert.equal(a.sent.filter((m) => m.op === 'block' && m.x === 45).length, 0);
+  // edge of the 3×3: chunks 1..3 × -2..0 are claimed; chunk 4 is free
+  b.sent.length = 0; a.sent.length = 0;
+  handler.message(b, { op: 'block', x: 70, y: 70, z: -8, b: 4, f: 0 });     // chunk 4,-1 → outside
+  assert.ok(!b.sent.some((m) => m.op === 'deny'), 'no deny outside claim');
+  assert.ok(a.sent.some((m) => m.op === 'block'), 'outside claim relays normally');
+});
+
+test('owner builds freely; totem is unbreakable by others; owner break unclaims', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  handler.message(a, { op: 'block', x: 40, y: 70, z: -8, b: TOTEM, f: 0 });
+
+  // Bob denied on the totem itself
+  handler.message(b, { op: 'block', x: 40, y: 70, z: -8, b: AIR, f: 0 });
+  assert.ok(b.sent.some((m) => m.op === 'deny'), 'totem break denied for non-owner');
+
+  // Alice builds + breaks freely
+  handler.message(a, { op: 'block', x: 42, y: 71, z: -9, b: 4, f: 0 });
+  assert.ok(a.sent.length === 0 || !a.sent.some((m) => m.op === 'deny'), 'owner not denied');
+
+  // Alice breaks the totem → unclaim broadcast, Bob can now build there
+  b.sent.length = 0;
+  handler.message(a, { op: 'block', x: 40, y: 70, z: -8, b: AIR, f: 0 });
+  const un = b.sent.find((m) => m.op === 'unclaim');
+  assert.ok(un, 'unclaim broadcast');
+  b.sent.length = 0; a.sent.length = 0;
+  handler.message(b, { op: 'block', x: 45, y: 70, z: -10, b: 4, f: 0 });
+  assert.ok(!b.sent.some((m) => m.op === 'deny'), 'no deny after unclaim');
+  assert.ok(a.sent.some((m) => m.op === 'block'), 'Bob can build after unclaim');
+});
+
+test('claims reject overlap and enforce the 2-claim cap, with reasons', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  handler.message(a, { op: 'block', x: 40, y: 70, z: -8, b: TOTEM, f: 0 });   // Alice claim @ 2,-1
+
+  // Bob's totem overlapping (chunk 3,-1 is inside Alice's 1..3 range) — the
+  // chunk-ownership check fires first: plain deny, no totem registered
+  handler.message(b, { op: 'block', x: 50, y: 70, z: -8, b: TOTEM, f: 0 });
+  assert.ok(b.sent.some((m) => m.op === 'deny' && m.owner === 'Alice'), 'overlap denied by ownership check');
+  handler.message(b, { op: 'state', s: [51, 70, -8, 0, 0] }); // Bob stands just outside
+  handler.message(b, { op: 'block', x: 64, y: 70, z: -8, b: TOTEM, f: 0 });   // chunk 4,-1 → adjacent, still overlaps range 3..5 × -2..0
+  let deny = b.sent.filter((m) => m.op === 'deny').pop();
+  assert.ok(deny && /overlap/i.test(deny.reason), 'adjacent overlap denied with reason');
+
+  // Alice claims two more spots (2nd ok, 3rd capped)
+  handler.message(a, { op: 'block', x: -400, y: 70, z: 400, b: TOTEM, f: 0 }); // far away, chunk -25,25
+  handler.message(a, { op: 'block', x: 800, y: 70, z: 800, b: TOTEM, f: 0 });  // chunk 50,50 → 3rd
+  deny = a.sent.find((m) => m.op === 'deny' && m.reason);
+  assert.ok(deny && /limit/.test(deny.reason), '3rd claim denied with reason');
+});
+
+test('claims persist across handlers', async () => {
+  freshStore();
+  const h1 = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h1.message(a, { op: 'join', room: 'SMP', name: 'Alice' });
+  h1.message(a, { op: 'block', x: 40, y: 70, z: -8, b: TOTEM, f: 0 });
+  h1.stop?.();
+
+  const h2 = (await makeHandler()).handler;
+  const b = fakeWs(2);
+  h2.message(b, { op: 'join', room: 'SMP', name: 'Bob' });
+  const w = b.sent[0];
+  assert.ok(w.claims.some((c) => c[0] === 2 && c[1] === -1 && c[2] === 'Alice'), 'claim in welcome');
+  handler_message_block: {
+    h2.message(b, { op: 'block', x: 45, y: 70, z: -10, b: 4, f: 0 });
+    assert.ok(b.sent.some((m) => m.op === 'deny'), 'claim enforced after reload');
+  }
+  h2.stop?.();
+});
+
+test('private rooms have no claim logic', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const a = fakeWs(1), b = fakeWs(2);
+  handler.message(a, { op: 'join', room: 'PRIV', name: 'A' });
+  handler.message(b, { op: 'join', room: 'PRIV', name: 'B' });
+  handler.message(a, { op: 'block', x: 40, y: 70, z: -8, b: TOTEM, f: 0 }); // just a block
+  assert.ok(!a.sent.some((m) => m.op === 'claim'), 'no claim broadcast');
+  assert.ok(b.sent.some((m) => m.op === 'block' && m.b === TOTEM), 'totem relays as a normal block');
+});

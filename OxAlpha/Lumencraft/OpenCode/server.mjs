@@ -15,6 +15,9 @@ const SMP_MAX_PEERS = 32;
 const ROOM_MAX_PEERS = 15;
 const MAX_EDITS = 50000;
 const NAME_RE = /[^\x20-\x7e]/g;
+const CLAIM_TOTEM_ID = 60;   // keep in sync with src/blocks.js B.CLAIM_TOTEM
+const CLAIM_RANGE = 1;       // chunks each direction → 3×3 chunk claim
+const MAX_CLAIMS_PER_PLAYER = 2;
 
 function smpStorePath() {
   return process.env.SMP_STORE ||
@@ -66,6 +69,10 @@ export default {
     let saveTimer = null;
     let smpDirty = false;
 
+    // claims live only in the SMP world: "cx,cz" -> {owner, totem, placedAt, lastSeen}
+    const claims = new Map();      // chunk key -> claim
+    const totemClaim = new Map();  // "x,y,z" -> center chunk key
+
     function loadSmp() {
       if (smpLoaded) return smpLoaded;
       smpLoaded = { seed: SMP_SEED, t0: Date.now(), edits: new Map() };
@@ -80,6 +87,21 @@ export default {
                 Number.isInteger(e[3]) && e[3] >= 0 && e[3] < 256) {
               smpLoaded.edits.set(e[0] + ',' + e[1] + ',' + e[2], [e[3] & 255, (e[4] | 0) & 3]);
             }
+          }
+          if (Array.isArray(raw.claims)) {
+            for (const c of raw.claims) {
+              if (!Array.isArray(c) || c.length < 7) continue;
+              const [cx, cz, owner, tx, ty, tz] = c;
+              if (!Number.isInteger(cx) || !Number.isInteger(cz)) continue;
+              const name = cleanName(owner, '');
+              if (!name) continue;
+              const totem = Number.isInteger(tx) && Number.isInteger(ty) && Number.isInteger(tz)
+                ? tx + ',' + ty + ',' + tz : null;
+              const rec = { owner: name, totem, placedAt: +c[6] || 0, lastSeen: +c[7] || 0 };
+              claims.set(cx + ',' + cz, rec);
+              if (totem) totemClaim.set(totem, cx + ',' + cz);
+            }
+            ctx.log(`SMP claims loaded: ${claims.size} chunks`);
           }
           ctx.log(`SMP world loaded: ${smpLoaded.edits.size} edits (saved ${new Date(raw.savedAt || 0).toISOString()})`);
         }
@@ -100,10 +122,16 @@ export default {
         t0: smp ? smp.t0 : loadSmp().t0,
         savedAt: Date.now(),
         edits: [],
+        claims: [],
       };
       for (const [k, v] of edits) {
         const [x, y, z] = k.split(',').map(Number);
         out.edits.push([x, y, z, v[0], v[1]]);
+      }
+      for (const [k, c] of claims) {
+        const [cx, cz] = k.split(',').map(Number);
+        const [tx, ty, tz] = c.totem ? c.totem.split(',').map(Number) : [0, -1, 0];
+        out.claims.push([cx, cz, c.owner, tx, ty, tz, c.placedAt, c.lastSeen]);
       }
       try {
         mkdirSync(dirname(smpStorePath()), { recursive: true });
@@ -174,7 +202,6 @@ export default {
         const code = peerRoom.get(ws.id);
 
         if (msg.op === 'join' && !code) {
-          const wantSmp = cleanRoom(msg.room) === SMP_ROOM;
           const room = getRoom(cleanRoom(msg.room), cleanSeed(msg.seed));
           const cap = room.smp ? SMP_MAX_PEERS : ROOM_MAX_PEERS;
           if (room.peers.size >= cap) {
@@ -203,10 +230,19 @@ export default {
             edits.push([x, y, z, v[0], v[1]]);
             if (edits.length >= capEdits) break;
           }
+          // claims snapshot for client-side F3 display
+          const claimsOut = [];
+          if (room.smp) {
+            for (const [k, c] of claims) {
+              const [cx, cz] = k.split(',').map(Number);
+              claimsOut.push([cx, cz, c.owner]);
+              if (claimsOut.length >= 2000) break;
+            }
+          }
           ws.send({
             op: 'welcome', you: ws.id, room: room.code, seed: room.seed,
             t0: room.t0, now: Date.now(), players: playerList(room, ws.id), edits,
-            smp: !!room.smp, spawnNear,
+            smp: !!room.smp, spawnNear, claims: claimsOut,
           });
           broadcast(room, ws.id, { op: 'joined', id: ws.id, name, s: peer.s });
           ctx.log(`room ${room.code}: ${name} joined (${room.peers.size} online)`);
@@ -246,6 +282,68 @@ export default {
           peer.blockT.push(now);
           if (peer.blockT.length > 40) return; // rate limit: 40 edits/sec
           if (!validBlockOp(msg)) return;
+
+          // ---- SMP claim enforcement ----
+          if (room.smp) {
+            const ck = (msg.x >> 4) + ',' + (msg.z >> 4);
+            const claim = claims.get(ck);
+            if (claim && claim.owner !== peer.name) {
+              ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: claim.owner });
+              return;
+            }
+            const key = msg.x + ',' + msg.y + ',' + msg.z;
+
+            // placing a totem → register a claim (or deny with reason)
+            if (msg.b === CLAIM_TOTEM_ID) {
+              const ccx = msg.x >> 4, ccz = msg.z >> 4;
+              for (let dz = -CLAIM_RANGE; dz <= CLAIM_RANGE; dz++) {
+                for (let dx = -CLAIM_RANGE; dx <= CLAIM_RANGE; dx++) {
+                  const other = claims.get((ccx + dx) + ',' + (ccz + dz));
+                  if (other) {
+                    ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: other.owner, reason: 'overlaps an existing claim' });
+                    return;
+                  }
+                }
+              }
+              const mine = [...claims.values()].filter((c) => c.owner === peer.name).length;
+              if (mine >= MAX_CLAIMS_PER_PLAYER) {
+                ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: peer.name, reason: `claim limit reached (${MAX_CLAIMS_PER_PLAYER})` });
+                return;
+              }
+              const rec = { owner: peer.name, totem: key, placedAt: now, lastSeen: now };
+              for (let dz = -CLAIM_RANGE; dz <= CLAIM_RANGE; dz++) {
+                for (let dx = -CLAIM_RANGE; dx <= CLAIM_RANGE; dx++) {
+                  claims.set((ccx + dx) + ',' + (ccz + dz), rec);
+                }
+              }
+              totemClaim.set(key, ccx + ',' + ccz);
+              scheduleSmpSave();
+              broadcast(room, -1, { op: 'claim', owner: peer.name, cx: ccx, cz: ccz });
+              ctx.log(`claim: ${peer.name} claimed ${ccx},${ccz} (+3×3)`);
+            }
+
+            // breaking the totem block → release its claim (owner only, enforced above)
+            if (msg.b === 0 && totemClaim.has(key)) {
+              const centerKey = totemClaim.get(key);
+              const rec = claims.get(centerKey);
+              if (rec && rec.totem === key) {
+                const [ccx, ccz] = centerKey.split(',').map(Number);
+                for (let dz = -CLAIM_RANGE; dz <= CLAIM_RANGE; dz++) {
+                  for (let dx = -CLAIM_RANGE; dx <= CLAIM_RANGE; dx++) {
+                    const k = (ccx + dx) + ',' + (ccz + dz);
+                    if (claims.get(k) === rec) claims.delete(k);
+                  }
+                }
+                totemClaim.delete(key);
+                scheduleSmpSave();
+                broadcast(room, -1, { op: 'unclaim', cx: ccx, cz: ccz });
+                ctx.log(`claim: ${peer.name} released ${ccx},${ccz}`);
+              } else {
+                totemClaim.delete(key);
+              }
+            }
+          }
+
           room.edits.set(msg.x + ',' + msg.y + ',' + msg.z, [msg.b, msg.f | 0]);
           const capEdits = room.smp ? SMP_MAX_EDITS : MAX_EDITS;
           if (room.edits.size > capEdits) {

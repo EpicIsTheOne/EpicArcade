@@ -93,6 +93,21 @@ def('gravel', (c, r) => {
 });
 def('bedrock', (c, r) => { base(c, r, [52, 52, 58], 16); speckle(c, r, [24, 24, 28], 20, 2); speckle(c, r, [90, 90, 98], 8, 2); });
 def('obsidian', (c, r) => { base(c, r, [28, 22, 40], 7); speckle(c, r, [46, 34, 70], 10, 2); speckle(c, r, [64, 48, 100], 4); });
+def('claim_totem', (c, r) => {
+  defs.obsidian(c, r);
+  for (let y = 6; y <= 9; y++) for (let x = 0; x < TILE; x++) {
+    c.fillStyle = hex(shade([212, 175, 55], ((r() - 0.5) * 34) | 0));
+    c.fillRect(x, y, 1, 1);
+  }
+  c.fillStyle = hex([46, 34, 70]); c.fillRect(0, 6, 1, 4); c.fillRect(15, 6, 1, 4);
+  speckle(c, r, [90, 220, 160], 6);
+});
+def('claim_totem_top', (c, r) => {
+  defs.obsidian(c, r);
+  c.fillStyle = hex([212, 175, 55]); c.fillRect(4, 4, 8, 8);
+  c.fillStyle = hex([255, 215, 106]); c.fillRect(5, 5, 6, 1);
+  c.fillStyle = hex([90, 220, 160]); c.fillRect(7, 7, 2, 2);
+});
 
 // ---------- wood ----------
 function planksBase(c, r, tint) {

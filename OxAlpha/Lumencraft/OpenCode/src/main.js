@@ -1243,6 +1243,9 @@ function frame(now) {
       `Chunk ${pcx},${pcz}  loaded ${st}  pending ${world.pendingCount()}\n` +
       `Biome ${bio}  Time ${(g.timeOfDay * 24).toFixed(1)}h  Rain ${(g.rainF * 100) | 0}%\n` +
       `Mobs ${g.entities.mobs.length}  Drops ${g.entities.drops.length}\n` +
+      (g.net && g.net.isSmp
+        ? `Claim ${g.net.claimOwnerAt(Math.floor(player.pos.x), Math.floor(player.pos.z)) || 'wilderness'}  Net peers ${g.net.peerCount()}\n`
+        : '') +
       `Draw calls ${g.graphics.renderer.info.render.calls}  tris ${(g.graphics.renderer.info.render.triangles / 1000).toFixed(0)}k\n` +
       `Vel ${player.vel.length().toFixed(1)}  ${player.onGround ? 'grounded' : player.inWater ? 'swimming' : 'airborne'}${player.flying ? ' (fly)' : ''}`);
   }

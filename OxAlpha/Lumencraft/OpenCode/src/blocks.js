@@ -13,6 +13,7 @@ export const B = {
   PUMPKIN: 52, BOOKSHELF: 53, OBSIDIAN: 54,
   WATER_F1: 55, WATER_F2: 56, WATER_F3: 57, WATER_F4: 58,
   LAVA: 59,
+  CLAIM_TOTEM: 60,
 };
 
 const T = null; // tile placeholder resolved later
@@ -99,6 +100,10 @@ def(B.PINE_LEAVES, cube('Pine Needles', { tile: 'pine_leaves', opaque: false, cu
 def(B.PUMPKIN, cube('Pumpkin', { tileTop: 'pumpkin_top', tileSide: 'pumpkin_side', hardness: 1.5, tool: 'axe' }));
 def(B.BOOKSHELF, cube('Bookshelf', { tileTop: 'planks', tileSide: 'bookshelf', hardness: 3, tool: 'axe', fuel: 15 }));
 def(B.OBSIDIAN, cube('Obsidian', { tile: 'obsidian', hardness: 50, tool: 'pickaxe', requireTool: true, tier: 3 }));
+def(B.CLAIM_TOTEM, cube('Claim Totem', {
+  tileTop: 'claim_totem_top', tileSide: 'claim_totem', tileBottom: 'claim_totem_top',
+  hardness: 8, tool: 'pickaxe', requireTool: true, tier: 2, drop: [[B.CLAIM_TOTEM, 1]],
+}));
 
 for (let lvl = 1; lvl <= 4; lvl++) {
   def(B.WATER_F1 + lvl - 1, { name: 'Water', solid: false, opaque: false, render: 'liquid', liquid: true,

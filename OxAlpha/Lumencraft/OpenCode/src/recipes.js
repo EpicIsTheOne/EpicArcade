@@ -27,6 +27,8 @@ export const RECIPES = [
   // circuits
   shaped(B.LEVER_OFF, 1, ['S', 'C'], { S: 'stick', C: B.COBBLE }),
   shaped(B.LAMP_OFF, 1, [' D ', 'DGD', ' D '], { D: 'spark_dust', G: B.GLASS }),
+  // claims
+  shaped(B.CLAIM_TOTEM, 1, [' S ', 'SGS', ' S '], { S: B.STONE, G: 'gold_ingot' }),
   // farming / food
   shaped('bread', 1, ['WWW'], { W: 'wheat' }),
 ];
