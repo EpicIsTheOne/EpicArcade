@@ -3,95 +3,88 @@ name: fl-studio-mcp
 description: >
   MUST USE when the user wants FL Studio automation — e.g. "make a beat in FL
   Studio", "control FL Studio", "add patterns/channels/mixer changes in FL",
-  "render/export from FL Studio", "FL Studio MCP", or any task driving FL
-  Studio transport, patterns, channels, mixer, plugins, piano roll, playlist,
-  arrangement, or generators through MCP. Encodes this machine's installed
-  fLMCP server (159 tools), the honest truth that FL has NO true headless mode
-  (FL must be running with the bridge enabled), one-time FL-side activation
-  steps, and version gotchas.
+  "render/export from FL Studio", "FL Studio MCP", "headless FL Studio", or any
+  task driving FL Studio transport, patterns, channels, mixer, plugins, piano
+  roll, playlist, arrangement, or generators through MCP. Encodes this
+  machine's installed fLMCP server (159 tools) + threadless file-bus relay
+  (works with FL minimized), one-time FL-side activation steps, and the
+  FL-2025.2/2026 sub-interpreter gotchas that break the upstream bridge.
 ---
 
-# FL Studio MCP via fLMCP (installed)
+# FL Studio MCP via fLMCP + file-bus relay (installed)
 
-MCP server **fLMCP** (geezoria/FLStudioMCP) exposing **159 tools**: transport,
-patterns, channels, mixer, plugin params, piano roll (staged via pyscript),
-playlist, arrangement, automation-REC events, project save/render, plus
-high-level music generators (scales/chords/progressions/arps/basslines/drums).
+MCP server **fLMCP** (geezoria/FLStudioMCP, 159 tools) driving FL Studio
+through a **threadless file-bus bridge** custom-patched for this machine —
+upstream's in-FL TCP server cannot start on FL 2025.2+/2026 (see gotchas).
 
-## Honest headless status
+## Headless reality (works!)
 
-**FL Studio has no headless mode.** The MCP *server* runs headless as an agent
-subprocess, but live tools need **FL Studio open with the bridge script
-enabled**. Without it, every live tool returns
-`bridge unavailable: connection refused` — graceful, never a crash. Plan work
-as: ask user to launch FL once → then drive it.
+FL Studio has no `--background` mode, BUT the bridge works with FL **minimized**
+— park it in the taskbar and agents drive it. Verified empirically.
 
-## What's installed on this machine
+**One constraint**: the in-FL script drains commands from `OnIdle()`, which
+fires only while FL's process keeps a live window. Keep FL open (minimized is
+fine); quitting FL = tools return `bridge unavailable` until relaunched.
+
+## Architecture (this machine)
+
+```
+agent → MCP server (stdio, 159 tools) → TCP 127.0.0.1:9876 → flmcp_relay.py
+      → file bus (request.json / response-<nonce>.json)
+      → device script OnIdle() inside FL 2025 → FL API
+```
 
 | Piece | Location |
 |---|---|
-| Server clone + venv | `C:\Users\Epic\mcp-servers\FLStudioMCP` (Python 3.12 venv) |
-| Server entry point | `C:\Users\Epic\mcp-servers\FLStudioMCP\.venv\Scripts\fl-studio-mcp.exe` |
-| opencode registration | `~/.config/opencode/opencode.jsonc` → `mcp.fl-studio` (stdio) |
-| FL bridge script | `%USERPROFILE%\Documents\Image-Line\FL Studio\Settings\Hardware\fLMCP Bridge\device_FLStudioMCP.py` |
-| Piano-roll pyscript | `...\Settings\Piano roll scripts\ComposeWithLLM.pyscript` |
-| FL versions present | FL Studio 20 / 21 / 2025 / 2026 — use **2025+** (TCP bridge needs its Python 3.12) |
+| Server + relay + patched bridge | `C:\Users\Epic\mcp-servers\FLStudioMCP` |
+| Relay (owns TCP 9876) | `flmcp_relay.py` — autostarts at logon via Startup-folder `fLMCP-relay.vbs` |
+| opencode registration | `~/.config/opencode/opencode.jsonc` → `mcp.fl-studio` |
+| Device script (deployed) | `%USERPROFILE%\Documents\Image-Line\FL Studio\Settings\Hardware\fLMCP Bridge\device_FLStudioMCP.py` |
+| FL target | **FL Studio 2025** (scripting v38). FL 2026 also bound but its sandbox blocks the old TCP path; file-bus works on both in principle |
+| Bus dir | `...\Settings\Hardware\fLMCP Bridge\bus\` (relay + FL must agree; relay logs `bridge.log` there too) |
 
-## One-time FL-side activation (user does this in the GUI)
+## FL-side activation (done once, survives restarts)
 
-1. Launch **FL Studio 2025+**.
-2. `Options > MIDI Settings > Input`: enable ANY input row and set
-   **Controller type = `fLMCP Bridge`** (no MIDI hardware needed; loopMIDI row
-   works). Script output should show `[fLMCP] TCP server listening on
-   127.0.0.1:9876`.
-3. Open any piano roll → scripts dropdown → pick **ComposeWithLLM** as active
-   (binds Ctrl+Alt+Y used for staged note edits).
-4. Allow FL64.exe through Windows Firewall for 127.0.0.1:9876 if prompted.
+FL 2025: Options → MIDI Settings → Input `loopMIDI Port` → Controller type
+**`fLMCP Bridge`** → **Port 3** → Enabled. (loopMIDI installed; virtual port
+autocreates at logon.) Piano roll → scripts → **ComposeWithLLM** selected for
+note-writing tools. FL 2026 has the same binding but prefer 2025.
 
-After that, agents just call tools. Verify with a cheap read (`ping`,
-project/transport state) before mutating.
+## Gotchas — all verified the hard way on this machine
 
-## Version gotchas (verified on this machine)
+1. **Threads are banned in FL scripts**: FL 2025.2+/2026 sub-interpreters
+   disable daemon threads AND `start_new_thread` fails outright
+   (`SystemError: returned NULL`). Upstream fLMCP's TCP-in-FL design cannot
+   work → hence the relay + file bus. Never "fix" by re-adding threads.
+2. **FL's interpreter breaks `os.remove`/`os.replace`** (`error return
+   without exception set`) while `open/write` works. The device script never
+   deletes/renames — the relay consumes and cleans up bus files.
+3. **`os.environ` inside FL scripts is unreliable** — path logic uses
+   `USERPROFILE`/`Path.home()` (SCRIPT_DIR), never TEMP/LOCALAPPDATA.
+4. **`ScriptFolder` registry value = the script's declared `# name=`**, not
+   the folder name (FL 2026), while FL 2025 resolves by folder name — keep
+   folder name AND `# name=` identical (`fLMCP Bridge`) to satisfy both.
+5. **Registry-seeded MIDI rows don't instantiate scripts** — binding must
+   happen through FL's MIDI dialog once. Row values must be **REG_SZ strings**
+   (DWORD `ConnectionCounter` crashes FL 2025 at startup: "Invalid data for
+   'ConnectionCounter'").
+6. **Pin `mcp>=1.2,<2`** in the server venv (mcp 2.0 removed
+   `mcp.server.fastmcp`). System python is 3.9 — the venv is Python 3.12;
+   delete a stale `.venv` before reinstalling with a different interpreter.
+7. **Only one bridge client** may hold TCP 9876 — if tools time out, check
+   for zombie relays: `Get-CimInstance Win32_Process -Filter "Name like
+   'python%'" | ? CommandLine -match flmcp_relay` → kill by PID.
+8. **Multiple FL instances fight over MIDI ports** — keep exactly one FL
+   running.
 
-1. **Pin `mcp>=1.2,<2`** — the venv originally resolved mcp 2.0.0 where
-   `mcp.server.fastmcp` no longer exists (`ModuleNotFoundError`). Fixed by
-   installing `mcp==1.29.0`. If the server ever fails at import with that
-   error, re-run:
-   `.venv\Scripts\python.exe -m pip install "mcp>=1.2,<2"`
-2. **System python is 3.9** — package requires ≥3.10. The venv uses
-   `C:\Users\Epic\AppData\Local\Programs\Python\Python312\python.exe`.
-   If reinstalling, DELETE the stale `.venv` first (the installer reuses it).
-3. Core install skips audio extras (librosa etc.). Voice-to-MIDI / audio
-   analysis tools need:
-   `.venv\Scripts\python.exe -m pip install -e "C:\Users\Epic\mcp-servers\FLStudioMCP[audio,gui]"`
-4. Piano-roll edits flow through staged JSON + synthesized Ctrl+Alt+Y — FL's
-   window must exist (it can be minimized); keep focus-stealing in mind when
-   other agents are doing GUI work.
-5. Only ONE bridge client can hold TCP 9876 per FL instance; if bind errors
-   appear in FL's script output, another copy is running.
+## Operations
 
-## Wiring into other harnesses
-
-```json
-{
-  "mcpServers": {
-    "fl-studio": {
-      "command": "C:\\Users\\Epic\\mcp-servers\\FLStudioMCP\\.venv\\Scripts\\fl-studio-mcp.exe"
-    }
-  }
-}
-```
-
-Works with any stdio MCP client (Claude Desktop/Claude Code/Cursor/OpenCode/
-Codex). Reinstall path: clone repo → run
-`scripts\install_windows.ps1 -SkipAudio -SkipClaudeConfig -PythonExe <py310+>`
-→ delete stale `.venv` first if present → apply gotcha #1 pin → register.
-
-## Verify installation
-
-Server alone (no FL needed):
-initialize over stdio → `tools/list` must return 159 tools; any live tool call
-returns a graceful `bridge unavailable` message.
-
-Full chain (FL running + activated): call a read tool like project state /
-transport state and get real values back instead of `bridge unavailable`.
+- Relay status: `Test-NetConnection 127.0.0.1 -Port 9876` + check
+  `...\fLMCP Bridge\bridge.log` for `[fLMCP]` lines.
+- Manual relay start: `Start-Process .venv\Scripts\pythonw.exe -ArgumentList
+  'flmcp_relay.py' -WorkingDirectory C:\Users\Epic\mcp-servers\FLStudioMCP`
+- Smoke test: `.venv\Scripts\python.exe scripts\smoke_test.py`
+- After editing the device script: copy to the Hardware folder, then **Reload
+  script** in FL's Script output panel (or restart FL).
+- Audio/voice extras (librosa etc.) not installed — install with
+  `pip install -e ".[audio,gui]"` if a task needs voice-to-MIDI/audio analysis.
