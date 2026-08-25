@@ -59,6 +59,36 @@ def resolved_prompt(p):
     return q
 
 
+FEEDBACK_FILE = ROOT / "feedback.json"
+REQUESTS_FILE = ROOT / "prompt_requests.json"
+POLICY_FILE = ROOT / "artifact_policy.json"
+_RATE = {}
+
+
+def _load_json(path, default):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return default
+
+
+def _save_json(path, data):
+    path.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
+
+
+def _rate_ok(ip, limit=6, window=3600):
+    now = time.time()
+    hits = [t for t in _RATE.get(ip, []) if now - t < window]
+    if len(hits) >= limit:
+        return False
+    _RATE.setdefault(ip, []).append(now)
+    return True
+
+
+def _clean(s, maxlen):
+    return str(s or "").strip()[:maxlen]
+
+
 def pack_hash():
     canonical = json.dumps(
         [{"id": p["id"], "title": p["title"], "difficulty": p["difficulty"],
@@ -167,6 +197,7 @@ class Handler(BaseHTTPRequestHandler):
         self._headers(204, "text/plain", 0)
 
     def do_POST(self):
+        self.req_method = 'POST'
         try:
             parsed = re.split(r"\?", self.path, maxsplit=1)
             path = parsed[0].rstrip("/") or "/"
@@ -265,7 +296,74 @@ class Handler(BaseHTTPRequestHandler):
         save_runs(runs)
         return self._json({"ok": True, "entry": entry}, 201)
 
+
+    def add_feedback(self, params):
+        ip = self.client_address[0] if self.client_address else "?"
+        if not _rate_ok("fb:" + ip):
+            return self._error(429, "too many submissions; try later")
+        cat = _clean(params.get("category"), 40)
+        allowed = {"Website issue", "Benchmark issue", "Result looks wrong",
+                   "Prompt feedback", "Feature request", "Other"}
+        if cat not in allowed:
+            return self._error(400, f"category must be one of {sorted(allowed)}")
+        items = _load_json(FEEDBACK_FILE, [])
+        entry = {
+            "id": len(items) + 1,
+            "type": "feedback",
+            "category": cat,
+            "title": _clean(params.get("title"), 120),
+            "details": _clean(params.get("details"), 4000),
+            "context": {k: _clean(v, 120) for k, v in (params.get("context") or {}).items()
+                        if isinstance(v, (str, int))},
+            "status": "new",
+            "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        items.append(entry)
+        _save_json(FEEDBACK_FILE, items[-500:])
+        return self._json({"ok": True, "id": entry["id"]}, 201)
+
+    def add_request(self, params):
+        ip = self.client_address[0] if self.client_address else "?"
+        if not _rate_ok("rq:" + ip):
+            return self._error(429, "too many submissions; try later")
+        diffs = {"Light", "Medium", "Heavy", "Not sure"}
+        diff = params.get("difficulty") if params.get("difficulty") in diffs else "Not sure"
+        items = _load_json(REQUESTS_FILE, [])
+        entry = {
+            "id": len(items) + 1,
+            "type": "prompt-request",
+            "title": _clean(params.get("title"), 140),
+            "idea": _clean(params.get("idea"), 6000),
+            "why": _clean(params.get("why"), 2000),
+            "difficulty": diff,
+            "capability": _clean(params.get("capability"), 60),
+            "deliverable": _clean(params.get("deliverable"), 500),
+            "notes": _clean(params.get("notes"), 2000),
+            "status": "new",
+            "at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        }
+        if not entry["title"] or not entry["idea"]:
+            return self._error(400, "title and idea are required")
+        items.append(entry)
+        # Suggestions NEVER touch the canonical pack — review queue only.
+        _save_json(REQUESTS_FILE, items[-500:])
+        return self._json({"ok": True, "id": entry["id"], "status": "new"}, 201)
+
+    def set_request_status(self, rid, params):
+        items = _load_json(REQUESTS_FILE, [])
+        allowed = {"new", "reviewing", "accepted", "rejected", "duplicate", "implemented"}
+        st = params.get("status")
+        if st not in allowed:
+            return self._error(400, f"status must be one of {sorted(allowed)}")
+        for e in items:
+            if e.get("id") == rid:
+                e["status"] = st
+                _save_json(REQUESTS_FILE, items)
+                return self._json({"ok": True, "id": rid, "status": st})
+        return self._error(404, "no such request")
+
     def do_GET(self):
+        self.req_method = 'GET'
         try:
             parsed = re.split(r"\?", self.path, maxsplit=1)
             path, query = parsed[0].rstrip("/") or "/", parsed[1] if len(parsed) > 1 else ""
@@ -274,7 +372,7 @@ class Handler(BaseHTTPRequestHandler):
                 k, _, v = pair.partition("=")
                 params[k.lower()] = v
             if path.startswith("/api"):
-                self.route_api(path, params)
+                self.route_api(path, params, getattr(self, 'req_method', 'GET'))
             else:
                 self.serve_static(path)
         except BrokenPipeError:
@@ -285,7 +383,7 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-    def route_api(self, path, params):
+    def route_api(self, path, params, req_method='GET'):
         if path in ("/api", "/api/help"):
             return self._json(self.help_obj())
         if path == "/api/meta":
@@ -312,6 +410,37 @@ class Handler(BaseHTTPRequestHandler):
             return self._bytes(200, resolve_placeholders(p["text"]).encode("utf-8"), "text/plain; charset=utf-8", extra)
         if path == "/api/progress":
             return self._json(progress_summary())
+        if path == "/api/feedback":
+            if req_method == "POST":
+                return self.add_feedback(params)
+            return self._json({"items": _load_json(FEEDBACK_FILE, [])[-100:]})
+        if path == "/api/prompt-request":
+            if req_method == "POST":
+                return self.add_request(params)
+            if "key" in params and params["key"] == API_KEY:
+                return self._json({"items": _load_json(REQUESTS_FILE, [])})
+            return self._json({"error": "admin key required"}, 401)
+        m = re.fullmatch(r"/api/prompt-request/(\d+)/status", path)
+        if m and req_method == "POST":
+            if params.get("key") != API_KEY:
+                return self._error(401, "admin key required")
+            return self.set_request_status(int(m.group(1)), params)
+        if path == "/api/artifact-policy":
+            if req_method == "POST":
+                if params.get("key") != API_KEY:
+                    return self._error(401, "admin key required")
+                pol = _load_json(POLICY_FILE, {})
+                for k in ("capBytes", "safetyMarginBytes", "offloadTarget"):
+                    if k in params:
+                        pol[k] = params[k]
+                _save_json(POLICY_FILE, pol)
+            pol = _load_json(POLICY_FILE, {
+                "capBytes": 10 * 1024 * 1024 * 1024,
+                "safetyMarginBytes": 5 * 1024 * 1024 * 1024,
+                "offloadTarget": "tailscale-pc (private; never exposed)",
+                "note": "applies to future benchmark artifact uploads only",
+            })
+            return self._json(pol)
         if path == "/api/placeholders":
             return self._json(placeholders_status())
         return self._error(404, f"unknown API route {path}")

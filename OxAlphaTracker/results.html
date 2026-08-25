@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Epic Bench — Live Results</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%2304060c' stroke='%2322d3ee'/%3E%3C/svg%3E" />
+<style>
+body{margin:0;background:#04060c;color:#cfe3f2;font-family:Rajdhana,Rajdhani,Segoe UI,monospace}
+a{color:#22d3ee;text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 16px}
+h1{font-size:28px;letter-spacing:.08em;margin:0 0 4px;color:#e8f6ff}
+.sub{color:#7f97ab;font-size:13px;margin-bottom:18px}
+nav{margin-bottom:20px;font-size:14px} nav a{margin-right:16px}
+.card{background:rgba(10,18,28,.85);border:1px solid rgba(34,211,238,.22);border-radius:10px;padding:16px;margin-bottom:18px}
+.prog b{color:#22d3ee;font-size:20px}
+.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid #2b4257;margin-right:6px}
+.pass{color:#34d399;border-color:#34d39955}.fail,.error{color:#f87171;border-color:#f8717155}
+.running{color:#22d3ee;border-color:#22d3ee55}.skipped{color:#94a3b8}
+select,input,textarea{background:#0a1420;color:#dbeafe;border:1px solid #24435c;border-radius:6px;padding:6px 8px;font-family:inherit;width:100%;max-width:420px}
+label{display:block;font-size:12px;color:#8fa8bd;margin:10px 0 4px}
+button{background:#0e2a3d;color:#22d3ee;border:1px solid #22d3ee66;border-radius:6px;padding:8px 16px;cursor:pointer;margin-top:10px}
+button:hover{background:#12354f}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:6px 8px;border-bottom:1px solid #16283a;text-align:left;vertical-align:top}
+th{color:#8fa8bd;font-weight:600}
+.msg{color:#7dd3fc;font-size:13px;margin-top:8px;min-height:18px}
+.muted{color:#64809a;font-size:12px}
+</style></head><body><div class="wrap">
+<h1>EPIC BENCH — LIVE RESULTS</h1>
+<div class="sub">Epic Bench · canonical pack <span id="packHash">…</span> · <a href="index.html">Prompt Browser</a></div>
+<nav><a href="index.html">Prompts</a><a href="results.html">Live Results</a><a href="results.html#suggest">Suggest a Prompt</a><a href="results.html#feedback">Give Feedback</a></nav>
+
+<div class="card prog" id="progCard"><b id="pDone">–</b> / <span id="pTotal">46</span> complete
+&nbsp;<span id="pCounts"></span><div class="muted" id="pUpdated"></div></div>
+
+<div class="card">
+<label>Prompt filter</label>
+<select id="promptSel"><option value="">All Prompts</option></select>
+<label>Status</label>
+<select id="statusSel" style="max-width:200px"><option value="">All</option>
+<option>running</option><option>pass</option><option>fail</option><option>error</option><option>skipped</option></select>
+<table><thead><tr><th>Updated</th><th>Harness</th><th>Model</th><th>Prompt</th><th>Status</th><th>Notes</th></tr></thead>
+<tbody id="rows"></tbody></table>
+</div>
+
+<div class="card" id="feedback">
+<b>Give Feedback</b>
+<label>Category</label><select id="fbCat">
+<option>Website issue</option><option>Benchmark issue</option><option>Result looks wrong</option>
+<option>Prompt feedback</option><option>Feature request</option><option>Other</option></select>
+<label>Short title</label><input id="fbTitle" maxlength="120"/>
+<label>Description</label><textarea id="fbDetails" rows="4" maxlength="4000"></textarea>
+<button onclick="sendFb()">Submit feedback</button><div class="msg" id="fbMsg"></div></div>
+
+<div class="card" id="suggest">
+<b>Suggest a Prompt</b>
+<div class="muted">Suggestions go to a review queue. Epic personally approves every prompt before it can become part of Epic Bench.</div>
+<label>Proposed title</label><input id="rqTitle" maxlength="140"/>
+<label>The task / prompt idea</label><textarea id="rqIdea" rows="5" maxlength="6000"></textarea>
+<label>Why it belongs in Epic Bench</label><textarea id="rqWhy" rows="2" maxlength="2000"></textarea>
+<label>Suggested difficulty</label><select id="rqDiff"><option>Not sure</option><option>Light</option><option>Medium</option><option>Heavy</option></select>
+<label>Capability tested</label><select id="rqCap"><option>other</option><option>frontend/UI</option><option>backend</option><option>debugging</option>
+<option>browser automation</option><option>game development</option><option>agentic research</option><option>tool use</option>
+<option>multimodal</option><option>long-horizon coding</option><option>recovery/resilience</option></select>
+<label>Optional expected deliverable</label><input id="rqDeliv" maxlength="500"/>
+<button onclick="sendRq()">Submit suggestion</button><div class="msg" id="rqMsg"></div></div>
+
+<div class="muted">Submissions are anonymous, rate-limited, and reviewed manually. Prompt suggestions never modify the canonical benchmark pack automatically.</div>
+</div>
+<script src="prompts-data.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+let PROMPT_BY_ID={};
+(window.PROMPTS_DATA||[]).forEach(p=>{PROMPT_BY_ID[p.id]=p;
+  const o=document.createElement('option');o.value=p.id;o.textContent=`${String(p.id).padStart(2,'0')} · ${p.title} [${p.difficulty}]`;
+  $('promptSel').appendChild(o);});
+const params=new URLSearchParams(location.search);
+if(params.get('prompt')) $('promptSel').value=params.get('prompt');
+$('promptSel').addEventListener('change',()=>{const u=new URL(location);u.searchParams.delete('prompt');
+ if($('promptSel').value)u.searchParams.set('prompt',$('promptSel').value);history.replaceState(null,'',u);load();});
+$('statusSel').addEventListener('change',load);
+function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML;}
+async function loadProgress(){try{const r=await fetch('api/progress',{cache:'no-store'});const d=await r.json();
+ $('packHash').textContent=(d.packHash||'').replace('sha256:','').slice(0,10);
+ $('pDone').textContent=d.promptsPassed;$('pTotal').textContent=d.totalPrompts;
+ const bs=d.byStatus||{};$('pCounts').textContent=
+  ['running','fail','error','skipped'].map(s=>bs[s]?`${bs[s]} ${s}`:'').filter(Boolean).join(' · ');
+ $('pUpdated').textContent='last update '+(d.lastUpdate||'—');}catch(e){}}
+async function load(){try{const r=await fetch('api/status',{cache:'no-store'});const d=await r.json();
+ let rows=(d.runs||[]);
+ const pf=$('promptSel').value, sf=$('statusSel').value;
+ if(pf)rows=rows.filter(x=>String(x.promptId)===pf);
+ if(sf)rows=rows.filter(x=>x.status===sf);
+ rows.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+ $('rows').innerHTML=rows.slice(0,80).map(x=>`<tr><td>${esc(x.updatedAt)}</td><td>${esc(x.harness||'—')}</td><td>${esc(x.model)}</td>`+
+  `<td>${x.promptId!=null?`${String(x.promptId).padStart(2,'0')} · ${esc((PROMPT_BY_ID[x.promptId]||{}).title||('#'+x.promptId))}`:'(run-level)'}</td>`+
+  `<td><span class="pill ${x.status}">${esc(x.status)}</span></td><td>${esc(x.notes)}</td></tr>`).join('')
+  ||'<tr><td colspan="6" class="muted">No results yet.</td></tr>';
+}catch(e){$('rows').innerHTML='<tr><td colspan="6">Failed to load.</td></tr>';}}
+function ctx(){return {prompt:$('promptSel').value||undefined,page:'results',packHash:$('packHash').textContent};}
+async function sendFb(){const r=await fetch('api/feedback',{method:'POST',headers:{'content-type':'application/json'},
+ body:JSON.stringify({category:$('fbCat').value,title:$('fbTitle').value,details:$('fbDetails').value,context:ctx()})});
+ const d=await r.json().catch(()=>({}));$('fbMsg').textContent=r.ok?('Thanks! Feedback #'+d.id+' recorded.'):(d.error||'Failed.');if(r.ok){$('fbTitle').value='';$('fbDetails').value='';}}
+async function sendRq(){const r=await fetch('api/prompt-request',{method:'POST',headers:{'content-type':'application/json'},
+ body:JSON.stringify({title:$('rqTitle').value,idea:$('rqIdea').value,why:$('rqWhy').value,
+ difficulty:$('rqDiff').value,capability:$('rqCap').value,deliverable:$('rqDeliv').value,context:ctx()})});
+ const d=await r.json().catch(()=>({}));$('rqMsg').textContent=r.ok?('Received! Suggestion #'+d.id+' is in the review queue.'):(d.error||'Failed.');
+ if(r.ok){['rqTitle','rqIdea','rqWhy','rqDeliv'].forEach(i=>$(i).value='');}}
+loadProgress();setInterval(loadProgress,5000);load();setInterval(load,5000);
+</script></body></html>
