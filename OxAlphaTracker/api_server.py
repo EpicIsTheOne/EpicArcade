@@ -219,6 +219,16 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception as exc:
                     return self._error(400, f"invalid JSON body: {exc}")
                 return self.update_status(body)
+            # Epic Bench community endpoints accept JSON bodies.
+            if path in ("/api/feedback", "/api/prompt-request", "/api/artifact-policy") or \
+                    re.fullmatch(r"/api/prompt-request/\d+/status", path):
+                try:
+                    body = json.loads(raw.decode("utf-8")) if raw else {}
+                except Exception as exc:
+                    return self._error(400, f"invalid JSON body: {exc}")
+                merged = dict(body)
+                merged.update(params)
+                return self.route_api(path, merged, "POST")
             return self._error(404, f"unknown API route {path}")
         except BrokenPipeError:
             pass
