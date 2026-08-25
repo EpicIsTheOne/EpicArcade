@@ -13,7 +13,7 @@ function slugOk(s) {
   return /^[A-Za-z0-9][A-Za-z0-9-]*$/.test(s);
 }
 
-function git(args, cwd, timeoutMs = 120000) {
+function git(args, cwd, timeoutMs = 480000) {
   return new Promise((resolve) => {
     const proc = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
     let out = "", err = "";
