@@ -17,6 +17,7 @@ import { Player } from './player.js';
 import { Interaction, raycastVoxel } from './interaction.js';
 import { EntityManager, MOB_TYPES, Mob } from './entities.js';
 import { Net, resolveWsUrl } from './net.js';
+import { MobNet } from './mobnet.js';
 import { SignManager } from './signs.js';
 import { Particles } from './particles.js';
 import { AudioSys } from './audio.js';
@@ -159,6 +160,14 @@ function startGame(opts) {
     g.net.onToast = (m) => ui.toast(m);
     if (g.net.spawnNear) g._smpSpawnNear = g.net.spawnNear;
 
+    // shared mobs: host-authoritative co-op sync
+    const mobNet = new MobNet(g);
+    g.mobNet = mobNet;
+    g.net.onHost = (id) => { id == null ? mobNet.handleDisconnect() : mobNet.onHostChanged(id); };
+    g.net.onMobs = (ms) => mobNet.onMobs(ms);
+    g.net.onMobHit = (m) => mobNet.onMobHit(m);
+    g.net.onMobDie = (m) => mobNet.onMobDie(m);
+
     const signManager = new SignManager(graphics.scene);
     g.signManager = signManager;
     g.net.onSignsReset = (entries) => signManager.reset(entries);
@@ -213,14 +222,23 @@ function startGame(opts) {
   g.spawnDrop = (x, y, z, id, count) => entities.spawnDrop(x, y, z, id, count);
 
   // combat helpers expected by interaction/entities
-  g.pickMob = (eye, dir, maxDist) => entities.pickMob(eye[0], eye[1], eye[2], dir.x, dir.y, dir.z, maxDist);
+  g.pickMob = (eye, dir, maxDist) =>
+    entities.pickMob(eye[0], eye[1], eye[2], dir.x, dir.y, dir.z, maxDist,
+      g.mobNet && g.mobNet.mirroring ? g.mobNet.pickList() : null);
+  g.onMobDeath = (mob) => { if (g.mobNet && g.net && g.net.connected) g.mobNet.onMobDeath(mob); };
   g.attackMob = (mob, dir) => {
     const held = ui.hotbarSelected();
     let dmg = 1.5;
     if (held && typeof held.id === 'string' && ITEMS[held.id]?.dmg) dmg = ITEMS[held.id].dmg;
     const crit = !player.onGround && player.vel.y < -1;
     if (crit) dmg *= 1.5;
-    mob.hurt(dmg, dir);
+    if (mob.isRemote) {
+      // mirrored mob: the host applies damage; we get hp/death back via snapshots
+      g.mobNet.hitRemote(mob.eid, dmg, dir);
+    } else {
+      mob.hurt(dmg, dir);
+      if (g.mobNet) g.mobNet.noteLocalHit(mob);
+    }
     if (crit) particles.critFx(mob.pos.x, mob.pos.y + mob.type.h * 0.7, mob.pos.z);
     audio.mobAttack(mob.typeName);
     audio.swing();
@@ -512,7 +530,8 @@ function startGame(opts) {
     if (!saved) {
       setTimeout(() => {
         if (game === g) {
-          entities.seedPassives(player.pos.x, player.pos.z, 6);
+          const mirroring = g.mobNet && g.mobNet.mirroring;
+          if (!mirroring) entities.seedPassives(player.pos.x, player.pos.z, 6);
           ui.inv.give(B.TORCH, 4);
         }
       }, 1500);
@@ -721,7 +740,32 @@ function startGame(opts) {
       }
       return null;
     },
-    mobsDetail: () => entities.mobs.map(m => ({ type: m.typeName, hp: m.hp, dying: m.dying, dead: m.dead, pos: m.pos.toArray() })),
+    mobsDetail: () => entities.mobs.map(m => ({ eid: m.eid, type: m.typeName, hp: m.hp, dying: m.dying, dead: m.dead, pos: m.pos.toArray() })),
+    mobnet: () => ({
+      host: g.mobNet ? g.mobNet.isHost : null,
+      mirroring: g.mobNet ? g.mobNet.mirroring : null,
+      remoteMobs: g.mobNet ? g.mobNet.remoteCount() : 0,
+      remoteEids: g.mobNet ? [...g.mobNet.pickList().map((r) => r.eid)] : [],
+      localMobs: entities.mobs.length,
+      hostId: g.net ? g.net.hostId : null,
+      you: g.net ? g.net.you : null,
+      peers: g.net && g.net.remotes ? g.net.remotes.count() : 0,
+    }),
+    hitRemoteMob: (n = 1, wantEid = null) => {
+      // QA helper: hit a mirrored mob n times with 3 dmg (default: nearest)
+      if (!g.mobNet || !g.mobNet.mirroring) return 'not mirroring';
+      const pp = player.pos;
+      let best = null, bd = 1e9;
+      for (const rec of g.mobNet.pickList()) {
+        if (rec.dying || rec.dead) continue;
+        if (wantEid != null) { if (rec.eid === wantEid) { best = rec; break; } continue; }
+        const d = rec.pos.distanceToSquared(pp);
+        if (d < bd) { bd = d; best = rec; }
+      }
+      if (!best) return 'no remote mobs';
+      for (let i = 0; i < n; i++) g.mobNet.hitRemote(best.eid, 3, null);
+      return `hit eid ${best.eid} (${best.typeName}) x${n}`;
+    },
   };
 
   // ---------- main loop pieces stored on g ----------
@@ -1100,7 +1144,6 @@ let autosaveT = 0;
 let lastViewCx = 1e9, lastViewCz = 1e9;
 
 function frame(now) {
-  requestAnimationFrame(frame);
   const dt = Math.min(0.05, (now - perf.lastMs) / 1000);
   perf.lastMs = now;
   perf.frames++;
@@ -1204,6 +1247,7 @@ function frame(now) {
     player.update(dt);
     g.interaction.update(dt);
     g.entities.update(dt);
+    if (g.mobNet) g.mobNet.update(dt);
     g.playTime += dt;
   }
 
@@ -1353,7 +1397,11 @@ function frame(now) {
   }
 }
 
-requestAnimationFrame(frame);
+// rAF drives the loop while visible; a hidden tab suspends rAF entirely, so a
+// background interval keeps the simulation ticking (a multiplayer host that
+// alt-tabs must not freeze shared mobs for everyone else).
+requestAnimationFrame(function loop(now) { requestAnimationFrame(loop); frame(now); });
+setInterval(() => { if (document.hidden && game) frame(performance.now()); }, 100);
 
 window.addEventListener('beforeunload', () => {
   syncQuitSave(game);

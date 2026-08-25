@@ -22,6 +22,8 @@ const MAX_CLAIMS_PER_PLAYER = 2;
 const MAX_CONTAINERS = 300;  // synced chests per room
 const MAX_OBSERVERS = 24;    // map viewers per room (don't eat player slots)
 const SIGN_BLOCK_ID = 61;    // keep in sync with src/blocks.js B.SIGN
+const MAX_MOBS_SYNC = 40;    // mobs relayed per snapshot (host's excess stays private)
+const MOB_TYPE_RE = /^[a-z]{3,12}$/;
 
 function maxSigns() {
   return Number(process.env.MAX_SIGNS) || 200;
@@ -100,6 +102,22 @@ function validChestOp(m) {
 
 function cleanSignText(raw) {
   return String(raw ?? '').replace(NAME_RE, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
+// shared-mob snapshot: [[eid, type, x, y, z, hp, yaw],...] — sparse validation
+function validMobsOp(m) {
+  if (!Array.isArray(m.ms) || m.ms.length > MAX_MOBS_SYNC) return false;
+  for (const e of m.ms) {
+    if (!Array.isArray(e) || e.length !== 7) return false;
+    const [eid, type, x, y, z, hp, yaw] = e;
+    if (!Number.isInteger(eid) || eid < 0 || eid > 1e9) return false;
+    if (typeof type !== 'string' || !MOB_TYPE_RE.test(type)) return false;
+    for (const v of [x, y, z, hp, yaw]) {
+      if (typeof v !== 'number' || !Number.isFinite(v) || Math.abs(v) > 1e6) return false;
+    }
+    if (hp < -1 || hp > 1000) return false;
+  }
+  return true;
 }
 
 export default {
@@ -275,6 +293,7 @@ export default {
             containers: saved.containers,
             signs: saved.signs,
             peers: new Map(),
+            hostId: null,
           };
         } else {
           room = {
@@ -285,6 +304,7 @@ export default {
             containers: new Map(),
             signs: new Map(),
             peers: new Map(),
+            hostId: null,
           };
         }
         rooms.set(code, room);
@@ -307,6 +327,21 @@ export default {
         out.push([id, p.name, ...p.s]);
       }
       return out;
+    }
+
+    // shared-mob authority: oldest non-observer peer still in the room
+    function pickHost(room) {
+      for (const [id, p] of room.peers) {
+        if (!p.observer) return id;
+      }
+      return null;
+    }
+
+    function reelectHost(room, exceptId = -1) {
+      const next = pickHost(room);
+      if (next === room.hostId) return;
+      room.hostId = next;
+      broadcast(room, exceptId, { op: 'host', id: next });
     }
 
     return {
@@ -363,6 +398,7 @@ export default {
               op: 'welcome', you: ws.id, room: room.code, seed: room.seed,
               t0: room.t0, now: Date.now(), players: playerList(room, -1),
               edits: [], smp: !!room.smp, spawnNear: null, claims: [], containers: [],
+              signs: [], host: room.hostId,
             });
             ctx.log(`room ${room.code}: map viewer attached (${room.peers.size} sockets)`);
             return;
@@ -377,6 +413,8 @@ export default {
           const peer = { name, s: [0.5, -100, 0.5, 0, 0], ws, blockT: [], chatT: [] };
           room.peers.set(ws.id, peer);
           peerRoom.set(ws.id, room.code);
+          // shared-mob host election (join can only fill a vacant seat)
+          reelectHost(room, ws.id);
 
           // SMP: suggest spawning next to an existing player (never an observer)
           let spawnNear = null;
@@ -422,7 +460,7 @@ export default {
             op: 'welcome', you: ws.id, room: room.code, seed: room.seed,
             t0: room.t0, now: Date.now(), players: playerList(room, ws.id), edits,
             smp: !!room.smp, spawnNear, claims: claimsOut, containers: containersOut,
-            signs: signsOut,
+            signs: signsOut, host: room.hostId,
           });
           broadcast(room, ws.id, { op: 'joined', id: ws.id, name, s: peer.s });
           ctx.log(`room ${room.code}: ${name} joined (${room.peers.size} online)`);
@@ -458,7 +496,8 @@ export default {
         // Ops from a socket the current handler doesn't know (hot reload
         // swapped handlers under a live socket): ask the client to re-join.
         if (!code) {
-          if (msg.op === 'state' || msg.op === 'block' || msg.op === 'chat' || msg.op === 'died') {
+          if (msg.op === 'state' || msg.op === 'block' || msg.op === 'chat' || msg.op === 'died' ||
+              msg.op === 'mobs' || msg.op === 'mobhit' || msg.op === 'mobdie') {
             const now = Date.now();
             if (!ws._rejoinAt || now - ws._rejoinAt > 2000) {
               ws._rejoinAt = now;
@@ -687,6 +726,48 @@ export default {
           return;
         }
 
+        // ---- shared mobs: host-authoritative relay ----
+        if (msg.op === 'mobs') {
+          const now = Date.now();
+          peer.mobT = (peer.mobT || []).filter((t) => now - t < 1000);
+          peer.mobT.push(now);
+          if (peer.mobT.length > 15) return; // snapshots are 10Hz; anything more is abuse
+          if (room.hostId !== ws.id) return; // only the host publishes
+          if (!validMobsOp(msg)) return;
+          broadcast(room, ws.id, { op: 'mobs', ms: msg.ms });
+          return;
+        }
+
+        if (msg.op === 'mobhit') {
+          const now = Date.now();
+          peer.mobT = (peer.mobT || []).filter((t) => now - t < 1000);
+          peer.mobT.push(now);
+          if (peer.mobT.length > 15) return;
+          if (room.hostId === ws.id || room.hostId == null) return; // host hits its own mobs locally
+          const id = msg.id, dmg = msg.dmg;
+          if (!Number.isInteger(id) || id < 0 || id > 1e9) return;
+          if (typeof dmg !== 'number' || !Number.isFinite(dmg) || dmg <= 0) return;
+          const dd = Math.min(20, +dmg.toFixed(2));
+          const kx = Number.isFinite(msg.kx) ? Math.max(-3, Math.min(3, +msg.kx.toFixed(2))) : 0;
+          const kz = Number.isFinite(msg.kz) ? Math.max(-3, Math.min(3, +msg.kz.toFixed(2))) : 0;
+          const hostWs = room.peers.get(room.hostId)?.ws;
+          if (hostWs) {
+            try { hostWs.send({ op: 'mobhit', id, dmg: dd, kx, kz, by: peer.name }); } catch {}
+          }
+          return;
+        }
+
+        if (msg.op === 'mobdie') {
+          const now = Date.now();
+          peer.mobT = (peer.mobT || []).filter((t) => now - t < 1000);
+          peer.mobT.push(now);
+          if (peer.mobT.length > 20) return;
+          if (room.hostId !== ws.id) return; // only the host declares deaths
+          if (!Number.isInteger(msg.id) || msg.id < 0 || msg.id > 1e9) return;
+          broadcast(room, ws.id, { op: 'mobdie', id: msg.id, killer: cleanName(msg.killer, '') });
+          return;
+        }
+
         if (msg.op === 'chat') {
           const now = Date.now();
           peer.chatT = peer.chatT.filter((t) => now - t < 1000);
@@ -722,6 +803,13 @@ export default {
         } else {
           broadcast(room, ws.id, { op: 'left', id: ws.id });
           if (peer) ctx.log(`room ${code}: ${peer.name} left (${room.peers.size} online)`);
+        }
+        // host left → hand mob authority to the next-oldest player
+        if (room.hostId === ws.id || (room.hostId != null && !room.peers.has(room.hostId))) {
+          reelectHost(room, -1);
+          if (room.hostId != null && room.hostId !== ws.id) {
+            ctx.log(`room ${code}: host migrated to peer ${room.hostId}`);
+          }
         }
         if (room.peers.size === 0 && !room.smp) {
           rooms.delete(code);

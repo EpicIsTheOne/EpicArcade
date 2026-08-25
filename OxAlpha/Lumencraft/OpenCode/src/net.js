@@ -77,6 +77,11 @@ export class Net {
     this.signs = new Map();       // "x,y,z" -> {text, owner}
     this.onSignsReset = null;     // (entries[[x,y,z,owner,text]...]) — bulk replace
     this.onSign = null;           // ({x,y,z,text,owner}|{x,y,z,text:null}) — live update
+    this.hostId = null;           // shared-mob authority (peer id or null)
+    this.onHost = null;           // (hostId) — host changed (incl. "me")
+    this.onMobs = null;           // (ms) — mirrored mob snapshot
+    this.onMobHit = null;         // ({id,dmg,kx,kz,by}) — routed to the host only
+    this.onMobDie = null;         // ({id,killer}) — mob death broadcast
     this.ui = null;               // attached for chest poll sync
     this._chestWire = new Map();  // "x,y,z" -> last sent JSON (dedup)
     this._chestPollT = 0;
@@ -153,6 +158,7 @@ export class Net {
     this.room = m.room;
     this.t0 = m.t0;
     this.clockOffset = m.now - Date.now();
+    this.hostId = Number.isInteger(m.host) ? m.host : null;
     this.edits = Array.isArray(m.edits) ? m.edits : [];
     this.spawnNear = Array.isArray(m.spawnNear) ? m.spawnNear : null;
     this.isSmp = !!m.smp;
@@ -180,6 +186,8 @@ export class Net {
     this.you = m.you;
     this.t0 = m.t0;
     this.clockOffset = m.now - Date.now();
+    this.hostId = Number.isInteger(m.host) ? m.host : null;
+    this.onHost?.(this.hostId);
     if (this.remotes) {
       for (const id of [...this.remotes.map.keys()]) this.remotes.remove(id);
       for (const p of (m.players || [])) this.remotes.add(p[0], p[1], p.slice(2));
@@ -221,7 +229,9 @@ export class Net {
     if (this._closedForGood) return;
     this.status = 'offline';
     this.onStatus(this.status);
+    this.hostId = null;
     if (this.remotes) { this.remotes.dispose(); this.remotes = null; }
+    this.onHost?.(null);
     if (this._retries >= 5) {
       this.status = 'error';
       this.onStatus(this.status);
@@ -311,6 +321,19 @@ export class Net {
         if (this.ui && this.ui.currentContainerKey === key) this.ui.refreshOpenWindow();
         break;
       }
+      case 'host':
+        this.hostId = Number.isInteger(m.id) ? m.id : null;
+        this.onHost?.(this.hostId);
+        break;
+      case 'mobs':
+        this.onMobs?.(m.ms);
+        break;
+      case 'mobhit':
+        this.onMobHit?.(m);
+        break;
+      case 'mobdie':
+        this.onMobDie?.(m);
+        break;
       case 'chat':
         this.onChat({ kind: 'chat', name: m.name, text: m.text });
         break;
@@ -414,6 +437,27 @@ export class Net {
     if (!this.connected) return false;
     this.ws.send(JSON.stringify({ op: 'sign', x: Math.floor(x), y: Math.floor(y), z: Math.floor(z), text: String(text || '').slice(0, 100) }));
     return true;
+  }
+
+  // ---- shared mobs (host-authoritative) ----
+  sendMobs(ms) {
+    if (!this.connected || !Array.isArray(ms)) return;
+    this.ws.send(JSON.stringify({ op: 'mobs', ms }));
+  }
+
+  sendMobHit(id, dmg, kx, kz) {
+    if (!this.connected) return;
+    this.ws.send(JSON.stringify({
+      op: 'mobhit', id: id | 0,
+      dmg: Math.max(0.1, Math.min(20, +dmg || 1)),
+      kx: Math.max(-3, Math.min(3, +kx || 0)),
+      kz: Math.max(-3, Math.min(3, +kz || 0)),
+    }));
+  }
+
+  sendMobDie(id, killer) {
+    if (!this.connected) return;
+    this.ws.send(JSON.stringify({ op: 'mobdie', id: id | 0, killer: String(killer || '').slice(0, 16) }));
   }
 
   /** shared day fraction while online (else null → caller keeps local clock) */

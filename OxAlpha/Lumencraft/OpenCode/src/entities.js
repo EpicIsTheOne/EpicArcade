@@ -142,8 +142,7 @@ function box(parent, w, h, d, color, x, y, z) {
   return m;
 }
 
-export const MOB_TYPES = {
-  gloom: {
+export const MOB_TYPES = {  gloom: {
     label: 'Gloom', hp: 12, speed: 2.75, w: 0.62, h: 1.85, hostile: true, dmg: 3, aggro: 22,
     burnsInSun: true, drops: [['coal', 1, 0.35], ['spark_dust', 1, 0.14]],
     build(g, P) {
@@ -223,11 +222,41 @@ export const MOB_TYPES = {
   },
 };
 
+// ---------- shared model/drop helpers (used by Mob and the net mirror) ----------
+let _nextEid = 1;
+
+/** claim a unique mob id; keeps future auto-ids above it (host migration) */
+export function reserveMobEid(eid) {
+  if (eid >= _nextEid) _nextEid = eid + 1;
+  return eid;
+}
+
+/** build the blocky model for a mob type: {group, P, mat} */
+export function buildMobModel(typeName) {
+  const type = MOB_TYPES[typeName];
+  const group = new THREE.Group();
+  const P = {};
+  type.build(group, P);
+  const mat = new THREE.MeshBasicMaterial({ vertexColors: true });
+  group.traverse((o) => { if (o.isMesh) o.material = mat; });
+  return { group, P, mat };
+}
+
+/** roll a mob's loot table → spawn drops via game.spawnDrop */
+export function rollDrops(game, typeName, x, y, z) {
+  const type = MOB_TYPES[typeName];
+  if (!type) return;
+  for (const [id, count, chance] of type.drops) {
+    if (Math.random() < chance) game.spawnDrop(x, y + 0.5, z, id, count);
+  }
+}
+
 export class Mob {
-  constructor(game, typeName, x, y, z) {
+  constructor(game, typeName, x, y, z, eid) {
     this.game = game;
     this.type = MOB_TYPES[typeName];
     this.typeName = typeName;
+    this.eid = eid == null ? _nextEid++ : reserveMobEid(eid);
     this.pos = new THREE.Vector3(x, y, z);
     this.vel = new THREE.Vector3();
     this.hp = this.type.hp;
@@ -246,13 +275,13 @@ export class Mob {
     this.dying = false;
     this.deathT = 0;
     this.stuckT = 0;
+    this.skipDrops = false;      // set when the killer will drop loot on their client
     this.lastX = x; this.lastZ = z;
 
-    this.group = new THREE.Group();
-    this.P = {};
-    this.type.build(this.group, this.P);
-    this.mat = new THREE.MeshBasicMaterial({ vertexColors: true });
-    this.group.traverse(o => { if (o.isMesh) o.material = this.mat; });
+    const model = buildMobModel(typeName);
+    this.group = model.group;
+    this.P = model.P;
+    this.mat = model.mat;
     this.group.position.copy(this.pos);
     game.graphics.scene.add(this.group);
   }
@@ -306,13 +335,12 @@ export class Mob {
     this.dying = true;
     this.deathT = 0;
     if (this.game.audio) this.game.audio.mobDie(this.typeName);
+    this.game.onMobDeath?.(this);   // shared mobs: broadcast death + drop routing
   }
 
   finishDeath() {
-    for (const [id, count, chance] of this.type.drops) {
-      if (Math.random() < chance) {
-        this.game.spawnDrop(this.pos.x, this.pos.y + 0.5, this.pos.z, id, count);
-      }
+    if (!this.skipDrops) {
+      rollDrops(this.game, this.typeName, this.pos.x, this.pos.y, this.pos.z);
     }
     if (this.game.particles) {
       this.game.particles.burst(this.pos.x, this.pos.y + 0.6, this.pos.z, [0.7, 0.1, 0.1], 10, 2.2);
@@ -453,6 +481,7 @@ export class EntityManager {
     this.mobs = [];
     this.drops = [];
     this.spawnT = 2.5;
+    this.spawnEnabled = true;   // false while mirroring another peer's mobs
   }
 
   spawnDrop(x, y, z, id, count) {
@@ -533,9 +562,11 @@ export class EntityManager {
     }
   }
 
-  pickMob(ox, oy, oz, dx, dy, dz, maxDist) {
+  /** ray-pick a mob; `extra` merges mirrored (remote) mobs into the search */
+  pickMob(ox, oy, oz, dx, dy, dz, maxDist, extra) {
     let best = null, bestT = maxDist;
-    for (const m of this.mobs) {
+    const pool = extra && extra.length ? this.mobs.concat(extra) : this.mobs;
+    for (const m of pool) {
       if (m.dead || m.dying) continue;
       const hw = m.type.w / 2 + 0.08;
       const min = [m.pos.x - hw, m.pos.y - 0.06, m.pos.z - hw];
@@ -559,7 +590,7 @@ export class EntityManager {
 
   update(dt) {
     this.spawnT -= dt;
-    if (this.spawnT <= 0) {
+    if (this.spawnEnabled && this.spawnT <= 0) {
       this.spawnT = 2.4;
       this.trySpawn();
     }
