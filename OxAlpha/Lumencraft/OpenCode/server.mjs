@@ -20,6 +20,7 @@ const CLAIM_TOTEM_ID = 60;   // keep in sync with src/blocks.js B.CLAIM_TOTEM
 const CLAIM_RANGE = 1;       // chunks each direction → 3×3 chunk claim
 const MAX_CLAIMS_PER_PLAYER = 2;
 const MAX_CONTAINERS = 300;  // synced chests per room
+const MAX_OBSERVERS = 24;    // map viewers per room (don't eat player slots)
 
 function smpStorePath() {
   return process.env.SMP_STORE ||
@@ -271,7 +272,7 @@ export default {
     function playerList(room, exceptId) {
       const out = [];
       for (const [id, p] of room.peers) {
-        if (id === exceptId) continue;
+        if (id === exceptId || p.observer) continue;
         out.push([id, p.name, ...p.s]);
       }
       return out;
@@ -315,8 +316,30 @@ export default {
           }
 
           const room = getRoom(cleanRoom(msg.room), cleanSeed(msg.seed));
+          const isMap = msg.map === true;
+
+          if (isMap) {
+            // map observers: invisible, read-only, separate cap
+            const observers = [...room.peers.values()].filter((p) => p.observer).length;
+            if (observers >= MAX_OBSERVERS) {
+              ws.send({ op: 'denied', reason: 'too many map viewers' });
+              return;
+            }
+            const peer = { name: '[map]', observer: true, s: [0, -100, 0, 0, 0], ws, blockT: [], chatT: [] };
+            room.peers.set(ws.id, peer);
+            peerRoom.set(ws.id, room.code);
+            ws.send({
+              op: 'welcome', you: ws.id, room: room.code, seed: room.seed,
+              t0: room.t0, now: Date.now(), players: playerList(room, -1),
+              edits: [], smp: !!room.smp, spawnNear: null, claims: [], containers: [],
+            });
+            ctx.log(`room ${room.code}: map viewer attached (${room.peers.size} sockets)`);
+            return;
+          }
+
           const cap = room.smp ? SMP_MAX_PEERS : ROOM_MAX_PEERS;
-          if (room.peers.size >= cap) {
+          const playersOnline = [...room.peers.values()].filter((p) => !p.observer).length;
+          if (playersOnline >= cap) {
             ws.send({ op: 'denied', reason: room.smp ? 'SMP world full' : 'room full' });
             return;
           }
@@ -324,10 +347,10 @@ export default {
           room.peers.set(ws.id, peer);
           peerRoom.set(ws.id, room.code);
 
-          // SMP: suggest spawning next to an existing player
+          // SMP: suggest spawning next to an existing player (never an observer)
           let spawnNear = null;
           if (room.smp) {
-            const candidates = [...room.peers.values()].filter((p) => p.s[1] > 0);
+            const candidates = [...room.peers.values()].filter((p) => !p.observer && p.s[1] > 0);
             if (candidates.length) {
               const c = candidates[(Math.random() * candidates.length) | 0];
               spawnNear = [Math.round(c.s[0]), Math.round(c.s[2])];
@@ -408,6 +431,37 @@ export default {
         const room = rooms.get(code);
         const peer = room && room.peers.get(ws.id);
         if (!peer) return;
+
+        // map observers are read-only: drop every gameplay op they send
+        if (peer.observer) {
+          if (msg.op === 'mapdata') {
+            const capEdits = room.smp ? SMP_MAX_EDITS : MAX_EDITS;
+            const edits = [];
+            for (const [k, v] of room.edits) {
+              const [x, y, z] = k.split(',').map(Number);
+              edits.push([x, y, z, v[0]]);
+              if (edits.length >= capEdits) break;
+            }
+            const claimsOut = [];
+            for (const [k, c] of claims) {
+              const [cx, cz] = k.split(',').map(Number);
+              claimsOut.push([cx, cz, c.owner]);
+              if (claimsOut.length >= 2000) break;
+            }
+            const containersOut = [];
+            for (const [k, c] of room.containers) {
+              const [cx, cy, cz] = k.split(',').map(Number);
+              containersOut.push([cx, cy, cz, c.slots]);
+              if (containersOut.length >= MAX_CONTAINERS) break;
+            }
+            ws.send({
+              op: 'mapdata', seed: room.seed, t0: room.t0, now: Date.now(),
+              edits, claims: claimsOut, containers: containersOut,
+              players: playerList(room, -1),
+            });
+          }
+          return;
+        }
 
         if (msg.op === 'state' && Array.isArray(msg.s)) {
           const s = msg.s;
@@ -555,8 +609,12 @@ export default {
         if (!room) return;
         const peer = room.peers.get(ws.id);
         room.peers.delete(ws.id);
-        broadcast(room, ws.id, { op: 'left', id: ws.id });
-        if (peer) ctx.log(`room ${code}: ${peer.name} left (${room.peers.size} online)`);
+        if (peer && peer.observer) {
+          ctx.log(`room ${code}: map viewer detached (${room.peers.size} sockets)`);
+        } else {
+          broadcast(room, ws.id, { op: 'left', id: ws.id });
+          if (peer) ctx.log(`room ${code}: ${peer.name} left (${room.peers.size} online)`);
+        }
         if (room.peers.size === 0 && !room.smp) {
           rooms.delete(code);
           ctx.log(`room ${code} empty — reclaimed`);
@@ -569,7 +627,10 @@ export default {
         for (const room of rooms.values()) {
           if (room.peers.size < 2) continue;
           const ps = [];
-          for (const [id, p] of room.peers) ps.push([id, ...p.s]);
+          for (const [id, p] of room.peers) {
+            if (!p.observer) ps.push([id, ...p.s]);
+          }
+          if (!ps.length) continue;
           broadcast(room, -1, { op: 'states', ps });
         }
       },

@@ -610,6 +610,107 @@ test('private rooms sync chests but do not persist them', async () => {
   h2.stop?.();
 });
 
+// ---- map observers ----
+
+function mapViewer(handler, id) {
+  const ws = fakeWs(id);
+  handler.message(ws, { op: 'join', room: 'SMP', name: 'map', map: true });
+  return ws;
+}
+
+test('observer joins invisibly: no joined broadcast, not in playerList', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const player = fakeWs(1);
+  handler.message(player, { op: 'join', room: 'SMP', name: 'Alice' });
+  player.sent.length = 0;
+
+  const obs = mapViewer(handler, 2);
+  assert.equal(obs.sent[0].op, 'welcome');
+  assert.deepEqual(obs.sent[0].players.map((p) => p[1]), ['Alice'], 'observer sees players');
+
+  // Alice must NOT hear about the observer
+  assert.equal(player.sent.filter((m) => m.op === 'joined').length, 0, 'no joined broadcast for observer');
+  // a new player's welcome must not include the observer
+  const c = fakeWs(3);
+  handler.message(c, { op: 'join', room: 'SMP', name: 'Bob' });
+  assert.ok(!c.sent[0].players.some((p) => p[1] === '[map]'), 'observer not in player lists');
+});
+
+test('observers are read-only: gameplay ops dropped, no spawn-anchor role', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a } = smpPair(handler);
+  a.sent.length = 0;
+  const obs = mapViewer(handler, 5);
+
+  handler.message(obs, { op: 'state', s: [50, 70, 50, 0, 0] });
+  handler.message(obs, { op: 'block', x: 50, y: 70, z: 50, b: 4, f: 0 });
+  handler.message(obs, { op: 'chat', text: 'lurking' });
+  assert.equal(a.sent.filter((m) => m.op === 'block' || m.op === 'chat').length, 0, 'nothing relayed');
+  // no edit recorded
+  const late = fakeWs(6);
+  handler.message(late, { op: 'join', room: 'SMP', name: 'Late' });
+  assert.deepEqual(late.sent[0].edits, [], 'observer edits not stored');
+  // observer position never suggested as spawn
+  const d = fakeWs(7);
+  handler.message(d, { op: 'join', room: 'SMP', name: 'D' });
+  assert.equal(d.sent[0].spawnNear, null, 'observer not a spawn anchor');
+});
+
+test('observers do not consume player slots', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  mapViewer(handler, 90);
+  mapViewer(handler, 91);
+  // SMP cap is 32 players; observers must not reduce that. Can't place 32
+  // players cheaply — instead verify cap counts only players by joining a
+  // private room (cap 15) with 15 players + observer still allowed.
+  const h = handler;
+  const obs = fakeWs(50);
+  h.message(obs, { op: 'join', room: 'CAP', name: 'map', map: true });
+  assert.equal(obs.sent[0].op, 'welcome');
+  for (let i = 0; i < 15; i++) {
+    const p = fakeWs(60 + i);
+    h.message(p, { op: 'join', room: 'CAP', name: 'P' + i });
+    assert.equal(p.sent[0].op, 'welcome', `player ${i} joins despite observer`);
+  }
+  const over = fakeWs(99);
+  h.message(over, { op: 'join', room: 'CAP', name: 'over' });
+  assert.equal(over.sent[0].op, 'denied', 'player cap still enforced');
+});
+
+test('mapdata returns edits, claims and containers', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a } = smpPair(handler);
+  handler.message(a, { op: 'block', x: 33, y: 64, z: 44, b: 4, f: 0 });
+  handler.message(a, { op: 'chest', x: 33, y: 65, z: 44, slots: [[0, 'bread', 1]] });
+  const obs = mapViewer(handler, 9);
+  obs.sent.length = 0;
+  handler.message(obs, { op: 'mapdata' });
+  const md = obs.sent.find((m) => m.op === 'mapdata');
+  assert.ok(md, 'mapdata reply');
+  assert.equal(md.seed, 'site-smp');
+  assert.ok(md.edits.some((e) => e[0] === 33 && e[1] === 64 && e[2] === 44 && e[3] === 4), 'edits present');
+  assert.ok(md.containers.some((c) => c[0] === 33 && c[1] === 65 && c[2] === 44), 'containers present');
+  assert.ok(Array.isArray(md.claims), 'claims array present');
+  assert.ok(md.players.some((p) => p[1] === 'Alice'), 'players present');
+});
+
+test('observer states are excluded from tick batches', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a } = smpPair(handler);
+  const obs = mapViewer(handler, 9);
+  obs.sent.length = 0;
+  handler.message(a, { op: 'state', s: [1, 60, 1, 0, 0] });
+  handler.tick();
+  const batch = obs.sent.find((m) => m.op === 'states');
+  assert.ok(batch, 'observer receives states');
+  assert.ok(batch.ps.every((p) => p[1] !== -100), 'observer placeholder not in batch');
+});
+
 test('short PINs are rejected with a reason; pinless names stay open', async () => {
   freshStore(); freshPins();
   const h = (await makeHandler()).handler;

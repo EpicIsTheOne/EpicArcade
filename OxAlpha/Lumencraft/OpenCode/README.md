@@ -78,7 +78,9 @@ then **Enter World** to capture the mouse. Continue resumes your last save.
   **Shared chests** — chest contents sync between all players (last-write-wins,
   0.5 s push while the chest is open); contents persist in the SMP world and
   survive restarts; breaking a chest clears its synced contents. Furnaces and
-  inventories stay local. Local-only
+  inventories stay local. **Live world map** — `map.html` renders the SMP
+  world top-down (terrain from the public seed, player builds, claim borders,
+  chests) with real-time player dots via read-only observer sockets. Local-only
   by design: mobs, drops, inventory and containers. Server handler hot-reloads
   resync live clients automatically (rejoin prompt).
 

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LUMENCRAFT — Live World Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%235a3f12'/><rect x='2' y='2' width='12' height='12' fill='%23ffb84d'/></svg>">
+<style>
+:root { --ui-font: 'Segoe UI', system-ui, sans-serif; }
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:100%; height:100%; overflow:hidden; background:#0a0c12; font-family:var(--ui-font); }
+#map { position:absolute; inset:0; width:100%; height:100%; cursor:grab; }
+#map.dragging { cursor:grabbing; }
+#hud { position:absolute; top:10px; left:10px; z-index:10; color:#e8e6f0; font-size:13px;
+  background:rgba(13,15,22,.88); border:1px solid #ffffff22; border-radius:10px; padding:10px 14px;
+  box-shadow:0 10px 40px rgba(0,0,0,.5); line-height:1.6; user-select:none; }
+#hud h1 { font-size:15px; letter-spacing:2px; margin-bottom:2px;
+  background:linear-gradient(#ffe9a8,#ff9d3f); -webkit-background-clip:text; background-clip:text; color:transparent; }
+#hud .sub { color:#9aa; font-size:11px; letter-spacing:1px; }
+#hud .row { margin-top:4px; }
+#hud b { color:#ffd76a; }
+#hud a { color:#8fd4ff; text-decoration:none; }
+#coords { position:absolute; bottom:10px; left:10px; z-index:10; color:#cfe8cf; font:12px Consolas,monospace;
+  background:rgba(0,0,0,.5); padding:4px 8px; border-radius:6px; pointer-events:none; }
+#legend { position:absolute; bottom:10px; right:10px; z-index:10; color:#aab; font-size:11px;
+  background:rgba(13,15,22,.88); border:1px solid #ffffff18; border-radius:8px; padding:8px 12px; line-height:1.7; }
+#legend .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:-1px; }
+#status { position:absolute; top:10px; right:10px; z-index:10; font-size:12px; padding:5px 10px;
+  border-radius:14px; background:rgba(13,15,22,.88); border:1px solid #ffffff22; color:#9aa; }
+#status.online { color:#9fd8a8; border-color:#9fd8a844; }
+#zooms { position:absolute; right:10px; top:44px; z-index:10; display:flex; flex-direction:column; gap:4px; }
+#zooms button { width:34px; height:30px; font-size:16px; color:#fff; cursor:pointer; border-radius:7px;
+  background:rgba(13,15,22,.9); border:1px solid #ffffff33; }
+#zooms button:hover { border-color:#ffd76a88; }
+</style>
+</head>
+<body>
+<canvas id="map"></canvas>
+<div id="hud">
+  <h1>LUMENCRAFT</h1>
+  <div class="sub">SITE SMP — LIVE WORLD MAP</div>
+  <div class="row">Online: <b id="online">—</b></div>
+  <div class="row"><a href="index.html" target="_blank" rel="noopener">▶ Play the game</a></div>
+</div>
+<div id="status">connecting…</div>
+<div id="zooms"><button id="z-in">+</button><button id="z-out">−</button></div>
+<div id="coords">0, 0</div>
+<div id="legend">
+  <div><span class="dot" style="background:#ffd76a"></span>player</div>
+  <div><span class="dot" style="background:#ff5a5a"></span>claim border</div>
+  <div><span class="dot" style="background:#7ac0ff"></span>chest</div>
+</div>
+<script type="module" src="./src/map.js"></script>
+</body>
+</html>
