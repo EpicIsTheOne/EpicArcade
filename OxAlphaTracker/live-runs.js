@@ -37,6 +37,36 @@
     return `${Math.floor(h / 24)}d ago`;
   }
 
+  let progressEl = document.getElementById('benchProgress');
+  if (!progressEl) {
+    progressEl = document.createElement('div');
+    progressEl.id = 'benchProgress';
+    progressEl.style.cssText =
+      'position:fixed;top:10px;right:12px;z-index:60;font-family:Rajdhana,Rajdhani,monospace;' +
+      'font-size:12px;letter-spacing:.04em;color:#9fb6c9;background:rgba(4,8,14,.72);' +
+      'border:1px solid rgba(34,211,238,.25);border-radius:6px;padding:6px 10px;';
+    document.body.appendChild(progressEl);
+  }
+
+  async function pollProgress() {
+    try {
+      const res = await fetch('api/progress', { cache: 'no-store' });
+      if (!res.ok) return;
+      const d = await res.json();
+      const hash8 = String(d.packHash || '').replace('sha256:', '').slice(0, 8);
+      const parts = [`<b style=\"color:#22d3ee\">${d.promptsPassed}/${d.totalPrompts}</b> complete`];
+      const bs = d.byStatus || {};
+      if (bs.running) parts.push(`${bs.running} running`);
+      if (bs.fail) parts.push(`${bs.fail} failed`);
+      if (bs.error) parts.push(`${bs.error} error`);
+      progressEl.innerHTML =
+        parts.join(' <span style=\"opacity:.5\">·</span> ') +
+        `<span style=\"opacity:.45\"> · pack ${hash8}${d.lastUpdate ? ' · ' + timeAgo(d.lastUpdate) : ''}</span>`;
+    } catch {
+      /* transient — next poll retries */
+    }
+  }
+
   function render(data) {
     const runs = data.runs || [];
     if (!runs.length) {
@@ -113,5 +143,7 @@
   });
   applyCollapse();
   poll();
+  pollProgress();
   setInterval(poll, 5000);
+  setInterval(pollProgress, 5000);
 })();
