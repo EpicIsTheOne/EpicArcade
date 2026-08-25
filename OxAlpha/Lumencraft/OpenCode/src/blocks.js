@@ -14,6 +14,7 @@ export const B = {
   WATER_F1: 55, WATER_F2: 56, WATER_F3: 57, WATER_F4: 58,
   LAVA: 59,
   CLAIM_TOTEM: 60,
+  SIGN: 61,
 };
 
 const T = null; // tile placeholder resolved later
@@ -104,6 +105,7 @@ def(B.CLAIM_TOTEM, cube('Claim Totem', {
   tileTop: 'claim_totem_top', tileSide: 'claim_totem', tileBottom: 'claim_totem_top',
   hardness: 8, tool: 'pickaxe', requireTool: true, tier: 2, drop: [[B.CLAIM_TOTEM, 1]],
 }));
+def(B.SIGN, cross('Sign', { tile: 'sign', hardness: 0.6, tool: 'axe', drop: [[B.SIGN, 1]], fuel: 5, interact: 'sign' }));
 
 for (let lvl = 1; lvl <= 4; lvl++) {
   def(B.WATER_F1 + lvl - 1, { name: 'Water', solid: false, opaque: false, render: 'liquid', liquid: true,

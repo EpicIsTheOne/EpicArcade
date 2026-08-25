@@ -711,6 +711,157 @@ test('observer states are excluded from tick batches', async () => {
   assert.ok(batch.ps.every((p) => p[1] !== -100), 'observer placeholder not in batch');
 });
 
+// ---- in-world signs ----
+const SIGN_BLOCK = 61;
+
+test('sign text is stored, relayed to all (incl. sender), and sent to late joiners', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  handler.message(a, { op: 'block', x: 20, y: 65, z: 20, b: SIGN_BLOCK, f: 0 });
+  a.sent.length = 0; b.sent.length = 0;
+  handler.message(a, { op: 'sign', x: 20, y: 65, z: 20, text: 'home sweet home' });
+  const relay = b.sent.find((m) => m.op === 'sign');
+  assert.ok(relay, 'relay to B');
+  assert.equal(relay.owner, 'Alice');
+  const selfEcho = a.sent.find((m) => m.op === 'sign');
+  assert.ok(selfEcho, 'sender also receives (sprite dedupe)');
+  const late = fakeWs(9);
+  handler.message(late, { op: 'join', room: 'SMP', name: 'Late' });
+  assert.ok(late.sent[0].signs.some((s) => s[4] === 'home sweet home'), 'welcome signs');
+});
+
+test('only the author (or claim owner) can edit a sign', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  handler.message(a, { op: 'block', x: 21, y: 65, z: 20, b: SIGN_BLOCK, f: 0 });
+  handler.message(a, { op: 'sign', x: 21, y: 65, z: 20, text: 'alice was here' });
+  handler.message(b, { op: 'sign', x: 21, y: 65, z: 20, text: 'bob was here' });
+  const deny = b.sent.find((m) => m.op === 'deny' && /not your sign/.test(m.reason || ''));
+  assert.ok(deny, 'non-author edit denied');
+  const late = fakeWs(9);
+  handler.message(late, { op: 'join', room: 'SMP', name: 'Late' });
+  assert.ok(late.sent[0].signs.some((s) => s[4] === 'alice was here'), 'text unchanged');
+});
+
+test('claim owner can edit a sign inside their claim even if not the author', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  const freeX = 400, freeZ = 400;
+  handler.message(b, { op: 'block', x: freeX, y: 65, z: freeZ, b: SIGN_BLOCK, f: 0 });
+  handler.message(b, { op: 'sign', x: freeX, y: 65, z: freeZ, text: 'bob note' });
+  handler.message(a, { op: 'block', x: freeX + 3, y: 70, z: freeZ + 3, b: TOTEM, f: 0 }); // claim (25,25) covers 400-415
+  handler.message(a, { op: 'sign', x: freeX, y: 65, z: freeZ, text: 'alice edited (claim owner)' });
+  const ownerEdit = b.sent.filter((m) => m.op === 'sign' && m.x === freeX).pop();
+  assert.equal(ownerEdit.text, 'alice edited (claim owner)', 'claim owner edit accepted');
+  assert.equal(ownerEdit.owner, 'Bob', 'original author preserved');
+});
+
+test('breaking a sign: author can, non-author denied, entry cleared', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  handler.message(a, { op: 'block', x: 22, y: 65, z: 20, b: SIGN_BLOCK, f: 0 });
+  handler.message(a, { op: 'sign', x: 22, y: 65, z: 20, text: 'do not touch' });
+  handler.message(b, { op: 'block', x: 22, y: 65, z: 20, b: AIR, f: 0 });
+  assert.ok(b.sent.some((m) => m.op === 'deny' && /not your sign/.test(m.reason || '')), 'non-author break denied');
+  handler.message(a, { op: 'block', x: 22, y: 65, z: 20, b: AIR, f: 0 });
+  const late = fakeWs(9);
+  handler.message(late, { op: 'join', room: 'SMP', name: 'Late' });
+  assert.ok(!late.sent[0].signs.some((s) => s[0] === 22), 'sign entry cleared');
+});
+
+test('sign text is sanitized; new signs require the sign block; cap enforced', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a, b } = smpPair(handler);
+  handler.message(a, { op: 'sign', x: 30, y: 65, z: 30, text: 'ghost sign' });
+  assert.ok(a.sent.some((m) => m.op === 'deny' && /no sign block/.test(m.reason || '')), 'block evidence required');
+  for (let i = 0; i < 3; i++) {
+    handler.message(a, { op: 'block', x: 30 + i, y: 65, z: 30, b: SIGN_BLOCK, f: 0 });
+  }
+  handler.message(a, { op: 'sign', x: 30, y: 65, z: 30, text: '  hi   there  ' + 'x'.repeat(120) });
+  const late = fakeWs(9);
+  handler.message(late, { op: 'join', room: 'SMP', name: 'Late' });
+  const stored = late.sent[0].signs.find((s) => s[0] === 30);
+  assert.ok(stored && stored[4].startsWith('hi there'), 'sanitized');
+  assert.ok(stored[4].length <= 100, 'length capped');
+  // cap: fill to 200 signs — rotate peers so the 40-blocks/sec rate limiter
+  // (per peer) never kicks in mid-fill
+  const crew = [a, b];
+  for (let i = 2; i < 8; i++) {
+    const p = fakeWs(40 + i);
+    handler.message(p, { op: 'join', room: 'SMP', name: 'P' + i });
+    crew.push(p);
+  }
+  let placed = 0;
+  for (const p of crew) {
+    for (let j = 0; j < 40 && placed < 210; j++) {
+      const x = 200 + placed, y = 65, z = 200;
+      handler.message(p, { op: 'block', x, y, z, b: SIGN_BLOCK, f: 0 });
+      handler.message(a, { op: 'sign', x, y, z, text: 's' + placed });
+      placed++;
+    }
+  }
+  assert.ok(placed >= 210, 'filled past cap');
+  a.sent.length = 0;
+  const fresh = fakeWs(99);
+  handler.message(fresh, { op: 'join', room: 'SMP', name: 'Fresh' });
+  handler.message(fresh, { op: 'block', x: 500, y: 65, z: 500, b: SIGN_BLOCK, f: 0 });
+  handler.message(a, { op: 'sign', x: 500, y: 65, z: 500, text: 'over cap' });
+  assert.ok(a.sent.some((m) => m.op === 'deny' && /sign limit/.test(m.reason || '')), 'cap enforced');
+});
+
+test('private rooms sync signs but do not persist them', async () => {
+  freshStore();
+  const h1 = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h1.message(a, { op: 'join', room: 'PRIVS', name: 'A' });
+  h1.message(a, { op: 'block', x: 5, y: 60, z: 5, b: SIGN_BLOCK, f: 0 });
+  h1.message(a, { op: 'sign', x: 5, y: 60, z: 5, text: 'temp note' });
+  const b = fakeWs(2);
+  h1.message(b, { op: 'join', room: 'PRIVS', name: 'B' });
+  assert.deepEqual(b.sent[0].signs, [[5, 60, 5, 'A', 'temp note']], 'synced within room');
+  h1.stop?.();
+
+  const h2 = (await makeHandler()).handler;
+  const c = fakeWs(3);
+  h2.message(c, { op: 'join', room: 'PRIVS', name: 'C' });
+  assert.deepEqual(c.sent[0].signs, [], 'not persisted for private rooms');
+  h2.stop?.();
+});
+
+test('signs persist across handlers (SMP)', async () => {
+  freshStore();
+  const h1 = (await makeHandler()).handler;
+  const a = fakeWs(1);
+  h1.message(a, { op: 'join', room: 'SMP', name: 'A' });
+  h1.message(a, { op: 'block', x: 44, y: 65, z: 55, b: SIGN_BLOCK, f: 0 });
+  h1.message(a, { op: 'sign', x: 44, y: 65, z: 55, text: 'permanent marker' });
+  h1.stop?.();
+
+  const h2 = (await makeHandler()).handler;
+  const b = fakeWs(2);
+  h2.message(b, { op: 'join', room: 'SMP', name: 'B' });
+  assert.deepEqual(b.sent[0].signs, [[44, 65, 55, 'A', 'permanent marker']]);
+  h2.stop?.();
+});
+
+test('signs are included in mapdata', async () => {
+  freshStore();
+  const { handler } = await makeHandler();
+  const { a } = smpPair(handler);
+  handler.message(a, { op: 'block', x: 60, y: 65, z: 60, b: SIGN_BLOCK, f: 0 });
+  handler.message(a, { op: 'sign', x: 60, y: 65, z: 60, text: 'map me' });
+  const obs = mapViewer(handler, 9);
+  obs.sent.length = 0;
+  handler.message(obs, { op: 'mapdata' });
+  const md = obs.sent.find((m) => m.op === 'mapdata');
+  assert.ok(md.signs.some((s) => s[0] === 60 && s[4] === 'map me'), 'signs in mapdata');
+});
+
 test('short PINs are rejected with a reason; pinless names stay open', async () => {
   freshStore(); freshPins();
   const h = (await makeHandler()).handler;

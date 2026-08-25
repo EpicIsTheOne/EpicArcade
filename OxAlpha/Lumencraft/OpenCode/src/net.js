@@ -74,6 +74,9 @@ export class Net {
     this.claims = new Map();      // "cx,cz" -> owner (SMP)
     this._localEdits = new Map(); // "x,y,z" -> prevId for deny-revert (cap 256)
     this.containers = [];         // welcome snapshot: [[x,y,z,slots]...]
+    this.signs = new Map();       // "x,y,z" -> {text, owner}
+    this.onSignsReset = null;     // (entries[[x,y,z,owner,text]...]) — bulk replace
+    this.onSign = null;           // ({x,y,z,text,owner}|{x,y,z,text:null}) — live update
     this.ui = null;               // attached for chest poll sync
     this._chestWire = new Map();  // "x,y,z" -> last sent JSON (dedup)
     this._chestPollT = 0;
@@ -157,6 +160,12 @@ export class Net {
     for (const c of (m.claims || [])) {
       if (Array.isArray(c) && c.length >= 3) this.claims.set(c[0] + ',' + c[1], String(c[2]));
     }
+    this.signs = new Map();
+    const signEntries = Array.isArray(m.signs) ? m.signs : [];
+    for (const s of signEntries) {
+      if (Array.isArray(s) && s.length >= 5) this.signs.set(s[0] + ',' + s[1] + ',' + s[2], { text: s[4], owner: s[3] });
+    }
+    this.onSignsReset?.(signEntries);
     this._retries = 0;
     this.status = 'online';
     this.onStatus(this.status);
@@ -180,6 +189,11 @@ export class Net {
       if (Array.isArray(c) && c.length >= 3) this.claims.set(c[0] + ',' + c[1], String(c[2]));
     }
     this.containers = Array.isArray(m.containers) ? m.containers : [];
+    this.signs = new Map();
+    for (const s of (m.signs || [])) {
+      if (Array.isArray(s) && s.length >= 5) this.signs.set(s[0] + ',' + s[1] + ',' + s[2], { text: s[4], owner: s[3] });
+    }
+    this.onSignsReset?.(m.signs || []);
     this._applyContainers();
     this._chestWire.clear();
     // bake any edits that landed while we were desynced; visible ones apply live
@@ -249,8 +263,18 @@ export class Net {
           const bk = m.x + ',' + m.y + ',' + m.z;
           this.world.containers.delete(bk);
           this._chestWire.delete(bk);
+          if (this.signs.has(bk)) {
+            this.signs.delete(bk);
+            this.onSign?.({ x: m.x, y: m.y, z: m.z, text: null, owner: null });
+          }
         }
         break;
+      case 'sign': {
+        const sk = m.x + ',' + m.y + ',' + m.z;
+        this.signs.set(sk, { text: m.text, owner: m.owner });
+        this.onSign?.({ x: m.x, y: m.y, z: m.z, text: m.text, owner: m.owner });
+        break;
+      }
       case 'deny': {
         // server rejected an edit we applied optimistically — revert it
         const key = m.x + ',' + m.y + ',' + m.z;
@@ -384,6 +408,12 @@ export class Net {
   sendDied(cause) {
     if (!this.connected) return;
     this.ws.send(JSON.stringify({ op: 'died', c: String(cause || '').slice(0, 16) }));
+  }
+
+  sendSign(x, y, z, text) {
+    if (!this.connected) return false;
+    this.ws.send(JSON.stringify({ op: 'sign', x: Math.floor(x), y: Math.floor(y), z: Math.floor(z), text: String(text || '').slice(0, 100) }));
+    return true;
   }
 
   /** shared day fraction while online (else null → caller keeps local clock) */

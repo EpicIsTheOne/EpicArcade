@@ -169,6 +169,14 @@ export class Interaction {
     // container cleanup
     this.world.containers.delete(x + ',' + y + ',' + z);
 
+    // sign cleanup — the server excludes the breaker from its own block
+    // broadcast, so the net-layer removal path never sees own breaks
+    const skey = x + ',' + y + ',' + z;
+    if (this.game.net && this.game.net.signs && this.game.net.signs.has(skey)) {
+      this.game.net.signs.delete(skey);
+      if (this.game.net.onSign) this.game.net.onSign({ x, y, z, text: null, owner: null });
+    }
+
     this.world.setBlock(x, y, z, B.AIR);
     if (this.game.net) this.game.net.sendBlock(x, y, z, B.AIR);
 
@@ -298,6 +306,7 @@ export class Interaction {
   interactBlock(hit, bd) {
     switch (bd.interact) {
       case 'crafting': this.game.ui.openCraftingTable(); return true;
+      case 'sign': this.game.openSignEditor?.(hit); return true;
       case 'chest':
         this.game.ui.openChest(hit.x, hit.y, hit.z);
         return true;
@@ -305,6 +314,7 @@ export class Interaction {
         this.game.ui.openFurnace(hit.x, hit.y, hit.z);
         return true;
       case 'bed': this.game.trySleep(); return true;
+      case 'sign': this.game.openSignEditor?.(hit); return true;
       case 'lever': {
         this.world.toggleLever(hit.x, hit.y, hit.z);
         if (this.game.net) {

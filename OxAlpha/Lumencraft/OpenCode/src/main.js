@@ -17,6 +17,7 @@ import { Player } from './player.js';
 import { Interaction, raycastVoxel } from './interaction.js';
 import { EntityManager, MOB_TYPES, Mob } from './entities.js';
 import { Net, resolveWsUrl } from './net.js';
+import { SignManager } from './signs.js';
 import { Particles } from './particles.js';
 import { AudioSys } from './audio.js';
 import { UI, Inventory } from './ui.js';
@@ -157,6 +158,15 @@ function startGame(opts) {
     g.net.onChat = addChatLine;
     g.net.onToast = (m) => ui.toast(m);
     if (g.net.spawnNear) g._smpSpawnNear = g.net.spawnNear;
+
+    const signManager = new SignManager(graphics.scene);
+    g.signManager = signManager;
+    g.net.onSignsReset = (entries) => signManager.reset(entries);
+    g.net.onSign = (s) => {
+      if (s.text == null) signManager.remove(s.x + ',' + s.y + ',' + s.z);
+      else signManager.set(s.x, s.y, s.z, s.text, s.owner);
+    };
+    g.openSignEditor = (hit) => openSignEditor(hit.x, hit.y, hit.z);
   }
 
   // ---------- world callbacks ----------
@@ -531,6 +541,72 @@ function startGame(opts) {
       if (!ui.anyScreenOpen()) input.requestLock();
     }, 1600);
   };
+
+  // ---------- sign editor ----------
+  let signModal = null;
+
+  function closeSignModal() {
+    if (!signModal) return;
+    signModal.remove();
+    signModal = null;
+    input.releaseAll();
+  }
+
+  function openSignEditor(x, y, z) {
+    if (!g.net || signModal) return;
+    const key = x + ',' + y + ',' + z;
+    const existing = g.net.signs.get(key);
+    const isAuthor = existing && existing.owner === g.net.myName;
+    const isClaimOwner = g.net.claimOwnerAt(x, z) === g.net.myName;
+    const canEdit = !existing || isAuthor || isClaimOwner;
+
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:46;' +
+      'background:linear-gradient(#232839,#1a1e2b);border:1px solid #6a7595aa;border-radius:12px;' +
+      'padding:16px 18px;box-shadow:0 30px 90px rgba(0,0,0,.75);color:#dde;width:min(420px,90vw);';
+    wrap.innerHTML = `<h3 style="font-size:14px;color:#ffd76a;margin-bottom:8px">Sign ${existing ? '· by ' + existing.owner : ''}</h3>`;
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.maxLength = 100;
+    inp.placeholder = 'Sign text…';
+    inp.value = existing ? existing.text : '';
+    inp.style.cssText = 'width:100%;padding:10px 12px;border-radius:8px;border:1px solid #565f7a;background:#12151f;color:#fff;font-size:14px;margin:4px 0 10px;';
+    if (!canEdit) { inp.value = existing.text; inp.disabled = true; }
+    wrap.appendChild(inp);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;';
+    const mkBtn = (label, primary, fn) => {
+      const b = document.createElement('button');
+      b.className = 'btn' + (primary ? ' primary' : '');
+      b.textContent = label;
+      b.style.margin = '0';
+      b.addEventListener('click', fn);
+      row.appendChild(b);
+      return b;
+    };
+    if (canEdit) {
+      mkBtn('Save', true, () => {
+        const text = inp.value.trim().slice(0, 100);
+        if (text) {
+          g.net.sendSign(x, y, z, text);
+          g.signManager.set(x, y, z, text, existing ? existing.owner : g.net.myName);
+          g.net.signs.set(key, { text, owner: existing ? existing.owner : g.net.myName });
+        }
+        closeSignModal();
+      });
+    }
+    mkBtn(canEdit ? 'Cancel' : 'Close', !canEdit, closeSignModal);
+    wrap.appendChild(row);
+    document.body.appendChild(wrap);
+    signModal = wrap;
+    input.releaseAll();
+    setTimeout(() => inp.focus(), 0);
+    inp.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); wrap.querySelector('.btn.primary')?.click(); }
+      else if (e.key === 'Escape') { e.preventDefault(); closeSignModal(); }
+    });
+  }
 
   // expose for QA/debugging
   window.__game = {

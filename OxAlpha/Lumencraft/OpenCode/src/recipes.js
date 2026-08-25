@@ -29,6 +29,8 @@ export const RECIPES = [
   shaped(B.LAMP_OFF, 1, [' D ', 'DGD', ' D '], { D: 'spark_dust', G: B.GLASS }),
   // claims
   shaped(B.CLAIM_TOTEM, 1, [' S ', 'SGS', ' S '], { S: B.STONE, G: 'gold_ingot' }),
+  // signs
+  shaped(B.SIGN, 2, ['PP', 'PP', ' S'], { P: B.PLANKS, S: 'stick' }),
   // farming / food
   shaped('bread', 1, ['WWW'], { W: 'wheat' }),
 ];

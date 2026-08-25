@@ -21,6 +21,11 @@ const CLAIM_RANGE = 1;       // chunks each direction → 3×3 chunk claim
 const MAX_CLAIMS_PER_PLAYER = 2;
 const MAX_CONTAINERS = 300;  // synced chests per room
 const MAX_OBSERVERS = 24;    // map viewers per room (don't eat player slots)
+const SIGN_BLOCK_ID = 61;    // keep in sync with src/blocks.js B.SIGN
+
+function maxSigns() {
+  return Number(process.env.MAX_SIGNS) || 200;
+}
 
 function smpStorePath() {
   return process.env.SMP_STORE ||
@@ -93,6 +98,10 @@ function validChestOp(m) {
   return true;
 }
 
+function cleanSignText(raw) {
+  return String(raw ?? '').replace(NAME_RE, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+}
+
 export default {
   maxSockets: 96,
   tickMs: 100,
@@ -141,7 +150,7 @@ export default {
 
     function loadSmp() {
       if (smpLoaded) return smpLoaded;
-      smpLoaded = { seed: SMP_SEED, t0: Date.now(), edits: new Map(), containers: new Map() };
+      smpLoaded = { seed: SMP_SEED, t0: Date.now(), edits: new Map(), containers: new Map(), signs: new Map() };
       try {
         const raw = JSON.parse(readFileSync(smpStorePath(), 'utf8'));
         if (raw && typeof raw.seed === 'string' && Array.isArray(raw.edits)) {
@@ -153,6 +162,20 @@ export default {
                 Number.isInteger(e[3]) && e[3] >= 0 && e[3] < 256) {
               smpLoaded.edits.set(e[0] + ',' + e[1] + ',' + e[2], [e[3] & 255, (e[4] | 0) & 3]);
             }
+          }
+          if (Array.isArray(raw.signs)) {
+            let sn = 0;
+            for (const s of raw.signs) {
+              if (!Array.isArray(s) || s.length < 4) continue;
+              const [x, y, z, owner, text] = s;
+              const name = cleanName(owner, '');
+              const t = cleanSignText(text);
+              if (!name || !t || !Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(z)) continue;
+              if (y < 0 || y >= 128) continue;
+              smpLoaded.signs.set(x + ',' + y + ',' + z, { owner: name, text: t });
+              if (++sn >= maxSigns()) break;
+            }
+            if (sn) ctx.log(`SMP signs loaded: ${sn}`);
           }
           if (Array.isArray(raw.containers)) {
             let n = 0;
@@ -212,6 +235,12 @@ export default {
         const [x, y, z] = k.split(',').map(Number);
         out.containers.push([x, y, z, c.slots]);
       }
+      out.signs = [];
+      const signsSrc = smp ? smp.signs : loadSmp().signs;
+      for (const [k, s] of signsSrc) {
+        const [x, y, z] = k.split(',').map(Number);
+        out.signs.push([x, y, z, s.owner, s.text]);
+      }
       for (const [k, c] of claims) {
         const [cx, cz] = k.split(',').map(Number);
         const [tx, ty, tz] = c.totem ? c.totem.split(',').map(Number) : [0, -1, 0];
@@ -244,6 +273,7 @@ export default {
             t0: saved.t0,
             edits: saved.edits,
             containers: saved.containers,
+            signs: saved.signs,
             peers: new Map(),
           };
         } else {
@@ -253,6 +283,7 @@ export default {
             t0: Date.now(),
             edits: new Map(),
             containers: new Map(),
+            signs: new Map(),
             peers: new Map(),
           };
         }
@@ -380,10 +411,18 @@ export default {
             containersOut.push([cx, cy, cz, c.slots]);
             if (containersOut.length >= MAX_CONTAINERS) break;
           }
+          // signs snapshot
+          const signsOut = [];
+          for (const [k, s] of room.signs) {
+            const [sx, sy, sz] = k.split(',').map(Number);
+            signsOut.push([sx, sy, sz, s.owner, s.text]);
+            if (signsOut.length >= maxSigns()) break;
+          }
           ws.send({
             op: 'welcome', you: ws.id, room: room.code, seed: room.seed,
             t0: room.t0, now: Date.now(), players: playerList(room, ws.id), edits,
             smp: !!room.smp, spawnNear, claims: claimsOut, containers: containersOut,
+            signs: signsOut,
           });
           broadcast(room, ws.id, { op: 'joined', id: ws.id, name, s: peer.s });
           ctx.log(`room ${room.code}: ${name} joined (${room.peers.size} online)`);
@@ -454,10 +493,16 @@ export default {
               containersOut.push([cx, cy, cz, c.slots]);
               if (containersOut.length >= MAX_CONTAINERS) break;
             }
+            const signsOut = [];
+            for (const [k, s] of room.signs) {
+              const [sx, sy, sz] = k.split(',').map(Number);
+              signsOut.push([sx, sy, sz, s.owner, s.text]);
+              if (signsOut.length >= maxSigns()) break;
+            }
             ws.send({
               op: 'mapdata', seed: room.seed, t0: room.t0, now: Date.now(),
               edits, claims: claimsOut, containers: containersOut,
-              players: playerList(room, -1),
+              players: playerList(room, -1), signs: signsOut,
             });
           }
           return;
@@ -553,6 +598,27 @@ export default {
             if (room.containers.delete(ck2) && room.smp) scheduleSmpSave();
           }
 
+          // sign broken → author (or claim owner) only; contents go with it
+          if (room.signs && room.signs.size && msg.b === 0) {
+            const sk = msg.x + ',' + msg.y + ',' + msg.z;
+            const srec = room.signs.get(sk);
+            if (srec && srec.owner !== peer.name) {
+              let allowed = false;
+              if (room.smp) {
+                const claim = claims.get((msg.x >> 4) + ',' + (msg.z >> 4));
+                allowed = !!(claim && claim.owner === peer.name);
+              }
+              if (!allowed) {
+                ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: srec.owner, reason: 'not your sign' });
+                return;
+              }
+            }
+            if (srec) {
+              room.signs.delete(sk);
+              if (room.smp) scheduleSmpSave();
+            }
+          }
+
           room.edits.set(msg.x + ',' + msg.y + ',' + msg.z, [msg.b, msg.f | 0]);
           const capEdits = room.smp ? SMP_MAX_EDITS : MAX_EDITS;
           if (room.edits.size > capEdits) {
@@ -576,6 +642,48 @@ export default {
           room.containers.set(key, { slots, at: Date.now() });
           if (room.smp) scheduleSmpSave();
           broadcast(room, ws.id, { op: 'chest', x: msg.x, y: msg.y, z: msg.z, slots });
+          return;
+        }
+
+        if (msg.op === 'sign') {
+          if (!Number.isInteger(msg.x) || !Number.isInteger(msg.y) || !Number.isInteger(msg.z)) return;
+          if (msg.y < 0 || msg.y >= 128 || Math.abs(msg.x) > 1e6 || Math.abs(msg.z) > 1e6) return;
+          const key = msg.x + ',' + msg.y + ',' + msg.z;
+          const text = cleanSignText(msg.text);
+          const existing = room.signs.get(key);
+          if (existing) {
+            // author or (inside a claim) the claim owner may edit
+            let allowed = existing.owner === peer.name;
+            if (!allowed && room.smp) {
+              const claim = claims.get((msg.x >> 4) + ',' + (msg.z >> 4));
+              allowed = !!(claim && claim.owner === peer.name);
+            }
+            if (!allowed) {
+              ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: existing.owner, reason: 'not your sign' });
+              return;
+            }
+            if (!text) {
+              ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: existing.owner, reason: 'empty text' });
+              return;
+            }
+            existing.text = text;
+          } else {
+            // new sign: the sign block must already have been placed here
+            const e = room.edits.get(key);
+            if (!e || (e[0] & 255) !== SIGN_BLOCK_ID) {
+              ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: peer.name, reason: 'no sign block here' });
+              return;
+            }
+            if (!text) return;
+            if (room.signs.size >= maxSigns()) {
+              ws.send({ op: 'deny', x: msg.x, y: msg.y, z: msg.z, owner: peer.name, reason: 'sign limit reached' });
+              return;
+            }
+            room.signs.set(key, { text, owner: peer.name });
+          }
+          if (room.smp) scheduleSmpSave();
+          const rec = room.signs.get(key);
+          broadcast(room, -1, { op: 'sign', x: msg.x, y: msg.y, z: msg.z, text: rec.text, owner: rec.owner });
           return;
         }
 

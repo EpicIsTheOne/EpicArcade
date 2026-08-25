@@ -96,6 +96,7 @@ const gen = new Generator(SEED);
 const edits = new Map();      // "x,z" -> {y, id}  (top edit per column)
 const claims = new Map();     // "cx,cz" -> owner
 const chests = [];            // [x, z]
+const signs = new Map();      // "x,z" -> {text, owner}
 const players = new Map();    // id -> {name, x, z}
 const tiles = new Map();      // "cx,cz" -> {cv, dirty:false}
 
@@ -212,6 +213,10 @@ function connect() {
         if (m.slots.length) chests.push([m.x, m.z]);
         break;
       }
+      case 'sign': {
+        signs.set(m.x + ',' + m.z, { text: m.text, owner: m.owner });
+        break;
+      }
       default:
         break;
     }
@@ -243,6 +248,12 @@ function applyMapData(m) {
     chests.length = 0;
     for (const c of m.containers) {
       if (Array.isArray(c) && c.length >= 3) chests.push([c[0], c[2]]);
+    }
+  }
+  if (Array.isArray(m.signs)) {
+    signs.clear();
+    for (const s of m.signs) {
+      if (Array.isArray(s) && s.length >= 5) signs.set(s[0] + ',' + s[2], { text: s[4], owner: s[3] });
     }
   }
   if (Array.isArray(m.players)) {
@@ -327,6 +338,23 @@ function render() {
     const sy = (z + 0.5 - camZ) * pxScale + h / 2;
     const s = Math.max(3, 4 * devicePixelRatio);
     ctx.fillRect(sx - s / 2, sy - s / 2, s, s);
+  }
+
+  // signs
+  ctx.font = `${11 * devicePixelRatio}px "Segoe UI", sans-serif`;
+  for (const [key, s] of signs) {
+    const [x, z] = key.split(',').map(Number);
+    const sx = (x + 0.5 - camX) * pxScale + w / 2;
+    const sy = (z + 0.5 - camZ) * pxScale + h / 2;
+    if (sx < -80 || sy < -20 || sx > w + 80 || sy > h + 20) continue;
+    ctx.fillStyle = '#c49a5a';
+    const ss = Math.max(3, 4 * devicePixelRatio);
+    ctx.fillRect(sx - ss / 2, sy - ss / 2, ss, ss);
+    if (scale >= 1) {
+      ctx.fillStyle = 'rgba(255, 225, 170, .9)';
+      const label = s.text.length > 22 ? s.text.slice(0, 21) + '…' : s.text;
+      ctx.fillText(label, sx + ss, sy + 4 * devicePixelRatio);
+    }
   }
 
   // players

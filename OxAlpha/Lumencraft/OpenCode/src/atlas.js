@@ -108,6 +108,26 @@ def('claim_totem_top', (c, r) => {
   c.fillStyle = hex([255, 215, 106]); c.fillRect(5, 5, 6, 1);
   c.fillStyle = hex([90, 220, 160]); c.fillRect(7, 7, 2, 2);
 });
+def('sign', (c, r) => {
+  // wooden sign: plank board with darker frame + post stub
+  planksBase(c, r, [176, 141, 87]);
+  c.fillStyle = hex(shade([176, 141, 87], -45));
+  c.fillRect(0, 0, TILE, 1); c.fillRect(0, 6, TILE, 1);
+  c.fillRect(0, 0, 1, 7); c.fillRect(15, 0, 1, 7);
+  for (let x = 2; x < 14; x += 3) { c.fillStyle = hex(shade([110, 85, 50], -10)); c.fillRect(x, 2, 2, 1); c.fillRect(x, 4, 3, 1); }
+  c.fillStyle = hex(shade([104, 82, 50], -12));
+  c.fillRect(7, 7, 2, 9);
+});
+def('sign', (c, r) => {
+  // wooden post with a pale board
+  base(c, r, [0, 0, 0], 0);
+  c.clearRect(0, 0, TILE, TILE);
+  c.fillStyle = hex([104, 82, 50]); c.fillRect(7, 8, 2, 8);
+  c.fillStyle = hex(shade([163, 129, 78], -14)); c.fillRect(2, 2, 12, 7);
+  c.fillStyle = hex([196, 160, 100]); c.fillRect(3, 3, 10, 5);
+  c.fillStyle = hex(shade([120, 90, 50], 0));
+  for (let i = 0; i < 3; i++) c.fillRect(4, 4 + i * 2, 8 - (i % 2) * 3, 1);
+});
 
 // ---------- wood ----------
 function planksBase(c, r, tint) {

@@ -77,10 +77,14 @@ then **Enter World** to capture the mouse. Continue resumes your last save.
   rejects other players' edits there and clients revert with a toast.
   **Shared chests** — chest contents sync between all players (last-write-wins,
   0.5 s push while the chest is open); contents persist in the SMP world and
-  survive restarts; breaking a chest clears its synced contents. Furnaces and
-  inventories stay local. **Live world map** — `map.html` renders the SMP
-  world top-down (terrain from the public seed, player builds, claim borders,
-  chests) with real-time player dots via read-only observer sockets. Local-only
+  survive restarts; breaking a chest clears its synced contents. **Writable
+  signs** — craft a sign (2 planks + 2 sticks → 2), place it and interact to
+  write up to 100 characters, rendered as a parchment sprite above the block;
+  text syncs to everyone, persists in the SMP world and shows as a marker on
+  the live map. Only the author (or the claim owner, inside their claim) may
+  edit; breaking the sign block removes it for everyone — including the
+  breaker, whose own break never echoes back. Furnaces and
+  inventories stay local. Local-only
   by design: mobs, drops, inventory and containers. Server handler hot-reloads
   resync live clients automatically (rejoin prompt).
 
