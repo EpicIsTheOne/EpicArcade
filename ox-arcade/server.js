@@ -80,7 +80,7 @@ let req_wants_head = false;
 // Scan cache: /api/builds answers instantly from the last scan; a single
 // background refresh runs when the cache is older than SCAN_TTL. First-ever
 // request still scans (no fake data), but concurrent requests share one scan.
-const SCAN_TTL = 60_000;
+const SCAN_TTL = 900_000;
 function makeBuildsCache(root) {
   const c = { root, data: null, inflight: null, last: 0 };
   c.get = async function () {
