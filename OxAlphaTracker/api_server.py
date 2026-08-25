@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -56,6 +57,37 @@ def resolved_prompt(p):
     if "text" in q:
         q["text"] = resolve_placeholders(q["text"])
     return q
+
+
+def pack_hash():
+    canonical = json.dumps(
+        [{"id": p["id"], "title": p["title"], "difficulty": p["difficulty"],
+          "filename": p["filename"], "text": p["text"]} for p in PROMPTS],
+        sort_keys=True, ensure_ascii=False,
+    ).encode("utf-8")
+    return "sha256:" + hashlib.sha256(canonical).hexdigest()
+
+
+PACK_HASH = pack_hash()
+
+
+def progress_summary():
+    """Live sweep status derived from tracker rows."""
+    runs = load_runs()
+    by_status = {}
+    for r in runs:
+        by_status[r.get("status") or "?"] = by_status.get(r.get("status") or "?", 0) + 1
+    covered = {(r.get("promptId"), r.get("model"), r.get("harness")) for r in runs}
+    completed_prompts = {r.get("promptId") for r in runs if r.get("status") == "pass"}
+    last_update = max((r.get("updatedAt") or "" for r in runs), default=None)
+    return {
+        "packHash": PACK_HASH,
+        "totalPrompts": len(PROMPTS),
+        "promptsPassed": len(completed_prompts),
+        "byStatus": by_status,
+        "distinctResults": len(covered),
+        "lastUpdate": last_update,
+    }
 
 
 def placeholders_status():
@@ -208,10 +240,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(400, "'promptId' must be an integer")
             if prompt_id not in BY_ID:
                 return self._error(404, f"no prompt with id {prompt_id}")
+        harness = str(body.get("harness") or "").strip()[:40] or None
         entry = {
             "run": run[:80],
             "model": model[:120],
             "promptId": prompt_id,
+            "harness": harness,
             "status": status,
             "score": body.get("score") if isinstance(body.get("score"), (int, float)) else None,
             "durationMs": body.get("durationMs") if isinstance(body.get("durationMs"), int) else None,
@@ -219,9 +253,12 @@ class Handler(BaseHTTPRequestHandler):
             "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%S"),
         }
         runs = load_runs()
+        # Uniqueness includes harness so two harnesses benchmarking the same
+        # model+prompt can never overwrite each other's result.
         runs = [r for r in runs
                 if not (r.get("run") == entry["run"] and r.get("model") == entry["model"]
-                        and r.get("promptId") == entry["promptId"])]
+                        and r.get("promptId") == entry["promptId"]
+                        and r.get("harness") == entry["harness"])]
         runs.append(entry)
         if len(runs) > MAX_RUNS:
             runs = runs[-MAX_RUNS:]
@@ -256,7 +293,8 @@ class Handler(BaseHTTPRequestHandler):
             for p in PROMPTS:
                 by_diff[p["difficulty"]] = by_diff.get(p["difficulty"], 0) + 1
             return self._json({"total": len(PROMPTS), "byDifficulty": by_diff,
-                               "difficulties": ["Light", "Medium", "Hard", "Very Hard"]})
+                               "difficulties": ["Light", "Medium", "Hard", "Very Hard"],
+                               "packHash": PACK_HASH})
         if path == "/api/prompts":
             return self.list_prompts(params)
         if path == "/api/status":
@@ -272,6 +310,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._error(404, f"no prompt with id {m.group(1)}")
             extra = {"Content-Disposition": f'attachment; filename="{p["filename"]}"'}
             return self._bytes(200, resolve_placeholders(p["text"]).encode("utf-8"), "text/plain; charset=utf-8", extra)
+        if path == "/api/progress":
+            return self._json(progress_summary())
         if path == "/api/placeholders":
             return self._json(placeholders_status())
         return self._error(404, f"unknown API route {path}")
