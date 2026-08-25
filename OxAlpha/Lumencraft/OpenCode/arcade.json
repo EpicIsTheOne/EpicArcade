@@ -1,5 +1,8 @@
 {
   "title": "Lumencraft",
   "description": "Voxel sandbox with a persistent site-wide SMP world plus private room codes. Build together.",
-  "multiplayer": { "endpoint": "/ws/lumencraft" }
+  "multiplayer": {
+    "endpoint": "/ws/lumencraft"
+  },
+  "thumb": "/Lumencraft/OpenCode/thumb.png"
 }
