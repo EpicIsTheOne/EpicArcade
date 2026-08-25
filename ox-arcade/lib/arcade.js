@@ -138,18 +138,26 @@ function applyDeployments(games, deployedMap) {
 
 // One full sync pass. Safe to call repeatedly. A failed pull degrades to
 // serving the last-known repo contents instead of nothing.
-async function sync(arcadeDir, opts = {}) {
-  const ensured = await ensureRepo(arcadeDir, opts.repoUrl);
-  const games = await parseArcadeLayout(arcadeDir);
-  applyDeployments(games, await readDeployed(arcadeDir));
-  const usable = ensured.ok || games.length > 0;
-  return {
-    ok: usable,
-    head: ensured.head || null,
-    error: usable ? undefined : ensured.error,
-    games,
-    syncedAt: new Date().toISOString(),
-  };
+// Concurrent callers (tick + POST /api/sync) share one in-flight pass:
+// interleaved git pull/checkout with parse could store a transient empty
+// games list.
+let _syncInFlight = null;
+function sync(arcadeDir, opts = {}) {
+  if (_syncInFlight) return _syncInFlight;
+  _syncInFlight = (async () => {
+    const ensured = await ensureRepo(arcadeDir, opts.repoUrl);
+    const games = await parseArcadeLayout(arcadeDir);
+    applyDeployments(games, await readDeployed(arcadeDir));
+    const usable = ensured.ok || games.length > 0;
+    return {
+      ok: usable,
+      head: ensured.head || null,
+      error: usable ? undefined : ensured.error,
+      games,
+      syncedAt: new Date().toISOString(),
+    };
+  })();
+  return _syncInFlight.finally(() => { _syncInFlight = null; });
 }
 
 module.exports = { slugOk, ensureRepo, parseArcadeLayout, readDeployed, mergeDeployed, applyDeployments, sync, DEFAULT_REPO };
