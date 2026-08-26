@@ -1,0 +1,18 @@
+{
+  "name": "kinetic-rush",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KINETIC RUSH - an original browser high-speed 3D action platformer",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "serve": "node tools/serve.mjs",
+    "qa": "node tools/qa-drive.mjs"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2",
+    "playwright-core": "^1.62.1",
+    "three": "^0.185.1",
+    "three-mesh-bvh": "^0.9.14"
+  }
+}
