@@ -42,6 +42,9 @@ def _resolve_synth_song_engine_skill():
     candidates = []
     if override:
         candidates.append(override)
+    # inside the oxalphatracker container the checkout mounts at /app,
+    # so ROOT-relative comes first there
+    candidates.append(str(ROOT / "skills" / "synth-song-engine" / "SKILL.md"))
     candidates.append(str(ROOT.parent / "skills" / "synth-song-engine" / "SKILL.md"))
     home = Path(os.path.expanduser("~"))
     for base in (".agents", ".claude"):
