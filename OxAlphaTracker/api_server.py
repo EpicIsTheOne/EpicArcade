@@ -37,8 +37,27 @@ def _resolve_e2e_isolation_skill():
     return "UNAVAILABLE"
 
 
+def _resolve_synth_song_engine_skill():
+    override = os.environ.get("SYNTH_SONG_ENGINE_SKILL_PATH")
+    candidates = []
+    if override:
+        candidates.append(override)
+    candidates.append(str(ROOT.parent / "skills" / "synth-song-engine" / "SKILL.md"))
+    home = Path(os.path.expanduser("~"))
+    for base in (".agents", ".claude"):
+        candidates.append(str(home / base / "skills" / "synth-song-engine" / "SKILL.md"))
+    for c in candidates:
+        try:
+            if c and c != "UNAVAILABLE" and Path(c).is_file():
+                return str(Path(c).resolve())
+        except OSError:
+            continue
+    return "UNAVAILABLE"
+
+
 PLACEHOLDER_RESOLVERS = {
     "{{E2E_ISOLATION_SKILL_PATH}}": _resolve_e2e_isolation_skill,
+    "{{SYNTH_SONG_ENGINE_SKILL_PATH}}": _resolve_synth_song_engine_skill,
 }
 
 

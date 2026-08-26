@@ -44,3 +44,31 @@ The image-generation block in every prompt currently hardcodes
 rule 3 this should eventually become a placeholder
 (`{{IMAGE_GEN_SCRIPT_PATH}}`); left untouched for now to keep task content
 immutable. Fish Audio and multiplayer blocks likewise predate this contract.
+
+## {{SYNTH_SONG_ENGINE_SKILL_PATH}}
+
+| Field | Value |
+|---|---|
+| Capability | synth-song-engine (offline numpy song synthesis: 84 genre playbooks, 29 voices, deterministic WAV/MP3 render, multi-agent lease) |
+| Type | file-backed skill |
+| Required/optional | **Optional** — degrades gracefully |
+| Injected value | Absolute path to the installed skill's SKILL.md on the executing machine |
+| Fallback | Literal string UNAVAILABLE when the skill is not installed for this machine/harness |
+| Behavior if UNAVAILABLE | Agent proceeds without it (WebAudio synthesis or other original methods remain fine) |
+| Setup timing | Skill installation happens BEFORE benchmark timing; never during it |
+| Safety notes | Renders audio offline into the run's project folder; grants no deployment or production-access permissions. FL/DAW contact requires the skill's fl_lease protocol |
+
+### Resolution (server-side)
+
+Same mechanism as {{E2E_ISOLATION_SKILL_PATH}}: env override
+SYNTH_SONG_ENGINE_SKILL_PATH, then repo-relative
+<repo-root>/skills/synth-song-engine/SKILL.md (ships inside EpicArcade, so
+the kvm2 production instance resolves it), then
+<home>/.agents/skills/..., then <home>/.claude/skills/...; first existing
+file wins, else UNAVAILABLE. Visible via GET /api/placeholders.
+
+Introduced: 2026-08-26 — added as an optional capability block to prompts
+21 (FNF Style Rhythm Game Original Song), 26 (Music Visualizer), and
+40 (Interactive Music Video), inserted between the IMAGE GENERATION block and
+the CONDITIONAL MULTIPLAYER BUILD CONTRACT v2 section. Deliberately NOT added
+to prompt 9 (FL Studio Browser DAW) — the engine would trivialize that task.
