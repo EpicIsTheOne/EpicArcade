@@ -15,6 +15,7 @@ const SKY_FRAG = /* glsl */`
 uniform float uSkyLight;
 uniform float uTime;
 uniform float uRain;
+uniform float uSiege;
 uniform vec3 uSunDir;
 varying vec3 vDir;
 
@@ -59,8 +60,12 @@ void main() {
   vec3 md = -sd;
   float m = dot(dir, md);
   float nightF = 1.0 - uSkyLight;
-  col += vec3(0.85, 0.88, 0.95) * smoothstep(0.99945, 0.99978, m) * 1.7 * nightF;
-  col += vec3(0.45, 0.52, 0.70) * pow(max(m, 0.0), 220.0) * 0.35 * nightF;
+  vec3 moonTint = mix(vec3(1.0), vec3(1.7, 0.30, 0.24), uSiege);
+  col += vec3(0.85, 0.88, 0.95) * moonTint * smoothstep(0.99945, 0.99978, m) * 1.7 * nightF;
+  col += vec3(0.45, 0.52, 0.70) * moonTint * pow(max(m, 0.0), 220.0) * 0.35 * nightF;
+
+  // blood moon wash: pull the whole dome toward crimson
+  col = mix(col, vec3(0.20, 0.010, 0.014) + col * vec3(0.38, 0.10, 0.10), uSiege);
 
   // stars
   if (y > -0.05) {

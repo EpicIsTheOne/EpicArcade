@@ -97,7 +97,9 @@ const edits = new Map();      // "x,z" -> {y, id}  (top edit per column)
 const claims = new Map();     // "cx,cz" -> owner
 const chests = [];            // [x, z]
 const signs = new Map();      // "x,z" -> {text, owner}
-const players = new Map();    // id -> {name, x, z}
+  const players = new Map();    // id -> {name, x, z}
+  const mobs = new Map();       // eid -> {x, z, type} — live blood-red dots
+  const drops = [];             // [{x,z}] — shared ground loot
 const tiles = new Map();      // "cx,cz" -> {cv, dirty:false}
 
 let camX = 0, camZ = 0;       // world coords at canvas center
@@ -211,6 +213,21 @@ function connect() {
         const i = chests.findIndex((c) => c[0] === m.x && c[1] === m.z);
         if (i >= 0) chests.splice(i, 1);
         if (m.slots.length) chests.push([m.x, m.z]);
+        break;
+      }
+      case 'mobs': {
+        // full snapshot from the host — rebuild (red dots on the live map)
+        mobs.clear();
+        for (const e of (m.ms || [])) {
+          if (Array.isArray(e) && e.length >= 7 && e[5] > 0) mobs.set(e[0], { x: e[2], z: e[4], type: e[1] });
+        }
+        break;
+      }
+      case 'drops': {
+        drops.length = 0;
+        for (const e of (m.ds || [])) {
+          if (Array.isArray(e) && e.length >= 6) drops.push({ x: e[3], z: e[5] });
+        }
         break;
       }
       case 'sign': {
@@ -355,6 +372,28 @@ function render() {
       const label = s.text.length > 22 ? s.text.slice(0, 21) + '…' : s.text;
       ctx.fillText(label, sx + ss, sy + 4 * devicePixelRatio);
     }
+  }
+
+  // shared ground loot (tiny amber specks)
+  const dr = Math.max(2, 2.5 * devicePixelRatio);
+  for (const d of drops) {
+    const sx = (d.x - camX) * pxScale + w / 2;
+    const sy = (d.z - camZ) * pxScale + h / 2;
+    if (sx < -20 || sy < -20 || sx > w + 20 || sy > h + 20) continue;
+    ctx.fillStyle = 'rgba(255, 190, 90, .85)';
+    ctx.fillRect(sx - dr / 2, sy - dr / 2, dr, dr);
+  }
+
+  // mobs (red threat dots)
+  const mr = Math.max(2.5, 3.5 * devicePixelRatio);
+  for (const mb of mobs.values()) {
+    const sx = (mb.x - camX) * pxScale + w / 2;
+    const sy = (mb.z - camZ) * pxScale + h / 2;
+    if (sx < -20 || sy < -20 || sx > w + 20 || sy > h + 20) continue;
+    ctx.beginPath();
+    ctx.arc(sx, sy, mr, 0, Math.PI * 2);
+    ctx.fillStyle = '#ff4a3c';
+    ctx.fill();
   }
 
   // players

@@ -13,6 +13,7 @@ export const globalUniforms = {
   uSkyHorizon: { value: new THREE.Color(0.62, 0.76, 0.95) },
   uTime: { value: 0 },
   uRain: { value: 0 },
+  uSiege: { value: 0 },             // blood moon intensity 0..1
   uShadowMap: { value: null },
   uShadowMatrix: { value: new THREE.Matrix4() },
   uShadowTexel: { value: 1 / 2048 },

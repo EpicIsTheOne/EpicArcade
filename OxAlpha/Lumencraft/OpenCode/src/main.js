@@ -19,6 +19,8 @@ import { EntityManager, MOB_TYPES, Mob } from './entities.js';
 import { Net, resolveWsUrl } from './net.js';
 import { MobNet } from './mobnet.js';
 import { DropNet } from './dropnet.js';
+import { bmStatus, bmSecondsUntilNext } from './bloodmoon.js';
+import { BloodMoon } from './bloodctrl.js';
 import { SignManager } from './signs.js';
 import { Particles } from './particles.js';
 import { AudioSys } from './audio.js';
@@ -148,6 +150,7 @@ function startGame(opts) {
 
   const entities = new EntityManager(g);
   g.entities = entities;
+  g.bloodMoon = new BloodMoon(g);
   const particles = new Particles(graphics.scene, world);
   g.particles = particles;
   const interaction = new Interaction(g);
@@ -803,6 +806,20 @@ function startGame(opts) {
     }),
     throwHeld: () => g.throwHeld(),
     spillNow: () => g.spillInventory(),
+    bloodMoon: () => {
+      const d = g.bloodMoon ? g.bloodMoon._elapsedDays() : 0;
+      const st = bmStatus(d);
+      return {
+        active: g.bloodMoon ? g.bloodMoon.active : false,
+        forced: !!g.bmForce,
+        intensity: g.bloodMoon ? +g.bloodMoon.intensity.toFixed(3) : 0,
+        nightId: st.nightId,
+        inWindow: st.inWindow,
+        nextBloodMoonSec: Math.round(bmSecondsUntilNext(d)),
+        siegeMode: entities.siegeMode,
+      };
+    },
+    bmForce: (on = true) => { g.bmForce = !!on; return 'forced ' + on; },
     dropsDetail: () => entities.drops.map(d => ({
       did: d.did, id: typeof d.id === 'string' ? d.id : Number(d.id),
       count: d.count, pos: d.pos.toArray(),
@@ -1310,6 +1327,7 @@ function frame(now) {
     g.entities.update(dt);
     if (g.mobNet) g.mobNet.update(dt);
     if (g.dropNet) g.dropNet.update(dt);
+    if (g.bloodMoon) g.bloodMoon.update(dt);
     g.playTime += dt;
   }
 
@@ -1357,6 +1375,11 @@ function frame(now) {
     globalUniforms.uFogColor.value.setRGB(0.03, 0.13, 0.30).lerp(new THREE.Color(0.10, 0.22, 0.38), cel.dayF);
   } else {
     globalUniforms.uFogDensity.value = 0.0052 + g.rainF * 0.004 + (cel.dayF < 0.2 ? 0.001 : 0);
+    if (g.bloodMoon && g.bloodMoon.intensity > 0) {
+      // blood haze creeps into the distance during a siege
+      const s = g.bloodMoon.intensity * (1 - cel.dayF * 0.7);
+      globalUniforms.uFogColor.value.lerp(new THREE.Color(0.30, 0.02, 0.02), s * 0.75);
+    }
   }
 
   // ---- camera ----

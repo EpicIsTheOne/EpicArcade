@@ -49,6 +49,10 @@ html,body { width:100%; height:100%; overflow:hidden; background:#000; font-fami
 #debug { position:absolute; top:8px; left:8px; color:#cfe8cf; font:12px/1.45 Consolas,monospace;
   text-shadow:0 1px 2px #000; white-space:pre; display:none; background:rgba(0,0,0,.35); padding:6px 8px; border-radius:6px; }
 #vignette-damage { position:absolute; inset:0; pointer-events:none; opacity:0; background:radial-gradient(ellipse at center, transparent 40%, rgba(255,0,0,.55) 100%); transition:opacity .12s; }
+#vignette-siege { position:absolute; inset:0; pointer-events:none; opacity:0; z-index:5;
+  background:radial-gradient(ellipse at center, transparent 46%, rgba(120,4,8,.42) 82%, rgba(60,0,4,.6) 100%);
+  transition:opacity 1.6s; animation:siegePulse 3.2s ease-in-out infinite; }
+@keyframes siegePulse { 0%,100% { filter:brightness(1); } 50% { filter:brightness(1.35); } }
 #underwater-tint { position:absolute; inset:0; pointer-events:none; opacity:0; background:linear-gradient(rgba(20,60,140,.28), rgba(10,40,110,.42)); }
 #sleep-fade { position:absolute; inset:0; pointer-events:none; opacity:0; background:#000; transition:opacity 1.2s; }
 #flash { position:absolute; inset:0; pointer-events:none; opacity:0; background:#fff; }
@@ -151,6 +155,7 @@ body.pano .panel { background:rgba(13,15,22,.86); backdrop-filter:blur(2px); }
 
 <div id="hud">
   <div id="vignette-damage"></div>
+<div id="vignette-siege"></div>
   <div id="underwater-tint"></div>
   <div id="flash"></div>
   <div id="sleep-fade"></div>

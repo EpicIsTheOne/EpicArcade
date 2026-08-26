@@ -252,8 +252,13 @@ export function buildMobModel(typeName) {
 export function rollDrops(game, typeName, x, y, z) {
   const type = MOB_TYPES[typeName];
   if (!type) return;
+  const siege = !!game.siegeActive;
   for (const [id, count, chance] of type.drops) {
     if (Math.random() < chance) game.spawnDrop(x, y + 0.5, z, id, count);
+    if (siege && Math.random() < chance * 0.6) {
+      // blood-moon bounty: extra rolls from the same table
+      if (Math.random() < 0.5) game.spawnDrop(x, y + 0.5, z, id, count);
+    }
   }
 }
 
@@ -488,6 +493,8 @@ export class EntityManager {
     this.drops = [];
     this.spawnT = 2.5;
     this.spawnEnabled = true;   // false while mirroring another peer's mobs
+    this.siegeMode = false;     // blood moon: ambient spawner yields to the director
+    this._siegeT = 0;
   }
 
   spawnDrop(x, y, z, id, count) {
@@ -569,8 +576,23 @@ export class EntityManager {
   }
 
   /** ray-pick a mob; `extra` merges mirrored (remote) mobs into the search */
-  pickMob(ox, oy, oz, dx, dy, dz, maxDist, extra) {
-    let best = null, bestT = maxDist;
+  /** blood-moon director: keep the horde near target with tight-ring bursts */
+  siegeTick(dt, targetAlive) {
+    this._siegeT -= dt;
+    if (this._siegeT > 0) return;
+    this._siegeT = 1.4;
+    const hostiles = this.mobs.filter((m) => m.type.hostile && !m.dead && !m.dying).length;
+    if (hostiles >= targetAlive) return;
+    const burst = Math.min(3, targetAlive - hostiles);
+    const p = this.game.player;
+    for (let i = 0; i < burst; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const r = 16 + Math.random() * 12;
+      this._tryHostileAt(Math.floor(p.pos.x + Math.cos(ang) * r), Math.floor(p.pos.z + Math.sin(ang) * r), true);
+    }
+  }
+
+  pickMob(ox, oy, oz, dx, dy, dz, maxDist, extra) {    let best = null, bestT = maxDist;
     const pool = extra && extra.length ? this.mobs.concat(extra) : this.mobs;
     for (const m of pool) {
       if (m.dead || m.dying) continue;
@@ -597,8 +619,8 @@ export class EntityManager {
   update(dt) {
     this.spawnT -= dt;
     if (this.spawnEnabled && this.spawnT <= 0) {
-      this.spawnT = 2.4;
-      this.trySpawn();
+      this.spawnT = this.siegeMode ? 0.5 : 2.4;
+      if (!this.siegeMode) this.trySpawn();
     }
 
     for (const d of this.drops) if (!d.dead) d.update(dt);
