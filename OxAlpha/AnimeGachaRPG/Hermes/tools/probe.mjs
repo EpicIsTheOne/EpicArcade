@@ -1,0 +1,12 @@
+import { chromium } from 'playwright-core';
+const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+const page = await (await browser.newContext()).newPage();
+page.on('console', m => console.log('[' + m.type() + ']', m.text().slice(0, 300)));
+page.on('pageerror', e => console.log('[PAGEERROR]', e.message, '\n', (e.stack||'').slice(0,600)));
+await page.goto('http://127.0.0.1:9107/', { waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+await page.click('#btn-new').catch(e=>console.log('click fail', e.message));
+await page.waitForTimeout(2500);
+console.log('ui-root children:', await page.evaluate(()=>document.getElementById('ui-root').children.length));
+console.log('app?', await page.evaluate(()=>!!window.__app));
+await browser.close();

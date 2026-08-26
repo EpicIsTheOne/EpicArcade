@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Demolition Yard — Physics Destruction Playground</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="topbar" class="panel">
+  <span class="logo">DEMOLITION YARD</span>
+  <span class="stats">
+    <span id="stat-fps">-- FPS</span><span class="sep">|</span>
+    <span id="stat-bodies">-- BODIES</span><span class="sep">|</span>
+    <span id="stat-tool">GRAB</span>
+  </span>
+</div>
+
+<div id="side" class="panel">
+  <button id="btn-slow" title="Slow motion (Space)">SLOW-MO</button>
+  <button id="btn-reset" title="Reset world (R)">RESET</button>
+  <button id="btn-sound" title="Mute (M)">SOUND ON</button>
+  <button id="btn-help" title="Help (H)">HELP</button>
+</div>
+
+<div id="toolbar"></div>
+<div id="spawnmenu" class="hidden"></div>
+<div id="reticle"><div class="dot"></div></div>
+<div id="toast" class="hidden"></div>
+
+<div id="help" class="overlay hidden">
+  <div class="modal panel">
+    <h2>CONTROLS</h2>
+    <table>
+      <tr><td>LMB</td><td>Use selected tool (grab, fire, blast, freeze...)</td></tr>
+      <tr><td>RMB drag</td><td>Orbit camera</td></tr>
+      <tr><td>MMB drag</td><td>Pan camera</td></tr>
+      <tr><td>Wheel</td><td>Zoom / pull held object closer</td></tr>
+      <tr><td>1 - 0</td><td>Select tool</td></tr>
+      <tr><td>Space</td><td>Slow motion</td></tr>
+      <tr><td>R</td><td>Reset the world</td></tr>
+      <tr><td>M</td><td>Mute sound</td></tr>
+      <tr><td>H / Esc</td><td>This panel</td></tr>
+    </table>
+    <p class="tip">Tip: grab the wrecking ball and swing it into the tall tower. The heavy roof slabs pancake beautifully.</p>
+    <button id="btn-closehelp">CLOSE</button>
+  </div>
+</div>
+
+<div id="veil"><div class="veilbox"><div class="spinner"></div><div id="veil-text">CALIBRATING PHYSICS...</div></div></div>
+<div id="fatal" class="overlay hidden"><div class="modal panel"><h2>ERROR</h2><p id="fatal-text"></p></div></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

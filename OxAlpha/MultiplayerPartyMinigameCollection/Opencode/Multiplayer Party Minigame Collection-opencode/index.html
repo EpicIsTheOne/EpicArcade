@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Party Blitz — Multiplayer Minigames</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎉</text></svg>">
+</head>
+<body>
+<div id="app">
+  <canvas id="cv"></canvas>
+
+  <!-- ===================== MENU ===================== -->
+  <section id="screen-menu" class="screen">
+    <div class="menu-card pop-in">
+      <div class="logo">
+        <span class="logo-p1">PARTY</span><span class="logo-p2">BLITZ</span>
+      </div>
+      <div class="tagline">4–8 players · 5 wild minigames · total chaos</div>
+      <div class="field-row">
+        <input id="inp-name" maxlength="14" placeholder="Your nickname" autocomplete="off">
+      </div>
+      <button id="btn-create" class="btn btn-big">🎉 Create Room</button>
+      <div class="join-row">
+        <input id="inp-code" maxlength="4" placeholder="CODE" autocomplete="off">
+        <button id="btn-join" class="btn">Join</button>
+      </div>
+      <div id="menu-status" class="status-line"></div>
+    </div>
+    <div class="menu-foot">Move: WASD / arrows · Action: SPACE / click / tap</div>
+  </section>
+
+  <!-- ===================== LOBBY ===================== -->
+  <section id="screen-lobby" class="screen hidden">
+    <div class="lobby-card pop-in">
+      <div class="lobby-head">
+        <button id="btn-leave" class="btn btn-ghost btn-small">← Leave</button>
+        <div class="room-code-wrap">
+          <div class="room-code-label">ROOM CODE</div>
+          <button id="btn-copy-code" class="room-code" title="Copy invite code">----</button>
+          <div class="room-code-hint">friends join with this code</div>
+        </div>
+        <button id="btn-mute" class="btn btn-ghost btn-small">🔊</button>
+      </div>
+      <div id="lobby-players" class="player-grid"></div>
+      <div class="lobby-actions">
+        <label id="quick-wrap" class="quick-toggle"><input type="checkbox" id="chk-quick"> ⚡ Short rounds</label>
+        <button id="btn-start" class="btn btn-big" disabled>Waiting for host…</button>
+        <div class="status-line" id="lobby-hint"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== GAME HUD ===================== -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="hud-pill" id="hud-game">?</div>
+      <div class="hud-timer"><div id="hud-timer-fill"></div></div>
+      <div class="hud-pill" id="hud-round">–</div>
+    </div>
+    <div id="hud-scores" class="hud-scores"></div>
+    <div id="hud-hint" class="hud-hint"></div>
+    <div id="touch-controls" class="touch-controls hidden">
+      <div id="tc-dpad">
+        <button data-d="up" class="tc-btn tc-up">▲</button>
+        <button data-d="left" class="tc-btn tc-left">◀</button>
+        <button data-d="right" class="tc-btn tc-right">▶</button>
+        <button data-d="down" class="tc-btn tc-down">▼</button>
+      </div>
+      <button id="tc-act" class="tc-act">A</button>
+    </div>
+  </div>
+
+  <!-- ===================== OVERLAYS ===================== -->
+  <div id="overlay-intro" class="overlay hidden">
+    <div class="intro-card pop-in">
+      <div class="intro-round" id="intro-round">ROUND 1 / 5</div>
+      <div class="intro-name" id="intro-name">GAME</div>
+      <div class="intro-tag" id="intro-tag"></div>
+      <ul class="intro-howto" id="intro-howto"></ul>
+      <div class="intro-controls" id="intro-controls"></div>
+    </div>
+  </div>
+
+  <div id="overlay-count" class="overlay transparent hidden">
+    <div id="count-num" class="count-num">3</div>
+  </div>
+
+  <div id="overlay-results" class="overlay hidden">
+    <div class="results-card pop-in">
+      <div class="results-title" id="results-title">Round Results</div>
+      <ol id="results-list" class="results-list"></ol>
+    </div>
+  </div>
+
+  <!-- ===================== PODIUM ===================== -->
+  <section id="screen-podium" class="screen transparent hidden">
+    <div class="podium-card pop-in">
+      <div class="podium-title">🏆 CHAMPION</div>
+      <div id="podium-top" class="podium-top"></div>
+      <ol id="podium-board" class="podium-board"></ol>
+      <button id="btn-again" class="btn btn-big hidden">🔁 Play Again</button>
+      <div class="status-line" id="podium-wait">Waiting for host to start a rematch…</div>
+      <button id="btn-podium-leave" class="btn btn-ghost btn-small">← Leave</button>
+    </div>
+  </section>
+
+  <div id="banner" class="banner hidden">
+    <div class="banner-inner"><span class="spinner"></span><span id="banner-text">Reconnecting…</span></div>
+  </div>
+  <div id="toasts"></div>
+</div>
+
+<script src="js/audio.js"></script>
+<script src="js/net.js"></script>
+<script src="js/render.js"></script>
+<script src="js/games.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

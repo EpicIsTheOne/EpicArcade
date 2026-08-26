@@ -1,0 +1,94 @@
+{
+  "checks": [
+    {
+      "name": "boot: game module ready (__volt exposed)",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "boot: title screen shown",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "flow: PLAY starts zone 1",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "flow: level name",
+      "pass": true,
+      "detail": "NEON SKYLINE"
+    },
+    {
+      "name": "spawn: player grounded & healthy",
+      "pass": true,
+      "detail": "[0,0.37,-4]"
+    },
+    {
+      "name": "controls: W runs away-from-camera (forward)",
+      "pass": true,
+      "detail": "vel=[0,-6.8,-5] fwdDot=1.00"
+    },
+    {
+      "name": "controls: D strafes right (camera-relative)",
+      "pass": true,
+      "detail": "vel=[0,0,-4.6]"
+    },
+    {
+      "name": "controls: S moves opposite forward (+Z)",
+      "pass": true,
+      "detail": "vel.z=4.57"
+    },
+    {
+      "name": "mouse: moving mouse right turns camera right",
+      "pass": true,
+      "detail": "Δyaw=-1.485"
+    },
+    {
+      "name": "jump: SPACE leaves ground upward",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "quick-step: double-tap A dodges left",
+      "pass": true,
+      "detail": "max Δvel.z=14.5"
+    },
+    {
+      "name": "sprint+boost: builds high speed (>20 u/s ≈ 72 km/h)",
+      "pass": true,
+      "detail": "max=46.0 u/s"
+    },
+    {
+      "name": "survival: no deaths during tests",
+      "pass": true,
+      "detail": "hp=3 dead=false"
+    },
+    {
+      "name": "collectibles exist in zone",
+      "pass": true,
+      "detail": "volts=76"
+    },
+    {
+      "name": "results: finishing shows results screen",
+      "pass": true,
+      "detail": ""
+    },
+    {
+      "name": "results: rank/score computed",
+      "pass": true,
+      "detail": "rank=B score=39406"
+    }
+  ],
+  "shots": [
+    "C:\\Users\\Epic\\Documents\\ChatGPT\\Ox model test\\SpeedGame High Speed Platformer [model-openrouter-stealth-ox-alpha] [piagent] [run-01]\\voltrunner\\screenshots\\01-title.png",
+    "C:\\Users\\Epic\\Documents\\ChatGPT\\Ox model test\\SpeedGame High Speed Platformer [model-openrouter-stealth-ox-alpha] [piagent] [run-01]\\voltrunner\\screenshots\\02a-gameplay-plaza.png",
+    "C:\\Users\\Epic\\Documents\\ChatGPT\\Ox model test\\SpeedGame High Speed Platformer [model-openrouter-stealth-ox-alpha] [piagent] [run-01]\\voltrunner\\screenshots\\02-gameplay-expressway.png",
+    "C:\\Users\\Epic\\Documents\\ChatGPT\\Ox model test\\SpeedGame High Speed Platformer [model-openrouter-stealth-ox-alpha] [piagent] [run-01]\\voltrunner\\screenshots\\03-results.png"
+  ],
+  "stats": {
+    "sprintMaxSpeed": 46
+  },
+  "consoleErrors": []
+}

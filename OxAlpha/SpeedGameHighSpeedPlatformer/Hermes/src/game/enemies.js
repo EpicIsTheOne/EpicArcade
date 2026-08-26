@@ -1,339 +1,141 @@
+// enemies.js — original hostile bots built from primitives.
+// Killed by any attack state (boost ram / jump stomp / Zephyr Strike dive);
+// otherwise they hurt the player on contact.
 import * as THREE from 'three';
-import { clamp } from './mathutil.js';
 
-const UP = new THREE.Vector3(0, 1, 0);
-const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+function bodyMat(c) { return new THREE.MeshStandardMaterial({ color: c, roughness: .55, metalness: .35 }); }
+function eyeMat(c = 0xff2244) { return new THREE.MeshStandardMaterial({ color: 0x111111, emissive: new THREE.Color(c), emissiveIntensity: 2.4 }); }
 
-const MAT = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: o.r ?? 0.5, metalness: o.m ?? 0.35, emissive: o.e ?? 0x000000, emissiveIntensity: o.ei ?? 1 });
-
-// ======================= ENEMY TYPES =======================
-class Enemy {
-  constructor(scene, pos) {
-    this.scene = scene;
+export class Enemy {
+  constructor(type, pos, opts = {}) {
+    this.type = type;
     this.pos = pos.clone();
+    this.home = pos.clone();
     this.alive = true;
-    this.radius = 1.0;
-    this.deathT = 0;
-    this.t = Math.random() * 7;
+    this.radius = opts.radius || 0.9;
     this.group = new THREE.Group();
     this.group.position.copy(this.pos);
-    scene.add(this.group);
+    this.t = Math.random() * 10;
+    this.deadT = 0;
   }
-  get chainPos() { return this.group.position; }
-  die(game, impactVel) {
+  kill(fx) {
     if (!this.alive) return;
     this.alive = false;
-    this.deathT = 0.001;
-    game.onEnemyKilled(this, impactVel);
+    fx.burst(this.pos, 26, { color: '#ff8c42', speed: 11, life: .7, size: .6, upBias: 1.4 });
+    fx.burst(this.pos, 12, { color: '#ffe29a', speed: 6, life: .5, size: .5 });
+    this.group.visible = false;
   }
-  updateDead(dt) {
-    this.deathT += dt;
-    const k = Math.max(0, 1 - this.deathT * 3.5);
-    this.group.scale.setScalar(Math.max(0.001, k));
-    this.group.rotation.z += dt * 9;
-    if (this.deathT > 0.34 && this.group.visible) this.group.visible = false;
-  }
-  // is the player currently able to damage us?
-  playerAttacking(player) {
-    return player.state === 'chain' || player.state === 'stomp' ||
-      (player.boosting || player.panelTimer > 0 || player.speed > 21);
-  }
-  tryContactKill(player, game, verticalBias = false) {
-    _v1.copy(player.pos).sub(this.chainPos);
-    const d = _v1.length();
-    const rr = this.radius + 0.75;
-    if (d < rr) {
-      if (this.playerAttacking(player)) {
-        this.die(game, player.vel);
-        if (player.state === 'chain') { /* chain bounce handled by player */ }
-        else if (!verticalBias) {
-          // small reward hop so you can chain through packs
-          if (player.state !== 'stomp') player.vel.y = Math.max(player.vel.y, 12);
-        }
-        return 'killed';
+  baseUpdate(dt, player, game) {
+    this.t += dt;
+    if (!this.alive) return false;
+    this.group.position.copy(this.pos);
+    const dToP = this.pos.distanceTo(player.pos);
+    // contact resolution
+    if (dToP < this.radius + player.radius && player.invulnT <= 0) {
+      if (player.isAttacking()) {
+        game.killEnemy(this, player.boosting ? 'ram' : (!player.grounded && player.vel.y < -3.5 ? 'stomp' : 'attack'));
+        return true;
+      } else {
+        if (player.hurt(this.pos)) game.onPlayerHit();
       }
-      if (player.hurt(this.chainPos)) return 'hurt';
-      // gentle separation
-      _v2.copy(_v1).normalize();
-      player.vel.addScaledVector(_v2, -6);
-      return 'bump';
     }
-    return null;
+    return true;
   }
 }
 
-export class Gnat extends Enemy {
-  constructor(scene, pos, opts = {}) {
-    super(scene, pos);
-    this.anchor = pos.clone();
-    this.patrol = opts.patrol || new THREE.Vector3(3, 0, 0);
-    this.pt = Math.random() * 10;
-    this.radius = 0.95;
-    const bodyMat = MAT(0x2c3550, { r: 0.4 });
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 18, 14), bodyMat);
-    body.scale.y = 0.82;
-    const eyeRing = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.09, 8, 20), MAT(0xff3050, { e: 0xff2038, ei: 2 }));
-    eyeRing.position.z = 0.42;
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 8), MAT(0x8892aa, { m: 0.8 }));
-    spike.rotation.x = -Math.PI / 2; spike.position.z = -0.55;
-    this.wings = [];
-    const wingGeo = new THREE.BoxGeometry(0.65, 0.03, 0.22);
-    const wingMat = MAT(0xbfefff, { e: 0x37d8ff, ei: 0.6, r: 0.2 });
-    for (const s of [-1, 1]) {
-      const w = new THREE.Mesh(wingGeo, wingMat);
-      w.position.set(s * 0.45, 0.45, 0);
-      this.wings.push(w);
-      this.group.add(w);
-    }
-    this.light = new THREE.PointLight(0xff3040, 1.4, 5);
-    this.group.add(body, eyeRing, spike, this.light);
-    this.mode = 'patrol';
+/** SCRAPPER — patrolling hover-crab that lunges when close. */
+export class Scrapper extends Enemy {
+  constructor(pos, opts = {}) {
+    super('scrapper', pos, opts);
+    this.range = opts.range ?? 6;
+    this.axis = opts.axis || 'x';
+    this.speed = opts.speed || 3.2;
+    this.lungeCd = 0;
+
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.62, 14, 10), bodyMat(0xd8453e));
+    shell.scale.set(1.25, 0.75, 1); this.group.add(shell);
+    const belly = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8), bodyMat(0x8c241f));
+    belly.position.y = -0.18; this.group.add(belly);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), eyeMat());
+    eye.position.set(0, 0.18, 0.52); this.group.add(eye); this.eye = eye;
+    [-1, 1].forEach(s => {
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.5, 6), bodyMat(0xf2f0e6));
+      claw.rotation.x = Math.PI / 2; claw.position.set(s * 0.55, -0.1, 0.35);
+      this.group.add(claw);
+    });
   }
   update(dt, player, game) {
-    if (!this.alive) { this.updateDead(dt); return; }
-    this.t += dt;
-    const toP = _v1.copy(player.pos).sub(this.chainPos);
-    const distP = toP.length();
-    if (distP < 15 && player.state !== 'dead') this.mode = 'chase'; else if (distP > 22) this.mode = 'patrol';
-    let target;
-    if (this.mode === 'patrol') {
-      this.pt += dt * 0.55;
-      target = _v2.copy(this.anchor).addScaledVector(this.patrol, (Math.sin(this.pt) + 1) / 2);
-      target.y += Math.sin(this.t * 2.2) * 0.25;
-    } else {
-      target = _v2.copy(player.pos); target.y += 1.4;
-      // hover offset so they swoop rather than stack
-      target.addScaledVector(UP, Math.sin(this.t * 3) * 0.5);
-    }
-    _v3.copy(target).sub(this.chainPos);
-    const d = _v3.length();
-    const sp = this.mode === 'chase' ? 9.5 : 3;
-    if (d > 0.01) {
-      _v3.divideScalar(d);
-      this.chainPos.addScaledVector(_v3, Math.min(sp * dt, d));
-    }
-    // face motion/player
-    const look = this.mode === 'chase' ? _v1 : _v3;
-    if (look.lengthSq() > 0.01) this.group.rotation.y = Math.atan2(look.x, look.z);
-    for (let i = 0; i < this.wings.length; i++) this.wings[i].rotation.z = Math.sin(this.t * 40 + i * Math.PI) * 0.7;
-    this.tryContactKill(player, game);
+    if (!this.baseUpdate(dt, player, game)) return;
+    // patrol back/forth on axis
+    const off = Math.sin(this.t * this.speed / this.range) * this.range;
+    this.pos.copy(this.home);
+    if (this.axis === 'x') this.pos.x += off; else this.pos.z += off;
+    this.pos.y += Math.sin(this.t * 3) * 0.15 + 0.55;
+    // face player when near
+    const d = this.pos.distanceTo(player.pos);
+    if (d < 16) {
+      this.group.lookAt(player.pos.x, this.pos.y, player.pos.z);
+      if (d < 9 && this.lungeCd <= 0) {
+        this.lungeCd = 2.4;
+        const dir = new THREE.Vector3().subVectors(player.pos, this.pos).normalize();
+        this.pos.addScaledVector(dir, 3.2);
+      }
+    } else this.group.rotation.y += dt;
+    this.eye.material.emissiveIntensity = d < 12 ? 3.4 : 1.6;
+    this.lungeCd -= dt;
   }
 }
 
-export class Stomper extends Enemy {
-  constructor(scene, pos, opts = {}) {
-    super(scene, pos);
-    this.a = pos.clone();
-    this.b = (opts.to || pos.clone().add(new THREE.Vector3(6, 0, 0)));
-    this.pt = Math.random();
-    this.dirS = 1;
-    this.radius = 1.5;
-    const body = new THREE.Mesh(new THREE.SphereGeometry(1.05, 18, 14), MAT(0x50304a, { r: 0.55 }));
-    body.scale.set(1.15, 0.95, 1.05); body.position.y = 1.5; body.castShadow = true;
-    const visor = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.28, 0.1), MAT(0xffd23e, { e: 0xffa200, ei: 2 }));
-    visor.position.set(0, 1.62, 0.95);
-    this.feet = [];
-    const legGeo = new THREE.CylinderGeometry(0.16, 0.22, 1.1, 10);
-    const legMat = MAT(0x39465e, { m: 0.6 });
-    for (const s of [-1, 1]) {
-      const leg = new THREE.Mesh(legGeo, legMat);
-      leg.position.set(s * 0.5, 0.55, 0);
-      const foot = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.7), legMat);
-      foot.position.y = -0.5;
-      leg.add(foot);
-      this.feet.push(leg);
-      this.group.add(leg);
-    }
-    this.bodyMesh = body;
-    this.group.add(body, visor);
-  }
-  update(dt, player, game) {
-    if (!this.alive) { this.updateDead(dt); return; }
-    this.t += dt;
-    this.pt += dt * 0.14 * this.dirS;
-    if (this.pt > 1) { this.pt = 1; this.dirS = -1; }
-    if (this.pt < 0) { this.pt = 0; this.dirS = 1; }
-    this.chainPos.lerpVectors(this.a, this.b, this.pt);
-    const stepPhase = Math.sin(this.t * 6) ;
-    this.feet[0].rotation.x = stepPhase * 0.5;
-    this.feet[1].rotation.x = -stepPhase * 0.5;
-    this.group.position.copy(this.chainPos);
-    _v1.copy(this.b).sub(this.a);
-    this.group.rotation.y = Math.atan2(_v1.x * this.dirS, _v1.z * this.dirS);
-    this.bodyMesh.position.y = 1.5 + Math.abs(stepPhase) * 0.08;
-    this.tryContactKill(player, game, true);
-  }
-}
-
+/** BOLTURRET — floor turret firing slow dodgeable orbs. */
 export class Turret extends Enemy {
-  constructor(scene, pos, game) {
-    super(scene, pos);
-    this.radius = 1.1;
-    this.fireCool = 1 + Math.random();
-    this.base = pos.clone();
-    const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.95, 0.9, 14), MAT(0x3c3550, { r: 0.5 }));
-    pod.position.y = 0.45; pod.castShadow = true;
-    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), MAT(0x574f78, { e: 0x7744ff, ei: 0.4 }));
-    dome.position.y = 0.9;
-    this.barrel = new THREE.Group();
-    this.barrel.position.y = 1.0;
-    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.17, 0.9, 10), MAT(0x8892aa, { m: 0.85 }));
-    tube.rotation.x = Math.PI / 2; tube.position.z = 0.45;
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), MAT(0xff3050, { e: 0xff2038, ei: 2.4 }));
-    tip.position.z = 0.92;
-    this.tipMesh = tip;
-    this.barrel.add(tube, tip);
-    this.group.add(pod, dome, this.barrel);
-    this.gameRef = game;
+  constructor(pos, opts = {}) {
+    super('turret', pos, opts);
+    this.cd = 1.4 + Math.random();
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.66, 0.82, 0.5, 10), bodyMat(0x394066));
+    base.position.y = 0.25; this.group.add(base);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), bodyMat(0x50599a));
+    dome.position.y = 0.5; this.group.add(dome);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.85, 8), bodyMat(0x22283f));
+    barrel.rotation.x = Math.PI / 2; barrel.position.set(0, 0.62, 0.35); this.group.add(barrel);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), eyeMat(0x66aaff));
+    eye.position.set(0, 0.68, 0.28); this.group.add(eye); this.eye = eye;
   }
   update(dt, player, game) {
-    if (!this.alive) { this.updateDead(dt); return; }
-    this.t += dt;
-    const toP = _v1.copy(player.pos).sub(this.base);
-    toP.y = 0;
-    if (toP.lengthSq() > 0.02) {
-      const yaw = Math.atan2(toP.x, toP.z);
-      this.group.rotation.y += (yaw - this.group.rotation.y) * clamp(dt * 5, 0, 1);
-    }
-    const distP = player.pos.distanceTo(this.base);
-    this.fireCool -= dt;
-    if (distP < 26 && distP > 3 && this.fireCool <= 0 && player.state !== 'dead') {
-      this.fireCool = 2.3;
-      _v1.copy(player.pos).addScaledVector(UP, 0.4).sub(_v2.copy(this.base).setY(this.base.y + 1));
-      _v1.normalize().multiplyScalar(15);
-      game.spawnProjectile(_v2.copy(this.base).setY(this.base.y + 1.05), _v1);
-    }
-    this.tipMesh.material.emissiveIntensity = this.fireCool < 0.4 ? 4 : 2;
-    this.tryContactKill(player, game);
-  }
-}
-
-export class Roller extends Enemy {
-  constructor(scene, pos, opts = {}) {
-    super(scene, pos);
-    this.a = pos.clone(); this.b = opts.to || pos.clone().add(new THREE.Vector3(10, 0, 0));
-    this.pt = Math.random(); this.dirS = 1;
-    this.speed = opts.speed || 13;
-    this.radius = 1.2;
-    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.95, 0.38, 12, 26), MAT(0x63341f, { r: 0.6 }));
-    wheel.castShadow = true;
-    const hub = new THREE.Mesh(new THREE.SphereGeometry(0.5, 14, 10), MAT(0xff7020, { e: 0xff4000, ei: 1.2 }));
-    this.wheelMesh = wheel;
-    this.group.add(wheel, hub);
-    this.rollA = 0;
-    this.axis = _v1.copy(this.b).sub(this.a).normalize().clone();
-  }
-  update(dt, player, game) {
-    if (!this.alive) { this.updateDead(dt); return; }
-    this.t += dt;
-    this.pt += (dt * this.speed / Math.max(1, this.a.distanceTo(this.b))) * this.dirS;
-    if (this.pt > 1) { this.pt = 1; this.dirS = -1; }
-    if (this.pt < 0) { this.pt = 0; this.dirS = 1; }
-    this.chainPos.lerpVectors(this.a, this.b, this.pt);
-    this.chainPos.y += this.radius;
-    this.group.position.copy(this.chainPos);
-    this.rollA += dt * this.speed * 1.1 * this.dirS;
-    this.wheelMesh.rotation.set(0, 0, 0);
-    this.group.quaternion.setFromUnitVectors(UP, UP.clone()); // reset
-    this.group.rotation.y = Math.atan2(this.axis.x, this.axis.z);
-    this.wheelMesh.rotation.x = this.rollA;
-    this.tryContactKill(player, game);
-  }
-}
-
-// ======================= PROJECTILES =======================
-export class Projectiles {
-  constructor(scene) {
-    this.list = [];
-    this.scene = scene;
-    this.geo = new THREE.SphereGeometry(0.28, 10, 8);
-    this.mat = new THREE.MeshStandardMaterial({ color: 0xff4060, emissive: 0xff1030, emissiveIntensity: 2.4, roughness: 0.3 });
-    this.pool = [];
-  }
-  spawn(pos, vel) {
-    let p = this.pool.pop();
-    if (!p) {
-      p = { mesh: new THREE.Mesh(this.geo, this.mat), vel: new THREE.Vector3(), life: 0, alive: false };
-      this.scene.add(p.mesh);
-    }
-    p.mesh.visible = true;
-    p.mesh.position.copy(pos);
-    p.vel.copy(vel);
-    p.life = 6; p.alive = true;
-    this.list.push(p);
-  }
-  update(dt, player, game) {
-    for (let i = this.list.length - 1; i >= 0; i--) {
-      const p = this.list[i];
-      p.life -= dt;
-      p.mesh.position.addScaledVector(p.vel, dt);
-      const pp = p.mesh.position;
-      let dead = p.life <= 0;
-      if (!dead && player.state !== 'dead') {
-        const d2 = pp.distanceToSquared(player.pos);
-        if (d2 < 1.2) {
-          player.hurt(pp);
-          dead = true;
-        } else if ((player.boosting || player.state === 'chain' || player.speed > 24) && d2 < 4.5) {
-          // smash projectiles with speed
-          dead = true;
-          game.onProjectileDestroyed(pp);
-        }
-      }
-      if (pp.y < game.killY) dead = true;
-      if (dead) {
-        p.alive = false; p.mesh.visible = false;
-        this.list.splice(i, 1);
-        this.pool.push(p);
+    if (!this.baseUpdate(dt, player, game)) return;
+    this.cd -= dt;
+    const d = this.pos.distanceTo(player.pos);
+    if (d < 34) {
+      this.group.lookAt(player.pos.x, player.pos.y, player.pos.z);
+      if (this.cd <= 0) {
+        this.cd = 2.1;
+        const dir = new THREE.Vector3().subVectors(player.pos, this.pos).normalize();
+        game.spawnOrb(this.pos.clone().addScaledVector(dir, 1), dir.multiplyScalar(13));
+        game.audio.tone('square', 340, 180, 0.12, 0.08);
       }
     }
   }
 }
 
-// ======================= MANAGER =======================
-export class Enemies {
-  constructor(scene, game) {
-    this.list = [];
-    this.scene = scene;
-    this.game = game;
-    this.projectiles = new Projectiles(scene);
+/** ZINGER — figure-8 patrol drone that swoops. */
+export class Zinger extends Enemy {
+  constructor(pos, opts = {}) {
+    super('zinger', pos, opts);
+    this.R = opts.radius || 7;
+    const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.5), bodyMat(0xb03bd6));
+    this.group.add(core); this.core = core;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.07, 8, 20), eyeMat(0xdd77ff));
+    ring.rotation.x = Math.PI / 2; this.group.add(ring); this.ring = ring;
+    this.hoverY = pos.y;
   }
-
-  add(type, pos, opts = {}, game) {
-    let e;
-    switch (type) {
-      case 'gnat': e = new Gnat(this.scene, pos, opts); break;
-      case 'stomper': e = new Stomper(this.scene, pos, opts); break;
-      case 'turret': e = new Turret(this.scene, pos, this.game); break;
-      case 'roller': e = new Roller(this.scene, pos, opts); break;
-      default: throw new Error('unknown enemy ' + type);
-    }
-    this.list.push(e);
-    return e;
-  }
-
-  // best homing-dash target near the player's velocity cone
-  findChainTarget(origin, velDir, maxDist) {
-    let best = null, bestScore = Infinity;
-    const vd = _v1.copy(velDir); vd.y *= 0.4;
-    if (vd.lengthSq() < 0.01) vd.set(0, 0, 1);
-    vd.normalize();
-    for (const e of this.list) {
-      if (!e.alive) continue;
-      _v2.copy(e.chainPos).sub(origin);
-      const d = _v2.length();
-      if (d > maxDist) continue;
-      _v2.divideScalar(d);
-      const dot = _v2.dot(vd);
-      if (dot < 0.25) continue;
-      const score = d - dot * 14;
-      if (score < bestScore) { bestScore = score; best = e; }
-    }
-    return best;
-  }
-
-  update(dt, player) {
-    for (const e of this.list) e.update(dt, player, this.game);
-    this.projectiles.update(dt, player, this.game);
+  update(dt, player, game) {
+    if (!this.baseUpdate(dt, player, game)) return;
+    const a = this.t * 1.1;
+    this.pos.set(
+      this.home.x + Math.sin(a) * this.R,
+      this.hoverY + Math.sin(a * 2) * 0.8,
+      this.home.z + Math.sin(a * 2) * this.R * 0.55
+    );
+    this.core.rotation.y += dt * 4;
+    this.ring.rotation.z += dt * 2.4;
   }
 }

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SKYRUSH — 3D Obby Speedrun</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='14' fill='%234cc9f0'/><polygon points='12,8 24,16 12,24' fill='%231b2340'/></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="gl"></canvas>
+  <canvas id="fx"></canvas>
+  <div id="vignette"></div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="progressTrack"><div id="progressFill"></div><div id="progressCps"></div></div>
+    <div id="timerBox"><div id="timer">0:00.00</div><div id="bestLine">PB —</div></div>
+    <div id="splits"></div>
+    <div id="statusCluster">
+      <div id="dashPip" class="pip ready"><span>DASH</span><i></i></div>
+      <div id="speedBar"><i></i></div>
+    </div>
+    <div id="hintBar">WASD move · SPACE jump · SHIFT dash · C slide · R restart · ESC menu · H help</div>
+    <div id="popup"></div>
+    <div id="cpFlash"></div>
+  </div>
+
+  <!-- Start overlay -->
+  <div id="startOverlay" class="overlay">
+    <div class="panel bigPanel">
+      <h1 class="logo">SKY<span>RUSH</span></h1>
+      <p class="tagline">A momentum obby for people who chase milliseconds.</p>
+      <div class="medalRow">
+        <div class="medal gold"><i>★</i><b>GOLD</b><em id="tgtGold">—</em></div>
+        <div class="medal silver"><i>★</i><b>SILVER</b><em id="tgtSilver">—</em></div>
+        <div class="medal bronze"><i>★</i><b>BRONZE</b><em id="tgtBronze">—</em></div>
+      </div>
+      <button id="btnStart" class="cta">▶&nbsp; START RUN</button>
+      <div class="helpGrid">
+        <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>run</span></div>
+        <div><kbd>SPACE</kbd><span>jump (coyote + buffered)</span></div>
+        <div><kbd>SHIFT</kbd><span>dash — refills on ground &amp; wall-jumps</span></div>
+        <div><kbd>C</kbd>/<kbd>CTRL</kbd><span>slide — keeps speed, slide-jump to carry it</span></div>
+        <div><kbd>MOUSE</kbd><span>look (click to lock) · <kbd>←</kbd><kbd>→</kbd> also steer camera</span></div>
+        <div><kbd>R</kbd><span>instant restart</span> · <kbd>G</kbd><span>ghost</span> · <kbd>M</kbd><span>music</span></div>
+      </div>
+      <div id="pbNote" class="pbNote hidden"></div>
+    </div>
+  </div>
+
+  <!-- Pause overlay -->
+  <div id="pauseOverlay" class="overlay hidden">
+    <div class="panel">
+      <h2>PAUSED</h2>
+      <div id="pauseStats" class="pauseStats"></div>
+      <button id="btnResume" class="cta">RESUME</button>
+      <button id="btnRestartP" class="secondary">RESTART RUN&nbsp;(R)</button>
+      <button id="btnQuit" class="ghostBtn">BACK TO MENU</button>
+    </div>
+  </div>
+
+  <!-- Results overlay -->
+  <div id="resultsOverlay" class="overlay hidden">
+    <div class="panel bigPanel">
+      <div id="resMedal" class="resMedal"><i>★</i></div>
+      <h2 id="resTitle">FINISH!</h2>
+      <div id="resTime" class="resTime">0:00.00</div>
+      <div id="resDelta" class="resDelta"></div>
+      <table id="resSplits"></table>
+      <div class="rowBtns">
+        <button id="btnAgain" class="cta">RUN IT AGAIN&nbsp;(R)</button>
+        <button id="btnMenu" class="ghostBtn">MENU</button>
+      </div>
+      <div id="resSaveNote" class="pbNote hidden"></div>
+    </div>
+  </div>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/level.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/effects.js"></script>
+  <script src="js/ghost.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

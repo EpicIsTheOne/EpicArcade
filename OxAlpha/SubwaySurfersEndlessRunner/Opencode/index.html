@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>HYPERLINE — Endless Runner</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23120b22'/%3E%3Cpath d='M6 22 L14 8 L18 16 L26 10' stroke='%2335e0d2' stroke-width='3.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='26' cy='10' r='2.6' fill='%23ffc93c'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app"></div>
+<div id="ui">
+  <div id="vignette"></div>
+  <div id="flashLayer"></div>
+
+  <!-- LOADING -->
+  <div class="screen" id="scr-loading">
+    <div class="logo-sm">HYPERLINE</div>
+    <div class="loadbar"><div id="loadFill"></div></div>
+    <div class="dim" id="loadTip">Warming up the rails…</div>
+  </div>
+
+  <!-- TITLE -->
+  <div class="screen hidden" id="scr-title">
+    <div class="title-top">
+      <div class="pill coinPill"><span class="ic ic-coin"></span><span id="tCoins">0</span></div>
+      <div class="pill bestPill">BEST <span id="tBest">0</span></div>
+    </div>
+    <div class="title-mid">
+      <h1 class="logo"><span>HYPE</span><span class="l2">RLINE</span></h1>
+      <div class="tagline">Outrun the Wardens across Sunset City</div>
+      <button class="btn big primary" id="btnPlay">PLAY</button>
+      <div class="row-btns">
+        <button class="btn" id="btnShop">SHOP</button>
+        <button class="btn" id="btnHelp">HOW TO PLAY</button>
+        <button class="btn" id="btnSettings">SETTINGS</button>
+      </div>
+      <div class="rankTag" id="rankTag">RANK 1 · x1 SCORE</div>
+    </div>
+    <div class="title-bottom dim">A / D — move &nbsp;·&nbsp; W / Space — jump &nbsp;·&nbsp; S — roll &nbsp;·&nbsp; Shift — hoverboard</div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="hudScoreBox">
+      <div id="hudScore">0</div>
+      <div id="hudMult" class="multBadge hidden">x2</div>
+    </div>
+    <div class="pill hudCoins"><span class="ic ic-coin"></span><span id="hudCoins">0</span></div>
+    <div id="hudMissions"></div>
+    <div id="hudPowerups"></div>
+    <div id="hudCombo" class="hidden"></div>
+    <div id="popups"></div>
+    <button id="btnBoard" title="Hoverboard (Shift)"><span class="ic ic-board"></span><b id="boardCount">0</b></button>
+    <button id="btnPause" title="Pause (Esc)">❚❚</button>
+    <div id="hintTouch" class="hidden">swipe to move · up = jump · down = roll</div>
+  </div>
+
+  <!-- COUNTDOWN -->
+  <div id="countdown" class="hidden"></div>
+
+  <!-- PAUSE -->
+  <div class="screen trans hidden" id="scr-pause">
+    <h2>PAUSED</h2>
+    <button class="btn big primary" id="btnResume">RESUME</button>
+    <div class="row-btns">
+      <button class="btn" id="btnRestartP">RESTART</button>
+      <button class="btn" id="btnQuitP">QUIT TO MENU</button>
+    </div>
+    <div class="optRow slim">
+      <label>Music <input type="range" id="pMusic" min="0" max="100"></label>
+      <label>Sound <input type="range" id="pSfx" min="0" max="100"></label>
+    </div>
+  </div>
+
+  <!-- GAME OVER -->
+  <div class="screen trans hidden" id="scr-over">
+    <div id="overCause" class="cause">BUSTED!</div>
+    <div class="newBest hidden" id="overNewBest">NEW BEST!</div>
+    <div class="overScore" id="overScore">0</div>
+    <div class="overStats">
+      <div><span>DISTANCE</span><b id="ovDist">0m</b></div>
+      <div><span>COINS</span><b id="ovCoins">0</b></div>
+      <div><span>BEST</span><b id="ovBest">0</b></div>
+    </div>
+    <div id="ovMissions"></div>
+    <div class="row-btns">
+      <button class="btn big primary" id="btnRetry">RUN AGAIN</button>
+      <button class="btn" id="btnShopO">SHOP</button>
+      <button class="btn" id="btnMenuO">MENU</button>
+    </div>
+    <div class="dim enterHint">press ENTER / R to run again</div>
+  </div>
+
+  <!-- SHOP -->
+  <div class="screen trans hidden" id="scr-shop">
+    <div class="panelHead">
+      <button class="btn back" id="btnShopBack">‹ BACK</button>
+      <h2>SUPPLY DEPOT</h2>
+      <div class="pill coinPill"><span class="ic ic-coin"></span><span id="shopCoins">0</span></div>
+    </div>
+    <div class="tabs">
+      <button class="tab on" data-tab="upg">UPGRADES</button>
+      <button class="tab" data-tab="boards">BOARDS</button>
+      <button class="tab" data-tab="chars">CREW</button>
+    </div>
+    <div class="shopList" id="shopList"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="screen trans hidden" id="scr-settings">
+    <div class="panelHead">
+      <button class="btn back" id="btnSetBack">‹ BACK</button>
+      <h2>SETTINGS</h2><span></span>
+    </div>
+    <div class="setCol">
+      <label class="setRow">Graphics quality
+        <select id="selQuality">
+          <option value="auto">Auto (recommended)</option>
+          <option value="ultra">Ultra — bloom + soft shadows</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+          <option value="qa">QA (fastest)</option>
+        </select>
+      </label>
+      <label class="setRow">Music <input type="range" id="sMusic" min="0" max="100"><span id="sMusicV"></span></label>
+      <label class="setRow">Sound FX <input type="range" id="sSfx" min="0" max="100"><span id="sSfxV"></span></label>
+      <label class="setRow chk"><input type="checkbox" id="chkShake"> Camera shake</label>
+      <label class="setRow chk"><input type="checkbox" id="chkFlash"> Screen flashes</label>
+      <div class="setRow">
+        <button class="btn danger" id="btnWipe">RESET ALL PROGRESS</button>
+        <span class="dim" id="wipeConfirm" style="display:none">click again to confirm</span>
+      </div>
+      <div class="dim ver" id="verTag"></div>
+    </div>
+  </div>
+
+  <!-- HELP -->
+  <div class="screen trans hidden" id="scr-help">
+    <div class="panelHead">
+      <button class="btn back" id="btnHelpBack">‹ BACK</button>
+      <h2>HOW TO PLAY</h2><span></span>
+    </div>
+    <div class="helpGrid">
+      <div class="helpCard"><div class="keys"><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd></div><p>Switch lane left / right. Swipes work too.</p></div>
+      <div class="helpCard"><div class="keys"><kbd>W</kbd><kbd>SPACE</kbd> / swipe up</div><p>Jump over barriers and gaps.</p></div>
+      <div class="helpCard"><div class="keys"><kbd>S</kbd> / swipe down</div><p>Roll under gantries. Roll mid-air to slam down.</p></div>
+      <div class="helpCard"><div class="keys"><kbd>SHIFT</kbd></div><p>Deploy a hoverboard — absorbs one crash for its duration.</p></div>
+      <div class="helpCard"><div class="keys"><kbd>ESC</kbd>/<kbd>P</kbd></div><p>Pause. <kbd>M</kbd> mute.</p></div>
+      <div class="helpCard"><div class="keys">TRAINS</div><p>Ride roofs via ramps. Oncoming trains must be dodged — watch the warning arrows.</p></div>
+      <div class="helpCard"><div class="keys">WARDEN</div><p>Stumble twice in a row and he grabs you. Clean running shakes him off.</p></div>
+      <div class="helpCard"><div class="keys">MISSIONS</div><p>Finish all three to rank up your score multiplier.</p></div>
+    </div>
+  </div>
+
+  <!-- ERROR OVERLAY -->
+  <div id="errOverlay" class="hidden"></div>
+</div>
+<script type="importmap">
+{ "imports": {
+    "three": "./vendor/three/build/three.module.js",
+    "three/addons/": "./vendor/three/examples/jsm/"
+} }
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

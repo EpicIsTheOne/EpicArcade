@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<!-- ============================================================
+  ZENITH RUN · 3D Obby Speedrun
+  build: ox-alpha · piagent · run-01 · sweep-9f1928d5
+  All assets procedural. No external network dependencies.
+============================================================ -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ZENITH RUN — 3D Obby Speedrun</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%230e1430'/%3E%3Cpath d='M9 21 L16 8 L23 21 Z' fill='%2340e8ff'/%3E%3Ccircle cx='16' cy='23' r='2.4' fill='%23ff5ea8'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app"></div>
+
+<!-- speed-line overlay -->
+<canvas id="speedlines"></canvas>
+
+<!-- vignette / damage flash -->
+<div id="flash"></div>
+
+<!-- ======== HUD ======== -->
+<div id="hud" class="hidden">
+  <div id="timerWrap">
+    <div id="timer">0:00.00</div>
+    <div id="pbRow" class="hidden"><span id="pbLabel">PB</span><span id="pbTime">--</span></div>
+  </div>
+  <div id="cpWrap">
+    <div id="cpCount">CP 0<span id="cpTotal">/6</span></div>
+    <div id="deathCount">☠ 0</div>
+  </div>
+  <div id="dashWrap">
+    <div id="dashPip"><div id="dashFill"></div><span>DASH</span></div>
+    <div id="speedWrap"><div id="speedFill"></div></div>
+  </div>
+  <div id="hintBar">H&nbsp;help&nbsp;·&nbsp;R&nbsp;restart&nbsp;·&nbsp;Esc&nbsp;pause</div>
+  <div id="centerPop"></div>
+  <div id="splitPop" class="hidden"></div>
+  <div id="ghostTag" class="hidden">▸ PB GHOST</div>
+</div>
+
+<!-- ======== HELP PANEL ======== -->
+<div id="helpPanel" class="hidden">
+  <h3>CONTROLS</h3>
+  <table>
+    <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Run (camera-relative)</td></tr>
+    <tr><td><kbd>SPACE</kbd></td><td>Jump — hold for higher · wall-jump off walls</td></tr>
+    <tr><td><kbd>SHIFT</kbd> / <kbd>RMB</kbd></td><td>Dash (air or ground)</td></tr>
+    <tr><td><kbd>C</kbd></td><td>Slide — keeps momentum, fits under bars</td></tr>
+    <tr><td><kbd>←</kbd><kbd>→</kbd> / drag</td><td>Rotate camera (<kbd>↑</kbd><kbd>↓</kbd> tilt)</td></tr>
+    <tr><td><kbd>R</kbd></td><td>Instant restart</td></tr>
+    <tr><td><kbd>G</kbd></td><td>Toggle PB ghost</td></tr>
+    <tr><td><kbd>M</kbd></td><td>Mute · <kbd>Esc</kbd> pause · <kbd>F</kbd> fullscreen</td></tr>
+  </table>
+  <p class="tip">Chain dash → jump → slide to carry speed. Rings give a boost. Cyan pads launch you.</p>
+</div>
+
+<!-- ======== START SCREEN ======== -->
+<div id="startScreen" class="screen">
+  <div class="panel">
+    <h1 class="logo">ZENITH<span>RUN</span></h1>
+    <p class="tagline">A vertical obby built for speed. Reach the summit gate.</p>
+    <div class="startCols">
+      <div class="col">
+        <h4>RUN</h4><p><kbd>WASD</kbd> move · <kbd>SPACE</kbd> jump<br><kbd>SHIFT</kbd> dash · <kbd>C</kbd> slide</p>
+      </div>
+      <div class="col">
+        <h4>FLOW</h4><p>Dash mid-air · slide-jump gaps<br>wall-jump the canyon · ride the rings</p>
+      </div>
+      <div class="col">
+        <h4>BEAT</h4><p>6 checkpoints · medal times<br>PB saved locally · race your ghost</p>
+      </div>
+    </div>
+    <button id="btnStart" class="bigBtn">▶&nbsp; START RUN</button>
+    <p class="foot">or press <kbd>SPACE</kbd> · best: <span id="menuBest">—</span></p>
+  </div>
+</div>
+
+<!-- ======== PAUSE ======== -->
+<div id="pauseScreen" class="screen hidden">
+  <div class="panel small">
+    <h2>PAUSED</h2>
+    <p id="pauseStats" class="mono">—</p>
+    <button id="btnResume" class="bigBtn">Resume</button>
+    <button id="btnPRestart" class="midBtn">Restart Run&nbsp;<kbd>R</kbd></button>
+    <label class="chk"><input type="checkbox" id="chkMusic" checked> music</label>
+    <label class="chk"><input type="checkbox" id="chkGhostShow" checked> show ghost</label>
+  </div>
+</div>
+
+<!-- ======== RESULTS ======== -->
+<div id="finishScreen" class="screen hidden">
+  <div class="panel">
+    <div id="medalBadge" class="medal gold"><span>GOLD</span></div>
+    <h2 id="finishTitle">SUMMIT REACHED</h2>
+    <div id="finalTime" class="mono big">0:00.00</div>
+    <div id="newRecord" class="hidden">★ NEW PERSONAL BEST ★</div>
+    <div id="resultRows" class="mono"></div>
+    <div class="row">
+      <button id="btnAgain" class="bigBtn">RUN AGAIN&nbsp;<kbd>R</kbd></button>
+      <button id="btnFreeRoam" class="midBtn">Free Roam&nbsp;<kbd>Esc</kbd></button>
+    </div>
+    <p class="foot" id="medalHint">—</p>
+  </div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/player.js"></script>
+<script src="js/course.js"></script>
+<script src="js/ghost.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

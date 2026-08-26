@@ -1,0 +1,41 @@
+export const S = {
+  events: new EventTarget(),
+  emit(name, detail) {
+    this.events.dispatchEvent(new CustomEvent(name, { detail }));
+  },
+  match: {
+    state: 'lobby',
+    time: 0,
+    alive: 40,
+    kills: 0,
+    placement: 40,
+    startTime: 0,
+    winnerName: null,
+  },
+  player: null,
+  bots: [],
+  lootItems: [],
+  chests: [],
+  ammoBoxes: [],
+  build: {
+    pieces: new Map(),
+    mode: null,
+    mat: 'wood',
+  },
+  storm: null,
+  bus: null,
+  settings: {
+    quality: 'high',
+    sens: 1.0,
+    invertX: false,
+    invertY: false,
+    volume: 0.8,
+  },
+  timeScale: 1,
+  scene: null,
+  camera: null,
+  renderer: null,
+  composer: null,
+  fps: 60,
+  paused: false,
+};

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOLT RUNNER — High-Speed Platformer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%230b0e1a'/%3E%3Cpath d='M9 1 3 9h3l-1 6 6-8H8l1-6z' fill='%2300e5ff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="src/ui/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/postprocessing/EffectComposer.js": "./vendor/addons/postprocessing/EffectComposer.js",
+    "three/addons/postprocessing/RenderPass.js": "./vendor/addons/postprocessing/RenderPass.js",
+    "three/addons/postprocessing/ShaderPass.js": "./vendor/addons/postprocessing/ShaderPass.js",
+    "three/addons/postprocessing/MaskPass.js": "./vendor/addons/postprocessing/MaskPass.js",
+    "three/addons/postprocessing/Pass.js": "./vendor/addons/postprocessing/Pass.js",
+    "three/addons/postprocessing/UnrealBloomPass.js": "./vendor/addons/postprocessing/UnrealBloomPass.js",
+    "three/addons/postprocessing/OutputPass.js": "./vendor/addons/postprocessing/OutputPass.js",
+    "three/addons/shaders/CopyShader.js": "./vendor/addons/shaders/CopyShader.js",
+    "three/addons/shaders/LuminosityHighPassShader.js": "./vendor/addons/shaders/LuminosityHighPassShader.js",
+    "three/addons/shaders/OutputShader.js": "./vendor/addons/shaders/OutputShader.js"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<!-- Boot / Loading -->
+<div id="boot" class="screen">
+  <div class="boot-inner">
+    <h1 class="logo">VOLT<span>RUNNER</span></h1>
+    <div class="bootbar"><div id="bootbar-fill"></div></div>
+    <div id="bootmsg">Charging capacitors…</div>
+  </div>
+</div>
+
+<!-- Title -->
+<div id="title" class="screen hidden">
+  <div class="title-bg"></div>
+  <div class="title-inner">
+    <h1 class="logo big">VOLT<span>RUNNER</span></h1>
+    <p class="tagline">Momentum is everything.</p>
+    <div class="menu">
+      <button id="btn-play" class="mbtn primary">▶&nbsp; PLAY</button>
+      <button id="btn-levels" class="mbtn">LEVEL SELECT</button>
+      <button id="btn-controls" class="mbtn">CONTROLS</button>
+      <button id="btn-options" class="mbtn">OPTIONS</button>
+    </div>
+    <p class="hint">Best experienced with headphones · Click PLAY, then click the game to capture your mouse</p>
+  </div>
+</div>
+
+<!-- Level select -->
+<div id="levelselect" class="screen hidden">
+  <h2 class="panel-title">SELECT ZONE</h2>
+  <div id="level-cards" class="cards"></div>
+  <button id="btn-levels-back" class="mbtn back">← BACK</button>
+</div>
+
+<!-- Controls -->
+<div id="controls-panel" class="screen hidden">
+  <h2 class="panel-title">CONTROLS</h2>
+  <div class="ctl-grid">
+    <div><kbd>W A S D</kbd></div><div>Run / steer (camera-relative)</div>
+    <div><kbd>SPACE</kbd></div><div>Jump (hold = higher)</div>
+    <div><kbd>SHIFT</kbd></div><div>Boost (drains gauge)</div>
+    <div><kbd>CLICK / F</kbd></div><div>Attack · Homing strike (in air)</div>
+    <div><kbd>C</kbd></div><div>Stomp slam (in air)</div>
+    <div><kbd>A / D ×2</kbd></div><div>Quick-step dodge (double-tap)</div>
+    <div><kbd>MOUSE</kbd></div><div>Camera (click game to capture)</div>
+    <div><kbd>R</kbd></div><div>Respawn at checkpoint</div>
+    <div><kbd>ESC</kbd></div><div>Pause</div>
+  </div>
+  <p class="tip">TIP: Downhill slopes build speed · Dash panels &amp; springs keep it · Rails carry it across gaps.</p>
+  <button id="btn-controls-back" class="mbtn back">← BACK</button>
+</div>
+
+<!-- Options -->
+<div id="options-panel" class="screen hidden">
+  <h2 class="panel-title">OPTIONS</h2>
+  <div class="opt-grid">
+    <label>GFX Quality</label>
+    <select id="opt-quality"><option value="ultra">ULTRA</option><option value="high">HIGH</option><option value="medium">MEDIUM</option><option value="low">LOW</option></select>
+    <label>Invert Mouse X</label>
+    <input type="checkbox" id="opt-invx">
+    <label>Invert Mouse Y</label>
+    <input type="checkbox" id="opt-invy">
+    <label>Music Volume</label>
+    <input type="range" id="opt-music" min="0" max="100" value="55">
+    <label>SFX Volume</label>
+    <input type="range" id="opt-sfx" min="0" max="100" value="80">
+  </div>
+  <button id="btn-options-back" class="mbtn back">← BACK</button>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div class="hud-tl">
+    <div class="stat"><span class="lbl">TIME</span><span id="hud-time">0:00.00</span></div>
+    <div class="stat"><span class="lbl">VOLTS</span><span id="hud-volts">0</span></div>
+  </div>
+  <div class="hud-tr">
+    <div class="hearts" id="hud-hearts"></div>
+    <div class="gemrow" id="hud-gems"></div>
+  </div>
+  <div class="hud-br">
+    <div id="hud-speed-wrap">
+      <div id="hud-speed">0</div><div class="unit">KM/H</div>
+      <div class="boostbar"><div id="hud-boost-fill"></div></div>
+      <div class="boostlbl">BOOST</div>
+    </div>
+  </div>
+  <div id="hud-combo"></div>
+  <div id="hud-objective"></div>
+  <div id="hud-toast"></div>
+  <div id="hud-centermsg"></div>
+  <div id="lock-hint" class="hidden">🖱 CLICK TO CAPTURE MOUSE — ESC TO PAUSE</div>
+</div>
+
+<!-- Pause -->
+<div id="pause" class="screen trans hidden">
+  <h2 class="panel-title">PAUSED</h2>
+  <div class="menu col">
+    <button id="btn-resume" class="mbtn primary">RESUME</button>
+    <button id="btn-restart" class="mbtn">RESTART LEVEL</button>
+    <button id="btn-quit" class="mbtn">QUIT TO MENU</button>
+  </div>
+</div>
+
+<!-- Results -->
+<div id="results" class="screen trans hidden">
+  <div class="res-inner">
+    <div id="res-rank">S</div>
+    <h2 id="res-title">ZONE CLEAR!</h2>
+    <div class="res-stats" id="res-stats"></div>
+    <div class="menu row">
+      <button id="btn-retry" class="mbtn">RETRY</button>
+      <button id="btn-next" class="mbtn primary">NEXT ZONE ▶</button>
+      <button id="btn-res-menu" class="mbtn">MENU</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

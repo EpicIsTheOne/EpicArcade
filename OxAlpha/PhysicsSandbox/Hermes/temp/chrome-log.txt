@@ -1,0 +1,13 @@
+
+DevTools listening on ws://127.0.0.1:9577/devtools/browser/48cac768-4427-4d59-9712-97730c7ca576
+[5724:93524:0825/211126.519:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR
+[5724:93524:0825/211126.532:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR
+[5724:93524:0825/211126.535:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR
+[5724:96152:0825/211131.403:ERROR:extensions\browser\crx_installer.cc:1008] Could not load javascript 'content_scripts/embeddedpdfs/embedded-pdf-touch-point-event-listener.js' for script. efaidnbmnnnibpcajpcglclefindmkaj 
+Created TensorFlow Lite XNNPACK delegate for CPU.
+[5724:93524:0825/211154.480:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[5724:93524:0825/211251.135:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[5724:93524:0825/211433.334:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[5724:93524:0825/211810.889:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[5724:93524:0825/212542.720:ERROR:google_apis\gcm\engine\registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[5724:7456:0825/215811.068:ERROR:components\device_event_log\device_event_log_impl.cc:200] [21:58:11.069] USB: usb_service_win.cc:108 SetupDiGetDeviceProperty({{A45C254E-DF1C-4EFD-8020-67D146A850E0}, 6}) failed: Element not found. (0x490)

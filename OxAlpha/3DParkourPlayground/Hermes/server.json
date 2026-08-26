@@ -1,0 +1,5 @@
+{
+  "port": 20504,
+  "pid": 37320,
+  "note": "SKYDASH run-01 static server (Windows PID); kill only this PID at teardown. Restart: cmd /c .e2e\\start-server.cmd"
+}

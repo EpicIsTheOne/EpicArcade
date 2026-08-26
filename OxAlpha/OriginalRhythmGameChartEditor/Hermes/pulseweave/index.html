@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PULSEWEAVE — Rhythm Game + Chart Editor</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230b0e1f'/><path d='M4 20 L9 20 L12 8 L16 26 L20 13 L23 20 L28 20' stroke='%2335e6ff' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== BOOT ===== -->
+  <div id="bootScreen" class="screen">
+    <div class="boot-inner">
+      <div class="logo small"><span>PULSE</span><span class="l2">WEAVE</span></div>
+      <div class="boot-bar"><div id="bootBar"></div></div>
+      <div id="bootMsg" class="dim">composing audio…</div>
+    </div>
+  </div>
+
+  <!-- ===== MENU ===== -->
+  <div id="menuScreen" class="screen hidden">
+    <canvas id="menuCanvas"></canvas>
+    <div class="menu-inner">
+      <div class="logo"><span>PULSE</span><span class="l2">WEAVE</span></div>
+      <div class="tagline">weave the rhythm · forge the chart</div>
+
+      <div class="panel song-panel">
+        <div class="song-title-row">
+          <div>
+            <div class="song-name" id="songName">Neon Meridian</div>
+            <div class="song-artist dim" id="songArtist">PULSEWEAVE Sound Lab · original synthesis</div>
+          </div>
+          <div class="song-len dim" id="songLen">--</div>
+        </div>
+        <div class="diff-row" id="diffRow">
+          <!-- diff cards injected -->
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn primary" id="btnPlay">▶&nbsp; PLAY</button>
+        <button class="btn" id="btnEditor">✎&nbsp; CHART EDITOR</button>
+        <button class="btn" id="btnSettings">⚙&nbsp; SETTINGS</button>
+        <button class="btn" id="btnHelp">?&nbsp; HOW TO PLAY</button>
+      </div>
+      <div class="hint dim">Keys <b>D&nbsp;F&nbsp;J&nbsp;K</b> hit lanes · <b>ESC</b> pauses · hold long notes to their tail</div>
+    </div>
+    <div class="footer dim">PULSEWEAVE · an original browser rhythm game with a built-in chart editor · all audio synthesized locally</div>
+  </div>
+
+  <!-- ===== GAME ===== -->
+  <div id="gameScreen" class="screen hidden">
+    <canvas id="gameCanvas"></canvas>
+    <div id="hud">
+      <div id="hudScore">000000</div>
+      <div id="hudRight">
+        <div id="hudAcc">100.00%</div>
+        <div id="hudMiss" class="dim">miss 0</div>
+      </div>
+      <div id="progressWrap"><div id="progressFill"></div><div id="progressKnob"></div></div>
+      <div id="hudSong" class="dim"></div>
+      <button id="btnPauseGame" title="Pause (Esc)">⏸</button>
+    </div>
+    <div id="countdownOverlay" class="hidden"></div>
+    <div id="pauseOverlay" class="overlay hidden">
+      <div class="overlay-card">
+        <h2>PAUSED</h2>
+        <div class="pause-stats dim" id="pauseStats"></div>
+        <div class="btn-col">
+          <button class="btn primary" id="btnResume">Resume</button>
+          <button class="btn" id="btnRestart">Restart</button>
+          <button class="btn" id="btnQuit">Quit</button>
+        </div>
+      </div>
+    </div>
+    <div id="flashLayer"></div>
+  </div>
+
+  <!-- ===== RESULTS ===== -->
+  <div id="resultsScreen" class="screen hidden">
+    <canvas id="resultsCanvas"></canvas>
+    <div class="results-inner">
+      <div class="res-song dim" id="resSong"></div>
+      <div class="res-grade-wrap">
+        <svg id="gradeRing" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="54" class="ring-bg"/>
+          <circle cx="60" cy="60" r="54" id="gradeArc"/>
+          <text x="60" y="74" text-anchor="middle" id="gradeLetter">S</text>
+        </svg>
+        <div id="newRecord" class="hidden">NEW RECORD!</div>
+      </div>
+      <div class="res-score-big" id="resScore">0</div>
+      <div class="res-grid">
+        <div class="cell"><span class="lbl">PERFECT</span><span class="val p1" id="resPerfect">0</span></div>
+        <div class="cell"><span class="lbl">GREAT</span><span class="val p2" id="resGreat">0</span></div>
+        <div class="cell"><span class="lbl">GOOD</span><span class="val p3" id="resGood">0</span></div>
+        <div class="cell"><span class="lbl">MISS</span><span class="val p4" id="resMiss">0</span></div>
+        <div class="cell"><span class="lbl">MAX COMBO</span><span class="val" id="resCombo">0</span></div>
+        <div class="cell"><span class="lbl">ACCURACY</span><span class="val" id="resAcc">0%</span></div>
+      </div>
+      <div class="btn-row center">
+        <button class="btn primary" id="btnRetry">↻ Retry</button>
+        <button class="btn" id="btnResEditor">✎ Editor</button>
+        <button class="btn" id="btnResMenu">☰ Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== EDITOR ===== -->
+  <div id="editorScreen" class="screen hidden">
+    <div id="edToolbar">
+      <button class="tbtn" id="edBack" title="Back to menu">← Menu</button>
+      <div class="tsep"></div>
+      <label class="tlabel">Title <input id="edTitle" type="text" spellcheck="false"></label>
+      <label class="tlabel">BPM <input id="edBpm" type="number" step="0.5" min="40" max="300"></label>
+      <label class="tlabel">Offset(ms) <input id="edOffset" type="number" step="1" min="-2000" max="2000"></label>
+      <div class="tsep"></div>
+      <label class="tlabel">Snap
+        <select id="edSnap">
+          <option value="1">1/1</option><option value="2">1/2</option>
+          <option value="4" selected>1/4</option><option value="8">1/8</option>
+          <option value="16">1/16</option>
+        </select>
+      </label>
+      <button class="tbtn" id="edZoomOut" title="Zoom out (-)">−</button>
+      <button class="tbtn" id="edZoomIn" title="Zoom in (+)">+</button>
+      <div class="tsep"></div>
+      <button class="tbtn accent" id="edPlaytest" title="Playtest from playhead (T)">▶ Playtest</button>
+      <button class="tbtn" id="edSave" title="Save chart (Ctrl+S)">💾 Save</button>
+      <button class="tbtn" id="edExport" title="Download .json">⬇ Export</button>
+      <label class="tbtn file-btn" title="Import chart .json">⬆ Import<input type="file" id="edImport" accept=".json,application/json"></label>
+      <button class="tbtn" id="edRestore" title="Discard edits, restore bundled chart">↺ Original</button>
+      <button class="tbtn" id="edHelp" title="Shortcuts">?</button>
+      <span id="edBadge" class="badge hidden">edited</span>
+    </div>
+    <div id="edCanvasWrap"><canvas id="edCanvas"></canvas>
+      <div id="edTip" class="dim">Click empty grid: place tap · drag note: move · drag hold edge: resize · right-click: delete · Space: play · T: playtest</div>
+    </div>
+    <div id="edTransport">
+      <button class="tbtn" id="edStop" title="Stop / to start">⏮</button>
+      <button class="tbtn wide" id="edPlay" title="Play/Pause (Space)">▶ Play</button>
+      <span id="edTime" class="mono">0:00.00</span>
+      <input type="range" id="edSeek" min="0" max="1000" value="0">
+      <span id="edBeatInfo" class="mono dim"></span>
+      <span id="edSelInfo" class="mono dim"></span>
+    </div>
+  </div>
+
+  <!-- ===== MODALS ===== -->
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card">
+      <h2>SETTINGS</h2>
+      <div class="set-row"><label>Note speed <span id="speedVal" class="mono"></span></label><input type="range" id="setSpeed" min="500" max="1400" step="20"></div>
+      <div class="set-row"><label>Volume <span id="volVal" class="mono"></span></label><input type="range" id="setVol" min="0" max="100" step="1"></div>
+      <div class="set-row"><label>Audio offset <span id="offVal" class="mono"></span></label><input type="range" id="setOff" min="-150" max="150" step="1"></div>
+      <div class="dim small-note">Positive = you hit late → notes judged slightly later. Use CALIBRATE to measure automatically.</div>
+      <div class="btn-row center">
+        <button class="btn" id="btnCalibrate">🎯 Calibrate latency</button>
+        <button class="btn primary" id="btnCloseSettings">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="calibModal" class="modal hidden">
+    <div class="modal-card">
+      <h2>LATENCY CALIBRATION</h2>
+      <p class="dim">Press <b>K</b> (or tap below) exactly when the circle flashes. ~16 ticks.</p>
+      <div id="calibStage"><div id="calibRing"></div><div id="calibHint">click to begin</div></div>
+      <div id="calibResult" class="mono"></div>
+      <div class="btn-row center">
+        <button class="btn primary" id="btnApplyCalib" disabled>Apply</button>
+        <button class="btn" id="btnCloseCalib">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="helpModal" class="modal hidden">
+    <div class="modal-card help">
+      <h2>HOW TO PLAY</h2>
+      <table class="help-table">
+        <tr><td class="k">D F J K</td><td>hit the four lanes when notes reach the receptor line</td></tr>
+        <tr><td class="k">Hold notes</td><td>press on the head, keep holding until the tail passes</td></tr>
+        <tr><td class="k">ESC</td><td>pause / resume</td></tr>
+        <tr><td class="k">± / − +</td><td>in editor: zoom timeline</td></tr>
+      </table>
+      <p>Judgement windows — <b class="p1">PERFECT ±45ms</b> · <b class="p2">GREAT ±90ms</b> · <b class="p3">GOOD ±135ms</b>. Accuracy weighs Perfect 100% / Great 70% / Good 30%. Grades: SSS ≥99%, SS ≥97, S ≥94, A ≥88, B ≥80, C ≥70.</p>
+      <h3>EDITOR SHORTCUTS</h3>
+      <table class="help-table">
+        <tr><td class="k">Space</td><td>play / pause preview</td></tr>
+        <tr><td class="k">T</td><td>playtest from playhead</td></tr>
+        <tr><td class="k">Click empty cell</td><td>place tap note (snapped)</td></tr>
+        <tr><td class="k">Drag note</td><td>move it · drag its right edge to resize holds</td></tr>
+        <tr><td class="k">Right-click / Del</td><td>delete note under cursor / selection</td></tr>
+        <tr><td class="k">Ctrl+Z / Ctrl+Y</td><td>undo / redo</td></tr>
+        <tr><td class="k">Ctrl+S</td><td>save chart (persists, game uses it)</td></tr>
+        <tr><td class="k">Home / ←→</td><td>jump to start / nudge selection</td></tr>
+        <tr><td class="k">Mouse wheel</td><td>scroll · ctrl+wheel zoom</td></tr>
+      </table>
+      <div class="btn-row center"><button class="btn primary" id="btnCloseHelp">Got it</button></div>
+    </div>
+  </div>
+
+  <div id="toasts"></div>
+</div>
+
+<script src="js/music.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

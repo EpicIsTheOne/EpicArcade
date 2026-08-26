@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EMBERFALL — Boss Fight</title>
+<link rel="icon" href="data:,">
+<!-- EMBERFALL run-01 :: bossfight-ox-alpha :: sweep-9f1928d5 [identity marker] -->
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="game" width="1280" height="720"></canvas>
+
+  <!-- ============ TITLE ============ -->
+  <div class="screen show" id="scr-title">
+    <div class="title-block">
+      <div class="logo">EMBERFALL</div>
+      <div class="tagline">the Cinder Sovereign awaits</div>
+    </div>
+    <button class="btn primary" id="btn-start">BEGIN THE HUNT</button>
+    <div class="controls-card">
+      <div class="cc-row"><span class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></span><span>move</span></div>
+      <div class="cc-row"><span class="keys"><kbd>LMB</kbd> / <kbd>J</kbd></span><span>slash (aim with mouse)</span></div>
+      <div class="cc-row"><span class="keys"><kbd>SPACE</kbd></span><span>dash — brief invulnerability</span></div>
+      <div class="cc-row"><span class="keys"><kbd>ESC</kbd> / <kbd>M</kbd></span><span>pause / mute</span></div>
+    </div>
+    <div class="foot">read his patterns · strike between attacks · sound on 🔊</div>
+  </div>
+
+  <!-- ============ PAUSE ============ -->
+  <div class="screen" id="scr-pause">
+    <div class="big-word small">PAUSED</div>
+    <div class="controls-card dim">
+      <div class="cc-row"><span class="keys"><kbd>WASD</kbd></span><span>move</span></div>
+      <div class="cc-row"><span class="keys"><kbd>LMB</kbd>/<kbd>J</kbd></span><span>slash</span></div>
+      <div class="cc-row"><span class="keys"><kbd>SPACE</kbd></span><span>dash (i-frames)</span></div>
+    </div>
+    <button class="btn primary" id="btn-resume">RESUME</button>
+    <button class="btn" id="btn-restart-p">RESTART FIGHT</button>
+    <button class="btn ghost" id="btn-title-p">TITLE</button>
+  </div>
+
+  <!-- ============ END (victory / defeat) ============ -->
+  <div class="screen" id="scr-end">
+    <div class="big-word" id="end-word">VICTORY</div>
+    <div class="end-sub" id="end-sub"></div>
+    <div class="stats-card" id="end-stats"></div>
+    <button class="btn primary" id="btn-restart">REMATCH&nbsp;&nbsp;[R]</button>
+    <button class="btn ghost" id="btn-title">RETURN TO TITLE</button>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/player.js"></script>
+<script src="js/boss.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

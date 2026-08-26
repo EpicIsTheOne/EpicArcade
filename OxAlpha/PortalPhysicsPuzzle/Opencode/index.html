@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THRESHOLD — Kestrel Deep Research Facility</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='13' cy='16' r='9' fill='none' stroke='%233fc1ff' stroke-width='3'/%3E%3Ccircle cx='21' cy='16' r='6' fill='%23ff9a3c' fill-opacity='0.85'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --blue:#3fc1ff; --orange:#ff9a3c; --bg:#0b0e12; --panel:#12171d;
+    --text:#d7dee6; --dim:#7d8894; --accent:#57e6c8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
+    font-family:"Segoe UI",system-ui,sans-serif;color:var(--text);user-select:none}
+  #app{position:fixed;inset:0}
+  canvas{display:block;width:100%;height:100%}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .4s}
+  #hud.on{opacity:1}
+  #crosshair{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+  #crosshair svg{display:block}
+  .chamber-card{position:absolute;top:64px;left:50%;transform:translateX(-50%);
+    text-align:center;opacity:0;transition:opacity .8s}
+  .chamber-card.show{opacity:1}
+  .chamber-card h2{font-size:15px;letter-spacing:.45em;font-weight:600;color:var(--accent);text-transform:uppercase}
+  .chamber-card p{font-size:11px;letter-spacing:.25em;color:var(--dim);margin-top:6px;text-transform:uppercase}
+  #subtitle{position:absolute;left:50%;bottom:12%;transform:translateX(-50%);
+    max-width:760px;text-align:center;background:rgba(8,11,14,.72);border:1px solid rgba(87,230,200,.18);
+    padding:10px 22px;border-radius:6px;font-size:16.5px;line-height:1.5;display:none}
+  #subtitle b{color:var(--accent)}
+  #prompt{position:absolute;left:50%;top:58%;transform:translateX(-50%);
+    background:rgba(8,11,14,.66);padding:6px 14px;border-radius:4px;font-size:13px;letter-spacing:.08em;display:none;border:1px solid rgba(255,255,255,.12)}
+  #prompt kbd{color:var(--orange);font-family:inherit}
+  #hint{position:absolute;left:24px;bottom:20px;font-size:12px;color:var(--dim);letter-spacing:.06em;line-height:1.7}
+  #perfHud{position:absolute;right:14px;top:12px;font-size:11px;color:rgba(125,136,148,.85);
+    text-align:right;display:none;font-variant-numeric:tabular-nums}
+
+  /* ---------- Menus ---------- */
+  .screen{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;background:radial-gradient(ellipse at 50% 35%, rgba(23,34,44,.92), rgba(7,9,12,.97) 70%);
+    z-index:10;transition:opacity .45s}
+  .screen.hidden{opacity:0;pointer-events:none}
+  .logo{font-size:52px;font-weight:200;letter-spacing:.55em;text-indent:.55em;margin-bottom:2px}
+  .logo b{font-weight:700;color:var(--accent)}
+  .tagline{color:var(--dim);letter-spacing:.3em;font-size:12px;margin-bottom:46px;text-transform:uppercase}
+  .menu{display:flex;flex-direction:column;gap:12px;min-width:320px}
+  button.mi{background:rgba(255,255,255,.04);border:1px solid rgba(215,222,230,.16);color:var(--text);
+    font:inherit;font-size:15px;letter-spacing:.22em;padding:13px 26px;cursor:pointer;text-transform:uppercase;
+    transition:all .15s;text-indent:.22em}
+  button.mi:hover:not(:disabled){background:rgba(87,230,200,.12);border-color:var(--accent);color:#fff}
+  button.mi:disabled{opacity:.35;cursor:default}
+  .footnote{position:absolute;bottom:26px;font-size:11px;color:var(--dim);letter-spacing:.14em;text-align:center;line-height:1.8}
+  .panelbox{background:var(--panel);border:1px solid rgba(255,255,255,.09);padding:30px 36px;border-radius:8px;min-width:420px}
+  .panelbox h3{font-weight:400;letter-spacing:.3em;font-size:13px;color:var(--accent);margin-bottom:22px;text-transform:uppercase}
+  .row{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;font-size:14px}
+  .row label{color:var(--dim)}
+  input[type=range]{width:170px;accent-color:var(--accent)}
+  select{background:#0d1116;color:var(--text);border:1px solid rgba(255,255,255,.15);padding:5px 10px;font:inherit;font-size:13px}
+  .backbtn{margin-top:8px;width:100%}
+  #chapters{display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:10px;max-height:52vh;overflow-y:auto;padding-right:6px}
+  #chapters button.mi{padding:10px;font-size:12px;letter-spacing:.12em;text-align:left;text-indent:0}
+  .kbd-table{font-size:13.5px;line-height:2.05;color:var(--dim)}
+  .kbd-table b{color:var(--text);display:inline-block;min-width:150px;font-weight:600}
+  .kbd-table i{color:var(--orange);font-style:normal;border:1px solid rgba(255,154,60,.4);border-radius:3px;padding:0 7px;margin-right:6px;font-size:12px}
+  #fadeout{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .6s;z-index:9}
+  #fadeout.on{opacity:1;pointer-events:all}
+  #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;
+    background:var(--bg);z-index:20;transition:opacity .5s;gap:18px}
+  #loading.hidden{opacity:0;pointer-events:none}
+  .loadring{width:42px;height:42px;border-radius:50%;border:3px solid rgba(87,230,200,.15);border-top-color:var(--accent);animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="hud">
+  <div id="crosshair">
+    <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+      <line x1="22" y1="14" x2="22" y2="19" stroke="#d7dee6" stroke-width="1.6"/>
+      <line x1="22" y1="25" x2="22" y2="30" stroke="#d7dee6" stroke-width="1.6"/>
+      <line x1="14" y1="22" x2="19" y2="22" stroke="#d7dee6" stroke-width="1.6"/>
+      <line x1="25" y1="22" x2="30" y2="22" stroke="#d7dee6" stroke-width="1.6"/>
+      <circle id="dotB" cx="17.5" cy="17.5" r="2.6" stroke="#3fc1ff" stroke-width="1.4" opacity=".28"/>
+      <circle id="dotO" cx="26.5" cy="17.5" r="2.6" stroke="#ff9a3c" stroke-width="1.4" opacity=".28"/>
+    </svg>
+  </div>
+  <div class="chamber-card" id="chamberCard"><h2 id="ccTitle"></h2><p id="ccSub"></p></div>
+  <div id="subtitle"></div>
+  <div id="prompt"></div>
+  <div id="hint">W A S D move &nbsp;·&nbsp; Space jump &nbsp;·&nbsp; E grab / use<br>Left click — blue portal &nbsp;·&nbsp; Right click — orange portal &nbsp;·&nbsp; R restart chamber &nbsp;·&nbsp; Esc pause</div>
+  <div id="perfHud"></div>
+</div>
+
+<div id="fadeout"></div>
+
+<div class="screen" id="menuMain">
+  <div class="logo">THRESH<b>O</b>LD</div>
+  <div class="tagline">Kestrel Deep Research · Kinetics Evaluation Protocol</div>
+  <div class="menu">
+    <button class="mi" id="btnNew">Begin Evaluation</button>
+    <button class="mi" id="btnContinue">Resume Session</button>
+    <button class="mi" id="btnChapters">Chamber Select</button>
+    <button class="mi" id="btnSettings">Settings</button>
+    <button class="mi" id="btnControls">Controls</button>
+  </div>
+  <div class="footnote">An original first-person spatial puzzle experience.<br>Momentum is conserved. Management is watching.</div>
+</div>
+
+<div class="screen hidden" id="menuPause">
+  <div class="panelbox">
+    <h3>Evaluation Paused</h3>
+    <div class="menu">
+      <button class="mi" id="btnResume">Resume</button>
+      <button class="mi" id="btnRestartChamber">Restart Chamber</button>
+      <button class="mi" id="btnPauseSettings">Settings</button>
+      <button class="mi" id="btnQuitMenu">Quit To Menu</button>
+    </div>
+  </div>
+</div>
+
+<div class="screen hidden" id="menuSettings">
+  <div class="panelbox">
+    <h3>Settings</h3>
+    <div class="row"><label>Invert Mouse X</label><input type="checkbox" id="setInvX"></div>
+    <div class="row"><label>Invert Mouse Y</label><input type="checkbox" id="setInvY"></div>
+    <div class="row"><label>Mouse Sensitivity</label><input type="range" id="setSens" min="0.3" max="2.5" step="0.05" value="1"></div>
+    <div class="row"><label>Field of View</label><input type="range" id="setFov" min="70" max="110" step="1" value="90"></div>
+    <div class="row"><label>Graphics Quality</label>
+      <select id="setQuality"><option value="ultra">Ultra</option><option value="high">High</option><option value="medium">Medium</option></select></div>
+    <div class="row"><label>Master Volume</label><input type="range" id="setVol" min="0" max="1" step="0.02" value="0.8"></div>
+    <button class="mi backbtn" id="btnSetBack">Back</button>
+  </div>
+</div>
+
+<div class="screen hidden" id="menuControls">
+  <div class="panelbox">
+    <h3>Controls</h3>
+    <div class="kbd-table">
+      <div><i>W A S D</i><b>Move</b> relative to view</div>
+      <div><i>Mouse</i><b>Look</b> right = right · up = up</div>
+      <div><i>Space</i><b>Jump</b></div>
+      <div><i>LMB</i><b>Blue portal</b> on white panel surfaces</div>
+      <div><i>RMB</i><b>Orange portal</b></div>
+      <div><i>E</i><b>Grab / Drop</b> cubes · press pedestal buttons</div>
+      <div><i>R</i><b>Restart chamber</b></div>
+      <div><i>Esc</i><b>Pause</b></div>
+    </div>
+    <button class="mi backbtn" id="btnCtrlBack">Back</button>
+  </div>
+</div>
+
+<div class="screen hidden" id="menuChapters">
+  <div class="panelbox">
+    <h3>Chamber Select</h3>
+    <div id="chapters"></div>
+    <button class="mi backbtn" id="btnChapBack">Back</button>
+  </div>
+</div>
+
+<div id="loading"><div class="loadring"></div><div style="letter-spacing:.3em;color:var(--dim);font-size:12px">CALIBRATING APERTURES</div></div>
+
+<script type="importmap">
+{"imports":{"three":"./vendor/three/build/three.module.js","three/addons/":"./vendor/three/examples/jsm/"}}
+</script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

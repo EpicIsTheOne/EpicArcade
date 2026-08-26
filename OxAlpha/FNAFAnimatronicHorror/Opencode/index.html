@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>STARLIGHT PLAYHOUSE — Night Shift</title>
+<link rel="stylesheet" href="css/style.css?v=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>★</text></svg>">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js"}}</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+  <div id="flash"></div>
+
+  <div id="panels" class="layer"></div>
+
+  <div id="hud" class="layer hide">
+    <div id="hud-left">
+      <div class="hud-row"><span class="hud-label">POWER</span><span id="power-pct">100%</span></div>
+      <div id="usage"><i></i><i></i><i></i><i></i><i></i></div>
+      <div id="power-warn" class="hide">LOW POWER</div>
+      <div id="snare-state"></div>
+    </div>
+    <div id="hud-right">
+      <div id="clock">12:00 AM</div>
+      <div id="night-label">NIGHT 1</div>
+    </div>
+    <div id="subtitle"></div>
+  </div>
+
+  <div id="mon" class="layer hide">
+    <div id="mon-top">
+      <div id="cam-name">CAM 01 · SHOW STAGE</div>
+      <div id="cam-rec"><span class="dot"></span>REC</div>
+      <div id="cam-ts">11-06-1993&nbsp;&nbsp;12:00 AM</div>
+    </div>
+    <div id="cam-audio-tag" class="hide">◉ AUDIO ONLY</div>
+    <div id="map-wrap">
+      <div id="map-title">FLOOR MAP</div>
+      <div id="map"></div>
+      <div id="map-hint">click: switch cam · [T] lure mode</div>
+    </div>
+    <div id="mon-bottom">
+      <div id="lure-btn" class="mon-btn">🔊 AUDIO LURE [T]</div>
+      <div id="snare-btn" class="mon-btn">⚡ VENT SNARE [G]</div>
+      <div id="mon-close">▼ LOWER MONITOR [SPACE]</div>
+    </div>
+  </div>
+
+  <div id="flip" class="layer"></div>
+
+  <div id="screens" class="layer">
+    <div id="menu" class="screen hide">
+      <div id="title-block">
+        <div id="title-star">★</div>
+        <h1 id="title">STARLIGHT<br>PLAYHOUSE</h1>
+        <div id="title-sub">NIGHT SHIFT · SECURITY TERMINAL v2.3</div>
+      </div>
+      <div id="menu-buttons">
+        <button class="btn big" id="btn-continue" disabled>CONTINUE</button>
+        <button class="btn big" id="btn-new">NEW SHIFT</button>
+        <div id="night-row"></div>
+        <button class="btn" id="btn-archive">ARCHIVE</button>
+        <button class="btn" id="btn-settings">SETTINGS</button>
+        <button class="btn" id="btn-help">HOW TO SURVIVE</button>
+      </div>
+      <div id="menu-foot">An original animatronic survival experience.<br>Headphones strongly recommended.</div>
+    </div>
+
+    <div id="intro" class="screen hide">
+      <div id="intro-box">
+        <div id="intro-head"></div>
+        <div id="intro-text"></div>
+        <div id="intro-skip">[CLICK / SPACE TO SKIP]</div>
+      </div>
+    </div>
+
+    <div id="pause" class="screen hide">
+      <h2>PAUSED</h2>
+      <button class="btn big" id="btn-resume">RESUME</button>
+      <button class="btn" id="btn-restart">RESTART NIGHT</button>
+      <button class="btn" id="btn-quit">QUIT TO MENU</button>
+    </div>
+
+    <div id="helpscr" class="screen hide">
+      <div id="help-box">
+        <h2>NIGHT GUARD ORIENTATION</h2>
+        <div class="cols">
+          <div>
+            <h3>OFFICE</h3>
+            <p><b>MOVE MOUSE</b> — look around (right = right)</p>
+            <p><b>A / D</b> or <b>← →</b> — turn</p>
+            <p><b>Q / E</b> — left / right DOOR</p>
+            <p><b>Z / C</b> (hold) — left / right hall LIGHT</p>
+            <p><b>F / G</b> — seal WEST / EAST vent HATCH</p>
+            <p><b>X</b> — flash both VENTS</p>
+            <p><b>SPACE / S</b> — raise / lower MONITOR</p>
+          </div>
+          <div>
+            <h3>CAMERAS</h3>
+            <p><b>1–9 / CLICK MAP</b> — switch feed · <b>← →</b> cycle</p>
+            <p><b>T</b> — audio lure: then click a room to play a child's lullaby there. Lures SELENE, sometimes STRIX.</p>
+            <p><b>B</b> — arm VENT SNARE (both vents, 20s, costs power)</p>
+          </div>
+          <div>
+            <h3>SURVIVAL</h3>
+            <p>Everything drains POWER. At 0% you are defenseless.</p>
+            <p>Listen. Every animatronic announces itself differently.</p>
+            <p>Survive until <b>6 AM</b>. Learn their patterns.</p>
+            <p class="warn">If you see something wrong on a feed, look away.</p>
+          </div>
+        </div>
+        <button class="btn big" id="btn-help-close">BACK</button>
+      </div>
+    </div>
+
+    <div id="archive" class="screen hide">
+      <h2>EVIDENCE ARCHIVE</h2>
+      <div id="archive-list"></div>
+      <button class="btn big" id="btn-archive-back">BACK</button>
+    </div>
+
+    <div id="settings" class="screen hide">
+      <h2>SETTINGS</h2>
+      <div id="settings-box">
+        <label>MASTER VOLUME <input type="range" id="set-vol" min="0" max="100" value="80"><span id="set-vol-v">80</span></label>
+        <label>LOOK SENSITIVITY <input type="range" id="set-sens" min="20" max="200" value="100"><span id="set-sens-v">1.0</span></label>
+        <label class="chk"><input type="checkbox" id="set-inv-x"> INVERT LOOK X</label>
+        <label class="chk"><input type="checkbox" id="set-inv-y"> INVERT LOOK Y</label>
+        <label>GRAPHICS
+          <select id="set-gfx">
+            <option value="ultra">ULTRA</option>
+            <option value="high">HIGH</option>
+            <option value="lite">LITE</option>
+          </select>
+        </label>
+        <label class="chk"><input type="checkbox" id="set-subs" checked> SOUND SUBTITLES</label>
+      </div>
+      <button class="btn big" id="btn-settings-back">BACK</button>
+    </div>
+
+    <div id="gameover" class="screen hide">
+      <div id="go-static"></div>
+      <h1 id="go-title">SIGNAL LOST</h1>
+      <div id="go-by"></div>
+      <div id="go-tip"></div>
+      <button class="btn big" id="btn-retry">TRY AGAIN</button>
+      <button class="btn" id="btn-go-menu">MAIN MENU</button>
+    </div>
+
+    <div id="win" class="screen hide">
+      <h1 id="win-time">6:00 AM</h1>
+      <div id="win-sub"></div>
+      <button class="btn big" id="btn-win-next">CONTINUE</button>
+    </div>
+
+    <div id="sixam-flash" class="hide"></div>
+    <div id="toast"></div>
+  </div>
+</div>
+<div id="boot-error" class="hide"></div>
+<script type="module" src="./js/main.js?v=1"></script>
+</body>
+</html>

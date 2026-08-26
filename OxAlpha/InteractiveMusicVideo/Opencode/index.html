@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON DRIFTER — an interactive music video</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>🌇</text></svg>">
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<!-- section title card -->
+<div id="titlecard"><div class="tc-inner"><span id="tc-num"></span><h2 id="tc-name"></h2><div class="tc-rule"></div></div></div>
+
+<!-- mode toast -->
+<div id="toast"></div>
+
+<!-- landing overlay -->
+<div id="landing">
+  <div class="land-inner">
+    <div class="land-kicker">AN INTERACTIVE MUSIC VIDEO</div>
+    <h1 class="land-title">NEON<br>DRIFTER</h1>
+    <div class="land-sub">original synthwave · seven scenes · one continuous drive</div>
+    <button id="btn-play" type="button">▶&nbsp;&nbsp;PLAY</button>
+    <div class="land-hints">
+      <span><b>move</b> drift the camera</span>
+      <span><b>click</b> pulse the void</span>
+      <span><b>1–7</b> remix visuals</span>
+      <span><b>A</b> auto</span>
+      <span><b>F</b> fullscreen</span>
+    </div>
+    <div class="land-foot">headphones recommended · everything runs locally</div>
+  </div>
+</div>
+
+<!-- end card -->
+<div id="endcard" hidden>
+  <div class="end-inner">
+    <div class="end-fin">FIN.</div>
+    <div class="end-sub">the sun always rises on another loop</div>
+    <button id="btn-replay" type="button">↻&nbsp;&nbsp;WATCH AGAIN</button>
+    <div class="end-hint">tip: press 1–7 during replay to force different visuals</div>
+  </div>
+</div>
+
+<!-- control bar -->
+<div id="controls">
+  <button id="c-play" class="cbtn" title="play/pause (space)">⏸</button>
+  <button id="c-restart" class="cbtn" title="restart (R)">⟲</button>
+  <div id="seekwrap" title="seek (←/→)">
+    <div id="seekbar">
+      <div id="seek-sects"></div>
+      <div id="seek-fill"></div>
+      <div id="seek-knob"></div>
+    </div>
+    <div id="seek-tip" hidden></div>
+  </div>
+  <div id="timebox"><span id="t-cur">0:00</span> / <span id="t-tot">2:46</span></div>
+  <div id="modebox"><span id="mode-label">AUTO</span></div>
+  <button id="c-full" class="cbtn" title="fullscreen (F)">⛶</button>
+</div>
+
+<script src="js/timeline.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/scenes.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

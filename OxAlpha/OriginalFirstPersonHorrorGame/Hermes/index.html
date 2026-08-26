@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HOLLOW SIGNAL</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="An original short first-person horror experience. Kestrel Deep Field Station went dark eleven days ago. You're the contractor they sent.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23070809'/%3E%3Ccircle cx='8' cy='8' r='4' fill='none' stroke='%23a4242b' stroke-width='1.6'/%3E%3Ccircle cx='8' cy='8' r='1.4' fill='%23a4242b'/%3E%3C/svg%3E">
+<style>
+:root{
+  --blood:#a4242b;
+  --blood-dim:#6e181d;
+  --bone:#cfc8ba;
+  --dim:#8a8578;
+  --panel:#101214ee;
+  --line:#2a2d31;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:#000}
+body{
+  font-family:"Segoe UI",system-ui,Arial,sans-serif;color:var(--bone);
+  user-select:none;-webkit-user-select:none;cursor:default;
+}
+canvas{display:block}
+#app{position:fixed;inset:0}
+
+/* ---------- post fx overlays ---------- */
+#vignette{position:fixed;inset:0;pointer-events:none;z-index:20;
+  background:radial-gradient(ellipse at center,transparent 42%,rgba(0,0,0,.55) 78%,rgba(0,0,0,.92) 100%);}
+#grain{position:fixed;inset:-100px;pointer-events:none;z-index:21;opacity:.07;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation:grainShift .45s steps(3) infinite;}
+@keyframes grainShift{
+  0%{transform:translate(0,0)}33%{transform:translate(-40px,25px)}66%{transform:translate(30px,-35px)}100%{transform:translate(0,0)}
+}
+#fearVeil{position:fixed;inset:0;pointer-events:none;z-index:22;opacity:0;transition:opacity .5s;
+  background:radial-gradient(ellipse at center,transparent 30%,rgba(120,10,14,.35) 75%,rgba(60,0,2,.8) 100%);}
+#flashWhite,#flashRed,#flashBlack{position:fixed;inset:0;pointer-events:none;z-index:60;opacity:0;background:#fff}
+#flashRed{background:#7d0d12}
+#flashBlack{background:#000}
+
+/* ---------- generic ---------- */
+.hidden{display:none!important}
+.overlay{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;flex-direction:column}
+button{
+  font-family:inherit;color:var(--bone);background:#15171acc;border:1px solid var(--line);
+  padding:10px 26px;font-size:15px;letter-spacing:.22em;text-transform:uppercase;cursor:pointer;
+  transition:border-color .15s,color .15s,background .15s;
+}
+button:hover{border-color:var(--blood);color:#fff;background:#1d1416ee}
+button:focus-visible{outline:1px dashed var(--dim)}
+input[type=range]{accent-color:var(--blood);width:210px}
+kbd{font-family:Consolas,monospace;border:1px solid #3a3d42;border-bottom-width:2px;padding:1px 7px;border-radius:3px;
+  background:#191b1e;font-size:12px;color:#d8d2c4}
+
+/* ---------- title ---------- */
+#title{background:radial-gradient(ellipse at 50% 120%,#10151c 0%,#05070a 55%,#000 100%);z-index:110}
+#titleInner{text-align:center;margin-top:-2vh}
+#gameTitle{
+  font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:min(9vw,84px);
+  letter-spacing:.34em;text-indent:.34em;color:#ddd6c6;text-shadow:0 0 26px rgba(164,36,43,.25),0 2px 2px #000;
+  animation:titleBreath 6s ease-in-out infinite;
+}
+@keyframes titleBreath{0%,100%{opacity:.92}50%{opacity:1}}
+#gameSub{margin-top:10px;color:var(--dim);letter-spacing:.5em;text-transform:uppercase;font-size:12px}
+#titleButtons{margin-top:52px;display:flex;flex-direction:column;gap:12px;align-items:center}
+#titleButtons button{width:280px}
+#titleWarn{position:absolute;bottom:26px;width:100%;text-align:center;color:#565b61;font-size:11px;letter-spacing:.18em}
+#titleVer{position:absolute;top:18px;right:22px;color:#3c4046;font-size:11px;letter-spacing:.2em}
+#titleFoot{position:absolute;bottom:56px;width:100%;text-align:center;color:#4a4f55;font-size:12px;letter-spacing:.12em;font-style:italic}
+
+/* ---------- intro card ---------- */
+#intro{background:#000;z-index:105}
+#introText{max-width:720px;padding:0 30px;font-size:19px;line-height:2.1;color:#b8b2a4;letter-spacing:.06em;
+  font-family:Consolas,"Courier New",monospace;text-align:left;white-space:pre-wrap}
+#introSkip{position:absolute;bottom:34px;right:44px;color:#555a60;font-size:12px;letter-spacing:.2em}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:30}
+#objective{position:absolute;top:22px;left:26px;max-width:430px}
+#objLabel{font-size:10px;letter-spacing:.34em;color:#6d7266;text-transform:uppercase}
+#objText{font-size:15px;letter-spacing:.08em;color:#cfc8ba;margin-top:5px;text-shadow:0 1px 3px #000;line-height:1.5}
+#objective.pulse #objText{animation:objPulse 2.4s ease-out}
+@keyframes objPulse{0%{color:#e8ddba;text-shadow:0 0 14px rgba(220,190,120,.5)}100%{}}
+#crosshair{position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px;border-radius:50%;
+  background:rgba(215,208,192,.55);box-shadow:0 0 4px rgba(0,0,0,.8)}
+#prompt{position:absolute;left:50%;top:57%;transform:translateX(-50%);font-size:15px;letter-spacing:.1em;
+  color:#e6dfcd;text-shadow:0 1px 4px #000;background:rgba(8,9,10,.55);padding:7px 16px;border-left:2px solid var(--blood)}
+#invBar{position:absolute;right:26px;bottom:24px;display:flex;gap:10px}
+.invItem{border:1px solid #33363b;background:rgba(10,11,12,.72);padding:7px 12px;font-size:11px;letter-spacing:.16em;
+  text-transform:uppercase;color:#b7b09f;display:flex;align-items:center;gap:8px}
+.invItem svg{display:block;filter:drop-shadow(0 1px 1px #000)}
+#subtitle{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);max-width:70%;text-align:center;
+  font-size:15px;letter-spacing:.06em;color:#c9c2b2;font-style:italic;text-shadow:0 1px 3px #000}
+#toast{position:absolute;left:50%;top:12%;transform:translateX(-50%);font-size:14px;letter-spacing:.2em;text-transform:uppercase;
+  color:#ded6c2;background:rgba(8,9,10,.6);padding:9px 22px;border-bottom:1px solid var(--blood);opacity:0;transition:opacity .4s}
+#hintLine{position:absolute;left:50%;bottom:4%;transform:translateX(-50%);color:#767b70;font-size:12px;letter-spacing:.14em;
+  text-shadow:0 1px 3px #000;transition:opacity .6s}
+#damageVeil{position:fixed;inset:0;pointer-events:none;z-index:25;opacity:0;
+  background:radial-gradient(ellipse at center,transparent 45%,rgba(130,8,12,.5) 90%)}
+
+/* ---------- panels (notes / keypad) ---------- */
+.panelWrap{z-index:120;background:rgba(0,0,0,.62)}
+#notePaper{
+  width:min(560px,88vw);background:linear-gradient(175deg,#d8d0bd,#c9bfa8 70%,#bdb29a);
+  color:#2c2820;padding:44px 46px 38px;box-shadow:0 24px 80px rgba(0,0,0,.9);
+  transform:rotate(-.7deg);position:relative;font-family:"Courier New",Consolas,monospace;
+}
+#notePaper:before{content:"";position:absolute;inset:0;background:
+  radial-gradient(circle at 82% 8%,rgba(120,90,40,.12) 0 12%,transparent 30%),
+  radial-gradient(circle at 12% 90%,rgba(90,70,30,.1) 0 10%,transparent 26%);pointer-events:none}
+#noteTitle{font-size:13px;letter-spacing:.28em;text-transform:uppercase;color:#7a4a3a;margin-bottom:16px;border-bottom:1px solid #a89a7c;padding-bottom:9px}
+#noteBody{font-size:16px;line-height:1.85;white-space:pre-wrap}
+#noteClose{margin-top:26px;font-size:12px;color:#6d6350;letter-spacing:.2em;text-transform:uppercase;text-align:right}
+
+/* keypad */
+#keypadBox{background:var(--panel);border:1px solid #34383d;padding:30px 34px;box-shadow:0 24px 80px #000;text-align:center}
+#kpTitle{font-size:12px;letter-spacing:.3em;color:var(--dim);text-transform:uppercase;margin-bottom:6px}
+#kpSub{font-size:11px;letter-spacing:.14em;color:#5d6268;margin-bottom:18px}
+#kpDisplay{
+  font-family:Consolas,monospace;font-size:34px;letter-spacing:.5em;text-indent:.5em;color:#b6ffbe;
+  background:#0a120c;border:1px solid #24352a;padding:10px 0 8px;margin-bottom:18px;min-height:58px;
+  text-shadow:0 0 12px rgba(120,255,140,.55);
+}
+#kpDisplay.err{color:#ff5a54;text-shadow:0 0 12px rgba(255,60,60,.6);animation:kpShake .3s}
+@keyframes kpShake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+#kpGrid{display:grid;grid-template-columns:repeat(3,64px);gap:9px;justify-content:center}
+#kpGrid button{padding:15px 0;font-size:18px;letter-spacing:0;font-family:Consolas,monospace}
+#kpCancel{margin-top:14px;font-size:11px}
+
+/* ---------- menus ---------- */
+.menuPanel{background:var(--panel);border:1px solid #2c3034;padding:38px 46px;min-width:380px;box-shadow:0 30px 90px #000}
+.menuTitle{font-size:13px;letter-spacing:.4em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:26px}
+.menuBtns{display:flex;flex-direction:column;gap:11px}
+.setRow{display:flex;align-items:center;justify-content:space-between;gap:26px;margin:15px 0;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:#b3ac9c}
+.setRow output{width:38px;text-align:right;color:#e0d8c4;font-family:Consolas,monospace}
+#controlsList{font-size:13px;line-height:2.35;color:#b3ac9c;letter-spacing:.06em}
+#controlsList td:first-child{padding-right:26px;white-space:nowrap}
+
+/* ---------- death ---------- */
+#death{background:#000;z-index:115}
+#deathText{font-family:Georgia,serif;font-size:min(7vw,58px);letter-spacing:.3em;text-indent:.3em;color:#8e1a20;
+  text-shadow:0 0 34px rgba(160,20,26,.6);animation:deathIn 1.6s ease-out forwards}
+@keyframes deathIn{0%{opacity:0;transform:scale(1.14)}100%{opacity:1;transform:scale(1)}}
+#deathSub{margin-top:22px;color:#5f5750;font-size:13px;letter-spacing:.26em;text-transform:uppercase;opacity:0;animation:fadeIn 1.2s 1s forwards}
+@keyframes fadeIn{to{opacity:1}}
+
+/* ---------- ending ---------- */
+#end{background:#000;z-index:118}
+#endInner{max-width:700px;text-align:center;padding:0 30px}
+#endText{font-size:17px;line-height:2.2;color:#b8b2a4;font-family:Consolas,monospace;white-space:pre-wrap;text-align:left}
+#endStats{margin-top:44px;display:flex;gap:44px;justify-content:center}
+.endStat b{display:block;font-family:Georgia,serif;font-size:30px;color:#d8d0bc;font-weight:400}
+.endStat span{font-size:10px;letter-spacing:.3em;color:#6a6f64;text-transform:uppercase}
+#endBtns{margin-top:48px;display:flex;gap:14px;justify-content:center}
+
+/* ---------- objectives overlay (Tab) ---------- */
+#objOverlay{z-index:90;justify-content:flex-start;align-items:flex-start;pointer-events:none;background:linear-gradient(180deg,rgba(0,0,0,.72),rgba(0,0,0,.4))}
+#objOverlay .menuPanel{margin:9vh 0 0 6vw;pointer-events:none;background:rgba(10,11,13,.85)}
+.objRow{font-size:14px;letter-spacing:.08em;line-height:2.2;color:#b9b2a1}
+.objRow.done{color:#5d6357;text-decoration:line-through}
+.objRow.cur{color:#e4dcc6}
+.objRow.cur:before{content:"▸ ";color:var(--blood)}
+
+/* ---------- loading ---------- */
+#loading{background:#000;z-index:200}
+#loadText{color:#5b6057;letter-spacing:.4em;font-size:12px;text-transform:uppercase;animation:loadPulse 1.6s infinite}
+@keyframes loadPulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+#touchWarn{position:fixed;inset:auto 0 0 0;z-index:300;background:#1a0d0ecc;color:#d8cfc0;text-align:center;
+  padding:8px;font-size:12px;letter-spacing:.12em}
+@media (pointer:coarse){ body:after{content:""} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- post fx -->
+<div id="vignette"></div>
+<div id="grain"></div>
+<div id="fearVeil"></div>
+<div id="damageVeil"></div>
+<div id="flashWhite"></div><div id="flashRed"></div><div id="flashBlack"></div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="objective"><div id="objLabel">Objective</div><div id="objText"></div></div>
+  <div id="crosshair"></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="invBar"></div>
+  <div id="subtitle" class="hidden"></div>
+  <div id="toast"></div>
+  <div id="hintLine"></div>
+</div>
+
+<div id="objOverlay" class="overlay hidden">
+  <div class="menuPanel"><div class="menuTitle">Field Objectives</div><div id="objList"></div></div>
+</div>
+
+<!-- note -->
+<div id="noteWrap" class="overlay panelWrap hidden">
+  <div id="notePaper">
+    <div id="noteTitle"></div>
+    <div id="noteBody"></div>
+    <div id="noteClose">[ E ] &nbsp;put down</div>
+  </div>
+</div>
+
+<!-- keypad -->
+<div id="keypadWrap" class="overlay panelWrap hidden">
+  <div id="keypadBox">
+    <div id="kpTitle">Freight Lift — Override Keypad</div>
+    <div id="kpSub">KEYPAD LOCKOUT ACTIVE · MANUAL CODE REQUIRED</div>
+    <div id="kpDisplay">&nbsp;</div>
+    <div id="kpGrid"></div>
+    <button id="kpCancel" class="ghostbtn">[ ESC ] step away</button>
+  </div>
+</div>
+
+<!-- pause -->
+<div id="pauseWrap" class="overlay panelWrap hidden">
+  <div class="menuPanel">
+    <div class="menuTitle">Paused</div>
+    <div class="menuBtns">
+      <button id="btnResume">Resume</button>
+      <button id="btnPauseSettings">Settings</button>
+      <button id="btnPauseControls">Controls</button>
+      <button id="btnRestartCp">Restart From Last Checkpoint</button>
+      <button id="btnQuit">Quit To Title</button>
+    </div>
+  </div>
+</div>
+
+<!-- settings -->
+<div id="settingsWrap" class="overlay panelWrap hidden">
+  <div class="menuPanel">
+    <div class="menuTitle">Settings</div>
+    <div class="setRow"><label for="setVol">Master Volume</label><span><input type="range" id="setVol" min="0" max="100" value="80"><output id="outVol">80</output></span></div>
+    <div class="setRow"><label for="setBright">Brightness</label><span><input type="range" id="setBright" min="40" max="170" value="100"><output id="outBright">100</output></span></div>
+    <div class="setRow"><label for="setSens">Mouse Sensitivity</label><span><input type="range" id="setSens" min="20" max="200" value="100"><output id="outSens">100</output></span></div>
+    <div class="setRow"><label for="setSubs">Sound Subtitles</label><input type="checkbox" id="setSubs" checked style="width:18px;height:18px;accent-color:var(--blood)"></div>
+    <div class="setRow"><label for="setHead">Head Bob</label><input type="checkbox" id="setHead" checked style="width:18px;height:18px;accent-color:var(--blood)"></div>
+    <div class="menuBtns" style="margin-top:26px"><button id="btnSetBack">Back</button></div>
+  </div>
+</div>
+
+<!-- controls -->
+<div id="controlsWrap" class="overlay panelWrap hidden">
+  <div class="menuPanel">
+    <div class="menuTitle">Controls</div>
+    <table id="controlsList">
+      <tr><td><kbd>W A S D</kbd></td><td>move</td></tr>
+      <tr><td><kbd>Mouse</kbd></td><td>look</td></tr>
+      <tr><td><kbd>Shift</kbd></td><td>sprint &nbsp;<span style="color:#777">(loud)</span></td></tr>
+      <tr><td><kbd>C</kbd></td><td>crouch &nbsp;<span style="color:#777">(quiet)</span></td></tr>
+      <tr><td><kbd>E</kbd></td><td>interact / pick up</td></tr>
+      <tr><td><kbd>F</kbd></td><td>flashlight</td></tr>
+      <tr><td><kbd>Tab</kbd></td><td>objectives</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>pause</td></tr>
+    </table>
+    <div class="menuBtns" style="margin-top:26px"><button id="btnCtrlBack">Back</button></div>
+  </div>
+</div>
+
+<!-- death -->
+<div id="death" class="overlay hidden">
+  <div id="deathText">IT HEARD YOU</div>
+  <div id="deathSub">returning to last checkpoint</div>
+</div>
+
+<!-- ending -->
+<div id="end" class="overlay hidden">
+  <div id="endInner">
+    <div id="endText"></div>
+    <div id="endStats">
+      <div class="endStat"><b id="statTime">–</b><span>shift time</span></div>
+      <div class="endStat"><b id="statDeaths">0</b><span>times caught</span></div>
+      <div class="endStat"><b id="statNotes">0</b><span>documents read</span></div>
+    </div>
+    <div id="endBtns"><button id="btnEndCredits">Keep Sitting With It</button></div>
+  </div>
+</div>
+
+<!-- credits -->
+<div id="credits" class="overlay hidden" style="background:#000;z-index:119;flex-direction:column">
+  <div style="text-align:center">
+    <div style="font-family:Georgia,serif;font-size:34px;letter-spacing:.3em;color:#c9c2b0">HOLLOW SIGNAL</div>
+    <div style="margin-top:14px;color:#5d6158;font-size:12px;letter-spacing:.3em">KESTREL DEEP FIELD STATION · INCIDENT RECORD 04·17·83</div>
+    <div style="margin-top:60px;color:#4c5148;font-size:13px;line-height:2.4;letter-spacing:.1em">
+      built as an original short horror experience<br>
+      sound · light · and one very bad idea<br><br>
+      thank you for playing
+    </div>
+  </div>
+</div>
+
+<!-- title -->
+<div id="title" class="overlay">
+  <div id="titleVer">KDF·S MAINTENANCE TERMINAL v2.31</div>
+  <div id="titleInner">
+    <div id="gameTitle">HOLLOW SIGNAL</div>
+    <div id="gameSub">kestrel deep field station</div>
+    <div id="titleButtons">
+      <button id="btnStart">Begin Shift</button>
+      <button id="btnTitleSettings">Settings</button>
+      <button id="btnTitleControls">How To Play</button>
+    </div>
+  </div>
+  <div id="titleFoot">ticket № 4471 — “station went quiet. bring the power back. don’t stay past dawn.”</div>
+  <div id="titleWarn">headphones recommended · contains flashing lights &amp; sudden loud sounds</div>
+</div>
+
+<!-- intro -->
+<div id="intro" class="overlay hidden">
+  <div id="introText"></div>
+  <div id="introSkip">[ CLICK ] skip</div>
+</div>
+
+<div id="loading" class="overlay"><div id="loadText">descending…</div></div>
+<div id="touchWarn" class="hidden">⚠ keyboard + mouse required — this experience needs a desktop browser.</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="js/core.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/textures.js"></script>
+<script src="js/maps.js"></script>
+<script src="js/world.js"></script>
+<script src="js/player.js"></script>
+<script src="js/threat.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/story.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+<script>
+if (('ontouchstart' in window) && matchMedia('(pointer:coarse)').matches) {
+  document.getElementById('touchWarn').classList.remove('hidden');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRISM PULSE — Rhythm Game + Chart Editor</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><polygon points='50,5 95,80 5,80' fill='%23a78bfa'/></svg>">
+</head>
+<body>
+
+<!-- ================= MENU ================= -->
+<section id="screen-menu" class="screen active">
+  <div class="menu-bg" aria-hidden="true">
+    <div class="beam b1"></div><div class="beam b2"></div><div class="beam b3"></div><div class="beam b4"></div>
+  </div>
+  <div class="menu-inner">
+    <h1 class="logo"><span>PRISM</span> <em>PULSE</em></h1>
+    <p class="tagline">a rhythm game with its own chart editor</p>
+    <div class="menu-buttons">
+      <button id="btn-play" class="btn primary big">▶&nbsp; Play “Neon Meridian”</button>
+      <button id="btn-custom" class="btn big" style="display:none">▶&nbsp; Play Custom Chart</button>
+      <button id="btn-editor" class="btn big">✎&nbsp; Chart Editor</button>
+      <div class="row">
+        <button id="btn-how" class="btn ghost">How to play</button>
+        <button id="btn-settings" class="btn ghost">⚙ Settings</button>
+      </div>
+    </div>
+    <p class="menu-foot">original demo track · charts are yours to edit · everything runs locally</p>
+  </div>
+</section>
+
+<!-- ================= LOADING ================= -->
+<section id="screen-loading" class="screen">
+  <div class="load-inner">
+    <h2>Composing “Neon Meridian”…</h2>
+    <p class="dim">rendering the track with the Web Audio synthesizer (one-time, ~seconds)</p>
+    <div class="load-bar"><div id="load-bar-fill"></div></div>
+  </div>
+</section>
+
+<!-- ================= GAME ================= -->
+<section id="screen-game" class="screen">
+  <canvas id="game-canvas"></canvas>
+  <div id="hud">
+    <div class="hud-top">
+      <div class="hud-left">
+        <div class="hud-label">SCORE</div><div data-hud="score" class="hud-score">0000000</div>
+        <div class="hud-label">ACCURACY</div><div data-hud="acc" class="hud-acc">100.00%</div>
+        <div data-hud="judge" class="hud-judge dim">0/0/0/0</div>
+      </div>
+      <div class="hud-center">
+        <div id="hud-title">Neon Meridian — PRISM PULSE</div>
+        <div id="hud-diff" class="dim">Medium · 128 BPM</div>
+        <div class="hud-progress"><div data-hud="prog"></div></div>
+      </div>
+      <div class="hud-right">
+        <div class="hud-combo-label">COMBO</div>
+        <div data-hud="combo" class="hud-combo">0</div>
+        <div id="hud-auto" class="auto-badge" style="display:none">AUTOPLAY</div>
+      </div>
+    </div>
+    <div id="hud-keys" class="hud-keys"></div>
+  </div>
+  <div id="pause-overlay" class="overlay">
+    <div class="panel">
+      <h2>Paused</h2>
+      <button id="btn-resume" class="btn primary">Resume</button>
+      <button id="btn-restart" class="btn">Restart</button>
+      <button id="btn-toeditor" class="btn">Back to Editor</button>
+      <button id="btn-tomenu" class="btn ghost">Quit to Menu</button>
+    </div>
+  </div>
+  <div id="results" class="overlay">
+    <div class="panel results-panel">
+      <div id="res-auto" class="res-auto"></div>
+      <div id="res-fc" class="res-fc"></div>
+      <div id="res-grade" class="res-grade">S</div>
+      <div id="res-title" class="res-title"></div>
+      <div class="res-stats">
+        <div><span class="hud-label">SCORE</span><b id="res-score">0000000</b></div>
+        <div><span class="hud-label">ACCURACY</span><b id="res-acc">0%</b></div>
+        <div><span class="hud-label">MAX COMBO</span><b id="res-combo">0</b></div>
+      </div>
+      <div id="res-counts" class="res-counts"></div>
+      <div class="row center">
+        <button id="btn-retry" class="btn primary">Retry</button>
+        <button id="btn-res-editor" class="btn">Back to Editor</button>
+        <button id="btn-res-menu" class="btn ghost">Menu</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= EDITOR ================= -->
+<section id="screen-editor" class="screen">
+  <div class="editor-toolbar">
+    <button id="ed-back" class="btn ghost" title="Back to menu">← Menu</button>
+    <button id="ed-play" class="btn primary">▶ Play</button>
+    <button id="ed-stop" class="btn" title="Stop and rewind">⏮ Start</button>
+    <span class="tb-sep"></span>
+    <button id="ed-snap" class="btn" title="Cycle grid snap (keys 1-7)">Snap 1/4</button>
+    <button id="ed-zoom" class="btn" title="Zoom in (+/- keys)">Zoom 110</button>
+    <span class="tb-sep"></span>
+    <label class="tb-field">BPM <input id="ed-bpm" type="number" min="40" max="300" step="1" value="128"></label>
+    <label class="tb-field">Offset(s) <input id="ed-offset" type="number" step="0.001" value="0"></label>
+    <label class="tb-field">Title <input id="ed-title" type="text" value="Neon Meridian" size="14"></label>
+    <span class="tb-sep"></span>
+    <button id="ed-test" class="btn accent" title="Playtest from cursor">▷ Playtest</button>
+    <button id="ed-save" class="btn primary">💾 Save</button>
+    <button id="ed-export" class="btn">⬇ Export .json</button>
+    <label class="btn" for="ed-import-input">⬆ Import<input id="ed-import-input" type="file" accept=".json,application/json" hidden></label>
+    <button id="ed-revert" class="btn ghost" title="Restore the included chart">↺ Included chart</button>
+  </div>
+  <div class="editor-wave-wrap"><canvas id="wave-canvas"></canvas></div>
+  <div class="editor-main">
+    <div class="editor-canvas-wrap"><canvas id="editor-canvas"></canvas></div>
+    <aside class="editor-side">
+      <h3>Chart</h3>
+      <div class="stat-line">Notes <b id="ed-stat-total">0</b> <span id="ed-dirty-dot" class="dirty-dot" title="unsaved changes" style="display:none"></span></div>
+      <div class="stat-line">Hold notes <b id="ed-stat-holds">0</b></div>
+      <div class="stat-line dim" id="ed-time">0:00.00 · bar 1</div>
+      <h3>How to edit</h3>
+      <ul class="help-list">
+        <li><b>Left-click</b> empty grid — place tap note (snapped)</li>
+        <li><b>Right-click</b> a note — delete it</li>
+        <li><b>Drag</b> a note head — move it in time</li>
+        <li><b>Drag</b> past a hold’s tail — resize the hold</li>
+        <li><b>Wheel / drag wave strip</b> — scroll & seek</li>
+        <li><b>Space</b> play/pause · <b>Home</b> rewind</li>
+        <li><b>+</b>/<b>−</b> zoom · <b>1–7</b> snap · <b>Del</b> remove selected</li>
+        <li><b>Playtest</b> plays from the cursor; Esc → back here</li>
+      </ul>
+      <p class="dim small">Save keeps the chart in this browser; Export downloads a portable .json both the game and editor understand.</p>
+      <div id="ed-status" class="toast"></div>
+    </aside>
+  </div>
+</section>
+
+<!-- ================= MODALS ================= -->
+<div id="settings" class="modal">
+  <div class="panel">
+    <h2>Settings</h2>
+    <label class="set-row">Note speed
+      <input id="set-speed" type="range" min="0.6" max="1.8" step="0.05" value="1">
+      <output id="set-speed-val">1.00×</output>
+    </label>
+    <label class="set-row">Audio offset
+      <input id="set-offset" type="range" min="-150" max="150" step="5" value="0">
+      <output id="set-offset-val">0 ms</output>
+    </label>
+    <p class="dim small">Positive offset if you consistently hit late; negative if early.</p>
+    <button id="btn-calibrate" class="btn">🎯 Calibrate latency</button>
+    <div id="cal-box" class="cal-box">
+      <p id="cal-hint">Tap any lane key on each click…</p>
+    </div>
+    <div class="row center"><button id="btn-close-settings" class="btn primary">Done</button></div>
+  </div>
+</div>
+
+<div id="how" class="modal">
+  <div class="panel">
+    <h2>How to play</h2>
+    <p>Notes ride four lanes down to the prism line. Strike when they land:</p>
+    <div class="keymap">
+      <span style="--c:#22d3ee">D</span><span style="--c:#f472b6">F</span><span style="--c:#fbbf24">J</span><span style="--c:#a3e635">K</span>
+    </div>
+    <p class="dim">(Arrow keys ← ↓ ↑ → also work.)</p>
+    <ul class="help-list">
+      <li><b>Taps</b> — one clean strike on the line.</li>
+      <li><b>Holds</b> — strike the head, keep the key down until the tail passes.</li>
+      <li>Judgements: Marvelous → Perfect → Great → Good → Miss.</li>
+      <li>Esc pauses anytime. Accuracy + combo drive your grade (D→SS).</li>
+    </ul>
+    <div class="row center"><button id="btn-how-close" class="btn primary">Got it</button></div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

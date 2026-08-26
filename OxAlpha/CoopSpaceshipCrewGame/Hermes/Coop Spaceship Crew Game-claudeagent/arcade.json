@@ -1,0 +1,7 @@
+{
+  "title": "Orion Run — Co-op Spaceship Crew",
+  "description": "2–4 player co-op: crew a starship, route power, fight fires and pirates, jump 5 sectors to Orion Gate.",
+  "multiplayer": {
+    "endpoint": "/ws/coop-spaceship-crew-game"
+  }
+}

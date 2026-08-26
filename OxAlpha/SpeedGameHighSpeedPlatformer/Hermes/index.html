@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VELOCITY RUSH — High Speed Platformer</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='10' fill='%2317c3b2'/><path d='M6 13l4 4 8-9' stroke='%23fff' stroke-width='2.4' fill='none'/></svg>">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+  <canvas id="speedlines"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="hud-topleft">
+      <div id="hud-levelname">SUNSPIRE COAST</div>
+      <div id="hud-timer">0:00.00</div>
+      <div id="hud-best"></div>
+    </div>
+    <div id="hud-topright">
+      <div class="pill"><span class="spark-icon"></span><span id="hud-sparks">0/0</span></div>
+      <div class="pill"><span class="bolt-icon"></span><span id="hud-secrets">0/3</span></div>
+    </div>
+    <div id="hud-bottomleft">
+      <div id="hud-hearts"></div>
+    </div>
+    <div id="hud-bottomright">
+      <div id="speedo">
+        <canvas id="speedo-canvas" width="220" height="130"></canvas>
+        <div id="speedo-num">0</div>
+        <div id="speedo-unit">VELOCITY</div>
+      </div>
+      <div id="boostbar-wrap"><div id="boostbar"></div><span class="boost-label">BOOST</span></div>
+    </div>
+    <div id="hud-center-msg"></div>
+    <div id="hud-combo"></div>
+    <div id="vignette"></div>
+    <div id="damage-flash"></div>
+  </div>
+
+  <!-- Title / menus -->
+  <div id="title-screen">
+    <div id="title-logo">
+      <h1>VELOCITY<span>RUSH</span></h1>
+      <p class="tagline">an original high-speed action platformer</p>
+      <p class="starring">starring KAZE — the wind-sprite courier</p>
+    </div>
+    <div id="title-menu"></div>
+    <div id="title-footer">Click to focus · Mouse looks · Esc pauses</div>
+  </div>
+
+  <div id="loading-screen" class="hidden">
+    <div class="load-ring"></div>
+    <div id="loading-label">BUILDING WORLD…</div>
+  </div>
+
+  <div id="pause-screen" class="hidden">
+    <h2>PAUSED</h2>
+    <div id="pause-menu"></div>
+    <div id="controls-card">
+      <table>
+        <tr><td>W A S D</td><td>Run / steer (camera-relative)</td></tr>
+        <tr><td>SPACE</td><td>Jump (hold = higher)</td></tr>
+        <tr><td>SHIFT</td><td>Boost — burns meter, rams enemies</td></tr>
+        <tr><td>C</td><td>Drift — sharp turns, charges boost</td></tr>
+        <tr><td>Q / E</td><td>Quick-step dodge left / right</td></tr>
+        <tr><td>F / Click (air)</td><td>Zephyr Strike — homing dive</td></tr>
+        <tr><td>R</td><td>Back to last checkpoint</td></tr>
+        <tr><td>MOUSE</td><td>Camera (wheel = zoom)</td></tr>
+        <tr><td>M</td><td>Mute music · Esc pause</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div id="results-screen" class="hidden">
+    <div id="results-card">
+      <div id="results-rank">A</div>
+      <h2 id="results-title">COURSE CLEAR</h2>
+      <div id="results-rows"></div>
+      <div id="results-buttons"></div>
+    </div>
+  </div>
+
+  <div id="toast-layer"></div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

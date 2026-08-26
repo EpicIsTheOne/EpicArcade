@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<!-- OXALPHA-RETROHUB-RUN02-CANONICAL · canonical entry: hubx/index.html -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RETRO ARCADE HUB</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ff2e88'/><rect x='3' y='6' width='10' height='5' rx='2' fill='%2307070f'/></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-theme="midnight">
+
+<!-- ===== LOBBY ===== -->
+<div id="lobby" class="view">
+  <canvas id="bgfx" width="960" height="600"></canvas>
+
+  <header id="hub-head">
+    <div class="brand">
+      <span class="brand-retro">RETRO</span><span class="brand-arcade">ARCADE</span><span class="brand-hub">HUB</span>
+    </div>
+    <div class="career">
+      <div class="career-label">CAREER SCORE</div>
+      <div class="career-value" id="career-total">0000000</div>
+    </div>
+  </header>
+
+  <main id="cabinets" role="listbox" aria-label="Arcade cabinets"></main>
+
+  <footer id="hub-foot">
+    <div class="foot-left">
+      <span class="kbd">◄ ►</span> SELECT &nbsp;
+      <span class="kbd">ENTER</span> PLAY &nbsp;
+      <span class="kbd">T</span> THEME &nbsp;
+      <span class="kbd">H</span> HELP &nbsp;
+      <span class="kbd">M</span> SOUND: <b id="snd-state">ON</b>
+    </div>
+    <div class="foot-right" id="theme-name">THEME: MIDNIGHT</div>
+  </footer>
+
+  <!-- recent runs ticker -->
+  <div id="ticker-wrap"><div id="ticker"></div></div>
+
+  <!-- theme rack -->
+  <aside id="theme-rack">
+    <div class="rack-title">CABINET THEMES</div>
+    <div id="rack-items"></div>
+  </aside>
+
+  <!-- high score board -->
+  <aside id="hs-board">
+    <div class="board-title">HIGH SCORES</div>
+    <div id="board-items"></div>
+  </aside>
+
+  <!-- help overlay -->
+  <div id="help-overlay" hidden>
+    <div class="help-panel">
+      <h2>HOW TO PLAY</h2>
+      <div id="help-games"></div>
+      <div class="help-keys">
+        <p><b>P</b> — pause · <b>M</b> — mute · <b>ESC</b> — quit to lobby · <b>ENTER</b> — start/retry</p>
+        <p>Earn CAREER SCORE (sum of bests) to unlock cabinet themes. Press T in the lobby to cycle them.</p>
+      </div>
+      <button id="help-close">CLOSE [H]</button>
+    </div>
+  </div>
+
+  <!-- unlock toast -->
+  <div id="unlock-toast" hidden>
+    <div class="toast-star">★</div>
+    <div class="toast-body"><b>UNLOCKED!</b><span id="unlock-text"></span></div>
+  </div>
+</div>
+
+<!-- ===== GAME VIEW ===== -->
+<div id="gamewrap" class="view" hidden>
+  <div id="game-frame">
+    <canvas id="game" width="480" height="640"></canvas>
+    <div id="game-bezel"></div>
+  </div>
+  <div id="game-side">
+    <div class="side-marquee" id="side-name">GAME</div>
+    <div class="side-block">
+      <div class="side-row"><span>SCORE</span><b id="side-score">0</b></div>
+      <div class="side-row"><span>BEST</span><b id="side-best">0</b></div>
+      <div class="side-row"><span>CAREER</span><b id="side-career">0</b></div>
+    </div>
+    <div class="side-help" id="side-help"></div>
+    <button id="quit-btn">QUIT TO LOBBY [ESC]</button>
+  </div>
+</div>
+
+<!-- global CRT overlays -->
+<div id="crt-scanlines"></div>
+<div id="crt-vignette"></div>
+
+<script src="js/util.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/input.js"></script>
+<script src="js/store.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/base.js"></script>
+<script src="js/game-nova.js"></script>
+<script src="js/game-dodge.js"></script>
+<script src="js/game-bricks.js"></script>
+<script src="js/game-turbo.js"></script>
+<script src="js/lobby.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

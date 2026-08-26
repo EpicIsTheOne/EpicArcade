@@ -1,290 +1,228 @@
+// character.js — "KAZE", original wind-sprite courier. Fully procedural model +
+// speed-reactive procedural animation: idle / run / sprint-streamline / jump /
+// fall / land squash / drift lean / grind stance / Zephyr Strike drill spin.
 import * as THREE from 'three';
-import { clamp, lerp } from './mathutil.js';
 
-// JOLT — original lightning-cheetah courier. Fully procedural model + animation.
-const MAT = (color, opts = {}) => new THREE.MeshStandardMaterial({ color, roughness: opts.rough ?? 0.62, metalness: opts.metal ?? 0.05, emissive: opts.emissive ?? 0x000000, emissiveIntensity: opts.ei ?? 1 });
+const TEAL = 0x17c3b2, ORANGE = 0xff9f1c, NAVY = 0x18233f, WHITE = 0xf2fbff, CYAN = 0x53f2e4;
+
+function toonMat(color, opts = {}) {
+  const grad = new Uint8Array([80, 160, 235, 255]);
+  const gradMap = new THREE.DataTexture(grad, grad.length, 1, THREE.RedFormat);
+  gradMap.needsUpdate = true;
+  gradMap.minFilter = gradMap.magFilter = THREE.NearestFilter;
+  return new THREE.MeshToonMaterial({ color, gradientMap: gradMap, ...opts });
+}
+
+function glow(color, intensity = 1.6) {
+  return new THREE.MeshStandardMaterial({ color: 0x111111, emissive: new THREE.Color(color), emissiveIntensity: intensity, roughness: .4 });
+}
 
 export class Character {
-  constructor() {
-    this.root = new THREE.Group();
-    this.bodyRoot = new THREE.Group();     // leans/banks, child of root
-    this.spinGroup = new THREE.Group();    // full-body spin (attacks)
+  constructor(scene) {
+    this.root = new THREE.Group();          // world position + yaw (faces local +Z)
+    this.tilt = new THREE.Group();          // lean/pitch/roll/squash
+    this.spin = new THREE.Group();          // drill-roll group
+    this.root.add(this.tilt); this.tilt.add(this.spin);
 
-    const gold = MAT(0xffa63e, { rough: 0.58 });
-    const cream = MAT(0xfff1d8, { rough: 0.7 });
-    const dark = MAT(0x33241c, { rough: 0.6 });
-    const teal = MAT(0x18dfd2, { rough: 0.35, metal: 0.35 });
-    const deepTeal = MAT(0x0b7d8f, { rough: 0.4 });
-    const magenta = MAT(0xff2fb4, { rough: 0.5 });
-    const white = MAT(0xffffff, { rough: 0.25 });
-    const black = MAT(0x141420, { rough: 0.4 });
-    this.mats = { gold, cream, dark, teal, deepTeal, magenta, white, black };
-
-    const mesh = (geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; return m; };
+    const suit = toonMat(TEAL), dark = toonMat(NAVY), lite = toonMat(WHITE), acc = toonMat(ORANGE);
+    this.mats = { suit, dark, lite, acc };
 
     // ---- torso ----
-    const torso = new THREE.Group();
-    torso.position.y = 0.92;
-    const chest = mesh(new THREE.SphereGeometry(0.34, 20, 16), gold, 0, 0.12, 0);
-    chest.scale.set(1.0, 1.08, 0.88);
-    const belly = mesh(new THREE.SphereGeometry(0.26, 18, 14), cream, 0, 0.02, 0.13);
-    belly.scale.set(0.86, 1.0, 0.72);
-    torso.add(chest, belly);
-
-    // scarf collar
-    const collar = mesh(new THREE.TorusGeometry(0.27, 0.09, 10, 20), magenta, 0, 0.32, 0);
-    collar.rotation.x = Math.PI / 2;
-    torso.add(collar);
-    this.scarf = [];
-    for (let i = 0; i < 4; i++) {
-      const s = mesh(new THREE.BoxGeometry(0.16 - i * 0.02, 0.03, 0.22 - i * 0.03), magenta, 0, 0.3, -0.28 - i * 0.16);
-      s.material = magenta;
-      this.scarf.push(s);
-      torso.add(s);
-    }
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.30, 0.34, 6, 12), suit);
+    torso.position.y = 0.86; this.spin.add(torso);
+    const chest = new THREE.Mesh(new THREE.SphereGeometry(0.21, 12, 10), lite);
+    chest.scale.set(1, 0.72, 0.62); chest.position.set(0, 0.94, 0.20); this.spin.add(chest);
+    const emblem = new THREE.Mesh(new THREE.OctahedronGeometry(0.085), glow(CYAN, 2.2));
+    emblem.position.set(0, 0.97, 0.30); this.spin.add(emblem);
+    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.315, 0.315, 0.09, 14), acc);
+    belt.position.y = 0.62; this.spin.add(belt);
+    const pack = new THREE.Mesh(new THREE.CapsuleGeometry(0.13, 0.18, 4, 8), dark);
+    pack.rotation.x = 0.5; pack.position.set(0, 0.95, -0.26); this.spin.add(pack);
 
     // ---- head ----
-    const head = new THREE.Group();
-    head.position.set(0, 0.52, 0.06);
-    const skull = mesh(new THREE.SphereGeometry(0.30, 22, 18), gold);
-    skull.scale.set(1.04, 0.96, 0.98);
-    const muzzle = mesh(new THREE.SphereGeometry(0.155, 16, 12), cream, 0, -0.07, 0.26);
-    muzzle.scale.set(1.15, 0.78, 0.95);
-    const nose = mesh(new THREE.SphereGeometry(0.05, 10, 8), dark, 0, -0.03, 0.40);
-    head.add(skull, muzzle, nose);
-
-    // ears
-    const earGeo = new THREE.ConeGeometry(0.11, 0.24, 8);
-    const earL = mesh(earGeo, gold, -0.19, 0.28, -0.02);
-    const earR = mesh(earGeo.clone(), gold, 0.19, 0.28, -0.02);
-    earL.rotation.z = 0.35; earR.rotation.z = -0.35;
-    const earInL = mesh(new THREE.ConeGeometry(0.055, 0.14, 6), dark, -0.185, 0.27, 0.03);
-    earInL.rotation.z = 0.35;
-    const earInR = mesh(new THREE.ConeGeometry(0.055, 0.14, 6), dark, 0.185, 0.27, 0.03);
-    earInR.rotation.z = -0.35;
-    head.add(earL, earR, earInL, earInR);
-    this.ears = [earL, earR];
-
-    // hair tufts (lightning spikes)
-    for (let i = 0; i < 3; i++) {
-      const spike = mesh(new THREE.ConeGeometry(0.07, 0.26, 5), deepTeal, -0.12 + i * 0.12, 0.30, -0.12);
-      spike.rotation.x = -0.7 - i * 0.1;
-      spike.rotation.z = (i - 1) * 0.3;
-      head.add(spike);
-    }
-
-    // goggles (forehead)
-    const strap = mesh(new THREE.TorusGeometry(0.29, 0.035, 8, 22), black, 0, 0.10, 0.02);
-    strap.rotation.x = Math.PI / 2 - 0.25;
-    head.add(strap);
-    const lensGeo = new THREE.CylinderGeometry(0.105, 0.105, 0.06, 16);
-    const gogL = mesh(lensGeo, teal, -0.125, 0.16, 0.235);
-    const gogR = mesh(lensGeo.clone(), teal, 0.125, 0.16, 0.235);
-    gogL.rotation.x = gogR.rotation.x = Math.PI / 2 - 0.18;
-    head.add(gogL, gogR);
-    this.goggles = [gogL, gogR];
-
-    // eyes
-    const eyeGeo = new THREE.SphereGeometry(0.075, 12, 10);
-    const eyeL = mesh(eyeGeo, white, -0.115, -0.01, 0.245);
-    const eyeR = mesh(eyeGeo.clone(), white, 0.115, -0.01, 0.245);
-    const pupGeo = new THREE.SphereGeometry(0.032, 8, 8);
-    const pupL = mesh(pupGeo, black, -0.105, -0.005, 0.305);
-    const pupR = mesh(pupGeo.clone(), black, 0.105, -0.005, 0.305);
-    head.add(eyeL, eyeR, pupL, pupR);
-    this.eyes = [eyeL, eyeR];
-    this.pupils = [pupL, pupR];
-
-    torso.add(head);
-    this.head = head;
+    this.headG = new THREE.Group(); this.headG.position.y = 1.38; this.spin.add(this.headG);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.245, 16, 14), dark);
+    head.scale.set(1, 0.94, 0.98); this.headG.add(head);
+    const visor = new THREE.Mesh(new THREE.SphereGeometry(0.212, 14, 10, -0.9, 1.8, 0.85, 0.85), glow(CYAN, 2.6));
+    visor.rotation.x = 0.28; this.headG.add(visor);
+    // swept-back single fin crest (original silhouette)
+    const finShape = new THREE.Shape();
+    finShape.moveTo(0, 0); finShape.quadraticCurveTo(0.1, 0.42, -0.62, 0.58); finShape.quadraticCurveTo(-0.16, 0.3, -0.05, 0);
+    const fin = new THREE.Mesh(new THREE.ExtrudeGeometry(finShape, { depth: 0.05, bevelEnabled: false }), acc);
+    fin.position.set(0.025, 0.13, -0.02); fin.rotation.y = Math.PI / 2;
+    this.headG.add(fin);
+    // ear pods
+    [-1, 1].forEach(s => {
+      const pod = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.07, 0.07, 10), acc);
+      pod.rotation.z = s * Math.PI / 2; pod.position.set(s * 0.24, 0.02, 0); this.headG.add(pod);
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(0.026), glow(CYAN, 2));
+      dot.position.set(s * 0.285, 0.02, 0); this.headG.add(dot);
+    });
 
     // ---- arms ----
-    const mkArm = (side) => {
-      const g = new THREE.Group();
-      g.position.set(side * 0.36, 0.26, 0);
-      const upper = mesh(new THREE.CapsuleGeometry(0.075, 0.2, 6, 10), gold, 0, -0.12, 0);
-      const fore = mesh(new THREE.CapsuleGeometry(0.065, 0.18, 6, 10), gold, 0, -0.32, 0.03);
-      const glove = mesh(new THREE.SphereGeometry(0.10, 12, 10), teal, 0, -0.44, 0.05);
-      g.add(upper, fore, glove);
-      torso.add(g);
-      return g;
-    };
-    this.armL = mkArm(-1); this.armR = mkArm(1);
-
+    this.armL = this._makeArm(dark, acc, 1); this.armR = this._makeArm(dark, acc, -1);
     // ---- legs ----
-    const mkLeg = (side) => {
-      const g = new THREE.Group();
-      g.position.set(side * 0.17, -0.06, 0);
-      const thigh = mesh(new THREE.CapsuleGeometry(0.095, 0.2, 6, 10), gold, 0, -0.14, 0);
-      const shin = mesh(new THREE.CapsuleGeometry(0.08, 0.2, 6, 10), gold, 0, -0.38, 0.02);
-      // rocket boot
-      const boot = mesh(new THREE.BoxGeometry(0.17, 0.14, 0.3), deepTeal, 0, -0.56, 0.06);
-      const sole = mesh(new THREE.BoxGeometry(0.19, 0.05, 0.34), black, 0, -0.64, 0.06);
-      const thruster = mesh(new THREE.CylinderGeometry(0.055, 0.075, 0.09, 10), teal, 0, -0.60, -0.08);
-      thruster.rotation.x = Math.PI / 2;
-      const glowMat = new THREE.MeshStandardMaterial({ color: 0x66f6ff, emissive: 0x37d8ff, emissiveIntensity: 2.2, roughness: 0.3 });
-      const glow = mesh(new THREE.SphereGeometry(0.05, 8, 8), glowMat, 0, -0.60, -0.135);
-      this.thrusterGlows = this.thrusterGlows || [];
-      this.thrusterGlows.push(glow);
-      g.add(thigh, shin, boot, sole, thruster, glow);
-      torso.add(g);
-      return g;
-    };
-    this.legL = mkLeg(-1); this.legR = mkLeg(1);
+    this.legL = this._makeLeg(suit, acc, 1); this.legR = this._makeLeg(suit, acc, -1);
 
-    // ---- tail (segment chain) ----
-    this.tailSegs = [];
-    let parent = torso;
-    const tailBase = new THREE.Group();
-    tailBase.position.set(0, 0.18, -0.3);
-    parent.add(tailBase);
-    parent = tailBase;
-    for (let i = 0; i < 5; i++) {
-      const seg = new THREE.Group();
-      seg.position.z = i === 0 ? 0 : -0.17;
-      const ball = mesh(new THREE.SphereGeometry(0.085 - i * 0.012, 10, 8), gold, 0, 0, i === 0 ? 0 : -0.02);
-      seg.add(ball);
-      if (i === 4) {
-        const tip = mesh(new THREE.ConeGeometry(0.05, 0.16, 6), magenta, 0, 0, -0.14);
-        tip.rotation.x = -Math.PI / 2;
-        seg.add(tip);
-        const spark = new THREE.PointLight(0xff2fb4, 1.2, 3.5);
-        spark.position.z = -0.2;
-        seg.add(spark);
-      }
-      parent.add(seg);
-      this.tailSegs.push(seg);
-      parent = seg;
+    // ---- scarf (verlet chain of puffs) ----
+    this.scarfPts = []; this.scarfPrev = [];
+    this.scarfMeshes = [];
+    for (let i = 0; i < 8; i++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.075 * (1 - i * 0.09), 8, 6), i % 2 ? toonMat(ORANGE) : toonMat(0xffc94d));
+      scene.add(m); this.scarfMeshes.push(m);
+      this.scarfPts.push(new THREE.Vector3()); this.scarfPrev.push(new THREE.Vector3());
+      this.scarfInit = false;
     }
 
-    // spin disc (visible during attacks)
-    this.disc = new THREE.Mesh(
-      new THREE.CircleGeometry(0.85, 24),
-      new THREE.MeshBasicMaterial({ color: 0x9ff3ff, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })
-    );
-    this.disc.visible = false;
+    // ---- boost flames ----
+    this.flames = [];
+    [this.legL.boot, this.legR.boot].forEach(b => {
+      const f = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 8), glow(0x66e0ff, 2.4));
+      f.rotation.x = Math.PI / 2; f.position.set(0, 0, -0.32); f.visible = false;
+      b.add(f); this.flames.push(f);
+    });
 
-    this.spinGroup.add(torso);
-    this.bodyRoot.add(this.spinGroup);
-    this.root.add(this.bodyRoot);
-    this.torso = torso;
-
-    // animation state
     this.phase = 0;
-    this.blinkT = 2;
-    this._sq = 1; this._lean = 0; this._bank = 0;
+    this.spinAngle = 0;
+    this.shadowBlob = null;
   }
 
-  // anim: {dt, speed01, grounded, state, drifting, grinding, wallSide, vy, turning, boost}
-  update(a) {
-    const dt = a.dt;
-    const s = a.speed01 ?? 0;
-    // run cycle
-    const cycleRate = a.grounded ? (2.2 + s * 15) : 4;
-    this.phase += dt * cycleRate;
-    const ph = this.phase;
+  _makeArm(matSleeve, matGlove, side) {
+    const g = new THREE.Group();
+    g.position.set(side * 0.36, 1.12, 0);
+    const upper = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.24, 4, 8), matSleeve);
+    upper.position.y = -0.17; g.add(upper);
+    const fist = new THREE.Mesh(new THREE.SphereGeometry(0.085, 8, 8), matGlove);
+    fist.position.y = -0.37; g.add(fist);
+    this.spin.add(g);
+    g.fist = fist;
+    return g;
+  }
+  _makeLeg(matSuit, matBoot, side) {
+    const g = new THREE.Group();
+    g.position.set(side * 0.155, 0.60, 0);
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.22, 4, 8), matSuit);
+    thigh.position.y = -0.17; g.add(thigh);
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.078, 0.2, 4, 8), matSuit);
+    shin.position.y = -0.46; g.add(shin);
+    const boot = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.30), matBoot);
+    boot.position.set(0, -0.63, 0.04); g.add(boot);
+    this.spin.add(g);
+    g.boot = boot;
+    return g;
+  }
 
-    // defaults
-    let legAmp = a.grounded ? lerp(0.25, 1.15, s) : 0.5;
-    let armAmp = a.grounded ? lerp(0.2, 1.0, s) : 0.6;
-    let legPhaseSpread = Math.PI;
+  /** Called every rendered frame with gameplay state. */
+  animate(dt, st) {
+    // st: {pos, yaw, speed01, grounded, airTime, vy, drifting, turnLean,
+    //      grinding, dive, boosting, landT, vel}
+    const s = st;
+    this.root.position.copy(s.pos);
+    this.root.position.y -= 0.12; // collider center -> visual feet offset
+    // yaw follow handled by player (smooth); apply:
+    this.root.rotation.y = s.yaw;
 
-    let hipLrot = Math.sin(ph) * legAmp - 0.1;
-    let hipRrot = Math.sin(ph + legPhaseSpread) * legAmp - 0.1;
-    let kneeBendL = Math.max(0, -Math.sin(ph)) * legAmp * 1.1;
-    let kneeBendR = Math.max(0, -Math.sin(ph + Math.PI)) * legAmp * 1.1;
-    let armLrot = Math.sin(ph + Math.PI) * armAmp;
-    let armRrot = Math.sin(ph) * armAmp;
+    const sp = s.speed01;
+    const T = this.tilt, S = this.spin;
 
-    let torsoPitch = a.grounded ? s * 0.55 : clamp(-a.vy * 0.008, -0.3, 0.42);
-    let crouch = 0;
+    // reset per-frame targets
+    let leanF = 0, leanR = 0, squash = 1;
 
-    if (!a.grounded) {
-      if (a.state === 'chain' || a.state === 'stomp') {
-        // tuck
-        hipLrot = hipRrot = 1.5; kneeBendL = kneeBendR = 2.0;
-        armLrot = armRrot = -2.4;
-        torsoPitch = a.state === 'stomp' ? 0.9 : 0.5;
-      } else if (a.vy > 2) {
-        hipLrot = -0.5; hipRrot = 0.35; armLrot = -1.9; armRrot = -2.2; kneeBendL = 0.4; kneeBendR = 1.1;
-      } else {
-        hipLrot = 0.3; hipRrot = -0.35; armLrot = -1.2; armRrot = -1.5; kneeBendL = 0.9; kneeBendR = 0.3;
-      }
-    } else if (a.grinding) {
-      crouch = 0.32; hipLrot = 1.15; hipRrot = 1.0; kneeBendL = kneeBendR = 1.5;
-      armLrot = -0.9; armRrot = -0.7; torsoPitch = 0.28;
-    } else if (a.drifting) {
-      crouch = 0.16; hipLrot = 0.75; hipRrot = 0.4; kneeBendL = 1.2; kneeBendR = 0.7;
-      torsoPitch = 0.5;
-    }
-
-    this.legL.rotation.x = hipLrot; this.legR.rotation.x = hipRrot;
-    // fake knees: shin counter-rotation
-    this.legL.children[1].rotation.x = -kneeBendL * 0.9;
-    this.legR.children[1].rotation.x = -kneeBendR * 0.9;
-    this.armL.rotation.x = armLrot; this.armR.rotation.x = armRrot;
-    this.armL.rotation.z = 0.18 + Math.abs(Math.sin(ph)) * 0.1 * s;
-    this.armR.rotation.z = -0.18 - Math.abs(Math.sin(ph)) * 0.1 * s;
-
-    // banking into turns + drift exaggeration
-    const targetBank = clamp((a.turning ?? 0) * (a.drifting ? 1.9 : 0.9), -0.65, 0.65) * (a.grounded ? 1 : 0.5);
-    this._bank = lerp(this._bank, targetBank, 1 - Math.exp(-10 * dt));
-    const targetLean = torsoPitch;
-    this._lean = lerp(this._lean, targetLean, 1 - Math.exp(-9 * dt));
-
-    this.bodyRoot.rotation.set(this._lean, 0, -this._bank);
-    const bobY = a.grounded ? Math.abs(Math.sin(ph)) * 0.05 * s : 0;
-    const crouchY = (a.grinding ? -0.22 : 0) - (a.drifting ? 0.1 : 0);
-
-    // squash & stretch spring (landings/jumps poke _sq externally)
-    this._sq = lerp(this._sq, 1, 1 - Math.exp(-11 * dt));
-    const sq = this._sq;
-    this.torso.position.y = 0.92 + bobY + crouchY;
-    this.torso.scale.set(sq < 1 ? 2 - sq : sq, sq, 1 / ((sq < 1 ? 2 - sq : sq) * 0.5 + 0.5));
-
-    // head looks ahead with slight bob
-    this.head.rotation.x = -this._lean * 0.6;
-    this.head.rotation.z = this._bank * 0.4;
-
-    // tail wave
-    for (let i = 0; i < this.tailSegs.length; i++) {
-      const seg = this.tailSegs[i];
-      const wag = Math.sin(this.phase * (a.grounded ? 1 : 0.5) + i * 0.9) * (0.12 + s * 0.2);
-      seg.rotation.y = wag;
-      seg.rotation.x = i === 0 ? -0.5 - s * 0.5 : Math.sin(this.phase * 1.3 + i) * 0.08;
-    }
-
-    // scarf flutters back with speed
-    for (let i = 0; i < this.scarf.length; i++) {
-      const sc = this.scarf[i];
-      sc.rotation.x = Math.sin(this.phase * 1.7 + i * 1.1) * (0.15 + s * 0.5) - s * 0.55 - (a.vy != null ? clamp(-a.vy * 0.02, -0.5, 0.5) : 0);
-      sc.position.y = 0.3 - i * 0.035;
-    }
-
-    // blink
-    this.blinkT -= dt;
-    if (this.blinkT < 0) {
-      const closed = this.blinkT > -0.12;
-      this.eyes.forEach((e) => e.scale.y = closed ? 0.12 : 1);
-      this.pupils.forEach((p) => p.visible = !closed);
-      if (this.blinkT < -0.12) this.blinkT = 1.6 + Math.random() * 2.6;
-    }
-
-    // spin disc during attacks
-    const spinning = a.state === 'chain';
-    this.disc.visible = spinning;
-    if (spinning) {
-      this.spinGroup.rotation.x += dt * 26;
-      this.disc.rotation.copy(this.spinGroup.rotation);
+    if (s.dive) {
+      // Zephyr Strike: drill roll around travel axis, limbs tucked
+      this.spinAngle += dt * 22;
+      S.rotation.z = this.spinAngle;
+      leanF = 1.15; // nearly horizontal
+      this._limbTuck(1);
     } else {
-      this.spinGroup.rotation.x *= Math.exp(-14 * dt);
+      S.rotation.z *= Math.max(0, 1 - dt * 10);
+      if (!s.grounded && !s.grinding) {
+        // jump tuck rising, spread fall
+        const rising = s.vy > 2;
+        this._legTarget(this.legL, rising ? -1.15 : -0.45, 0.15);
+        this._legTarget(this.legR, rising ? -0.85 : -0.2, -0.15);
+        this._armTarget(this.armL, rising ? -2.4 : -0.5, rising ? 0 : 0.5, rising ? 0.5 : 0.35);
+        this._armTarget(this.armR, rising ? -2.4 : -0.5, rising ? 0 : -0.5, rising ? -0.5 : -0.35);
+        leanF = rising ? 0.25 : 0.05 + Math.sin(performance.now() * 0.004) * 0.05;
+      } else if (s.grinding) {
+        // sideways surf stance
+        this._legTarget(this.legL, -0.28, 0.3); this._legTarget(this.legR, -0.1, -0.3);
+        this._armTarget(this.armL, -0.4 + Math.sin(performance.now() * 0.006) * 0.25, 1.1, 0);
+        this._armTarget(this.armR, -0.4 - Math.sin(performance.now() * 0.005) * 0.25, -1.1, 0);
+        leanF = 0.22;
+      } else {
+        // run cycle
+        this.phase += dt * (5 + sp * 26);
+        const amp = Math.min(0.15 + sp * 1.25, 1.25);
+        const sw = Math.sin(this.phase), cw = Math.cos(this.phase);
+        this._legTarget(this.legL, sw * amp * 0.85, 0);
+        this._legTarget(this.legR, -sw * amp * 0.85, 0);
+        // arms pump; at sprint (>0.62) sweep back into streamline
+        const stream = THREE.MathUtils.smoothstep(sp, 0.62, 0.95);
+        const armSwing = -sw * amp * 0.8;
+        this._armTarget(this.armL, THREE.MathUtils.lerp(armSwing, -2.75, stream), stream ? 0.25 : 0.12, 0);
+        this._armTarget(this.armR, THREE.MathUtils.lerp(-armSwing, -2.75, stream), stream ? -0.25 : -0.12, 0);
+        leanF = 0.10 + sp * 0.62;
+        squash = 1 - sp * 0.06;
+        // bob
+        T.position.y = Math.abs(cw) * 0.05 * sp;
+      }
+      if (s.drifting) {
+        leanR = -s.turnLean * 0.55;
+        this._armTarget(this.armL, -0.9, 1.25, 0);   // hand down inside
+        this._armTarget(this.armR, -1.6, -0.4, 0);
+      }
+      if (s.landT > 0) { squash = 0.78 + 0.22 * (1 - s.landT); }
+    }
+    if (s.grounded || s.grinding || s.dive) T.position.y *= Math.max(0, 1 - dt * 8);
+
+    T.rotation.x = THREE.MathUtils.lerp(T.rotation.x, leanF, 1 - Math.pow(0.0001, dt));
+    T.rotation.z = THREE.MathUtils.lerp(T.rotation.z, leanR, 1 - Math.pow(0.0001, dt));
+    const sy = T.scale.y; T.scale.y = THREE.MathUtils.lerp(sy, squash, 1 - Math.pow(0.001, dt));
+
+    this.headG.rotation.x = -leanF * 0.55; // keep gaze forward
+
+    // flames
+    const flameOn = s.boosting || (s.speed01 > 0.8 && s.grounded);
+    for (const f of this.flames) {
+      f.visible = !!flameOn;
+      if (flameOn) { const k = 0.75 + Math.random() * 0.6; f.scale.set(k, 0.8 + Math.random() * 0.7, k); }
     }
 
-    // thrusters
-    const glowI = a.boost ? 2.6 + Math.sin(performance.now() * 0.04) * 0.8 : (s > 0.5 ? 0.7 : 0.15);
-    for (const g of this.thrusterGlows) g.material.emissiveIntensity = glowI;
+    // scarf verlet
+    this._scarf(dt, s);
   }
 
-  // external impulses
-  squash(amount) { this._sq = amount; }
+  _legTarget(g, rx, rz) { g.rotation.x += (rx - g.rotation.x) * 0.45; g.rotation.z += ((rz || 0) - g.rotation.z) * 0.45; }
+  _armTarget(g, rx, rz, zx) { g.rotation.x += (rx - g.rotation.x) * 0.4; g.rotation.z += ((rz || 0) - g.rotation.z) * 0.4; if (zx !== undefined) g.fist.position.x = zx * 0.001; }
+  _limbTuck(k) {
+    this._legTarget(this.legL, -1.3 * k, 0.2); this._legTarget(this.legR, -1.3 * k, -0.2);
+    this._armTarget(this.armL, -2.9 * k, 0.3); this._armTarget(this.armR, -2.9 * k, -0.3);
+  }
+
+  _scarf(dt, s) {
+    const anchor = new THREE.Vector3(0, 0.28, -0.24).applyAxisAngle(new THREE.Vector3(0, 1, 0), s.yaw).add(this.root.position);
+    if (!this.scarfInit) {
+      for (let i = 0; i < 8; i++) { this.scarfPts[i].copy(anchor); this.scarfPrev[i].copy(anchor); }
+      this.scarfInit = true;
+    }
+    this.scarfPts[0].copy(anchor);
+    const wind = new THREE.Vector3(s.vel.x, 0, s.vel.z).multiplyScalar(-0.028);
+    for (let i = 1; i < 8; i++) {
+      const p = this.scarfPts[i], pr = this.scarfPrev[i];
+      const vx = (p.x - pr.x) * 0.96, vy = (p.y - pr.y) * 0.96, vz = (p.z - pr.z) * 0.96;
+      pr.copy(p);
+      p.x += vx + wind.x * (i / 8) - Math.sin(performance.now() * 0.008 + i) * 0.004;
+      p.y += vy - 0.012 + Math.sin(performance.now() * 0.011 + i * 1.3) * 0.006;
+      p.z += vz + wind.z * (i / 8);
+      const prev = this.scarfPts[i - 1];
+      const d = new THREE.Vector3().subVectors(p, prev);
+      const len = d.length() || 0.001;
+      const rest = 0.16;
+      p.copy(prev).add(d.multiplyScalar(rest / len));
+    }
+    for (let i = 0; i < 8; i++) this.scarfMeshes[i].position.copy(this.scarfPts[i]);
+  }
+
+  setVisible(v) { this.root.visible = v; }
 }

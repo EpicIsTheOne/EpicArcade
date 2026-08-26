@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkyRange — Drone Simulator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%232ea8d8'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <div id="vignette"></div>
+  <div id="flash"></div>
+
+  <div id="hud" class="hidden">
+    <canvas id="compass" width="520" height="52"></canvas>
+    <div id="telemetry">
+      <div class="tl-row"><span class="tl-label">MODE</span><span id="hudMode">ANGLE · ASSIST</span></div>
+      <div class="tl-row"><span class="tl-label">CAM</span><span id="hudCam">FPV</span></div>
+      <div class="tl-row"><span class="tl-label">HDG</span><span id="hudHdg">000°</span></div>
+    </div>
+
+    <div id="bottomLeft">
+      <div class="bar-group">
+        <div class="bar-label"><span>THR</span><span id="thrPct">0%</span></div>
+        <div class="bar"><div id="thrFill" class="bar-fill cyan"></div></div>
+      </div>
+      <div class="bar-group">
+        <div class="bar-label"><span>BAT</span><span id="batPct">100%</span></div>
+        <div class="bar"><div id="batFill" class="bar-fill green"></div></div>
+        <div id="batEst" class="bar-sub">est 0:00</div>
+      </div>
+      <canvas id="horizon" width="220" height="220" class="fpv-only"></canvas>
+    </div>
+
+    <div id="bottomCenter">
+      <div class="big-read"><span id="spdVal">0</span><small>KM/H</small></div>
+      <div class="big-read"><span id="altVal">0.0</span><small>ALT M</small></div>
+      <div class="big-read vsi"><span id="vsiVal">+0.0</span><small>V/S</small></div>
+    </div>
+
+    <div id="topRight">
+      <canvas id="minimap" width="340" height="340"></canvas>
+      <div id="racePanel">
+        <div class="rp-state" id="raceState">FREE FLIGHT</div>
+        <div class="rp-time" id="raceTime">0:00.00</div>
+        <div class="rp-row"><span>BEST</span><span id="raceBest">--:--.--</span></div>
+        <div class="rp-row" id="raceGateRow"><span>GATE</span><span id="raceGate">-/10</span></div>
+      </div>
+    </div>
+
+    <div id="hints">
+      <span><b>C</b> camera</span><span><b>R</b> restart</span><span><b>ENTER</b> race</span><span><b>ESC</b> menu</span><span><b>H</b> help</span>
+    </div>
+
+    <div id="centerMsg"></div>
+    <div id="warnBox"></div>
+
+    <div id="gateArrow" class="hidden">
+      <svg viewBox="0 0 48 48" width="48" height="48"><polygon points="24,4 42,38 24,28 6,38" fill="#ffd54a" stroke="#b8860b" stroke-width="2"/></svg>
+    </div>
+
+    <div id="helpCard" class="hidden">
+      <h3>CONTROLS</h3>
+      <table>
+        <tr><td>W / S</td><td>Pitch forward / back</td></tr>
+        <tr><td>A / D</td><td>Roll left / right</td></tr>
+        <tr><td>Q / E</td><td>Yaw left / right</td></tr>
+        <tr><td>SPACE / SHIFT</td><td>Climb / descend</td></tr>
+        <tr><td>C</td><td>Camera: FPV · Chase · Orbit</td></tr>
+        <tr><td>R</td><td>Restart flight</td></tr>
+        <tr><td>ENTER</td><td>Start / retry race</td></tr>
+        <tr><td>ESC</td><td>Settings &amp; pause</td></tr>
+        <tr><td>M</td><td>Mute sound</td></tr>
+      </table>
+      <p>Gamepad supported (Mode 2 sticks). Land on the helipad to recharge. Cross the START arch to begin a timed lap.</p>
+    </div>
+  </div>
+
+  <div id="introOverlay" class="overlay">
+    <div class="panel intro-panel">
+      <div class="logo-chip">SKYRANGE</div>
+      <h1>DRONE SIMULATOR</h1>
+      <p class="tagline">FPV practice range · 10-gate circuit · best-time chase</p>
+      <div class="intro-controls">
+        <table>
+          <tr><td>W / S</td><td>Pitch</td><td>A / D</td><td>Roll</td></tr>
+          <tr><td>Q / E</td><td>Yaw</td><td>SPACE / SHIFT</td><td>Up / Down</td></tr>
+          <tr><td>C</td><td>Camera</td><td>R</td><td>Restart</td></tr>
+          <tr><td>ENTER</td><td>Race</td><td>ESC</td><td>Menu</td></tr>
+        </table>
+      </div>
+      <p class="best-line">BEST LAP: <span id="introBest">--:--.--</span></p>
+      <div class="btn-row">
+        <button id="btnFlyFree" class="btn primary">FLY FREE</button>
+        <button id="btnStartRace" class="btn">START RACE</button>
+      </div>
+      <p class="foot-hint">Gamepad supported · press any key to launch</p>
+    </div>
+  </div>
+
+  <div id="menuOverlay" class="overlay hidden">
+    <div class="panel menu-panel">
+      <h2>PAUSED — SETTINGS</h2>
+      <div class="set-grid">
+        <label>Pitch / Roll sensitivity<input type="range" id="setPR" min="0.4" max="2" step="0.05"></label>
+        <label>Yaw sensitivity<input type="range" id="setYaw" min="0.4" max="2" step="0.05"></label>
+        <label>Climb sensitivity<input type="range" id="setClimb" min="0.5" max="2" step="0.05"></label>
+        <label>FPV field of view<input type="range" id="setFov" min="70" max="120" step="1"></label>
+      </div>
+      <div class="chk-grid">
+        <label><input type="checkbox" id="setAssist"> Self-level assist (angle mode)</label>
+        <label><input type="checkbox" id="setHover"> Hover hold (altitude assist)</label>
+        <label><input type="checkbox" id="setSound"> Sound</label>
+        <label><input type="checkbox" id="setMap"> Minimap</label>
+      </div>
+      <div class="btn-col">
+        <button id="btnResume" class="btn primary">RESUME</button>
+        <button id="btnRestartFlight" class="btn">RESTART FLIGHT</button>
+        <button id="btnRaceFromMenu" class="btn">START RACE</button>
+        <button id="btnResetBest" class="btn ghost">RESET BEST TIME</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="finishOverlay" class="overlay hidden">
+    <div class="panel finish-panel">
+      <div id="newRecord" class="record-badge hidden">NEW RECORD</div>
+      <h2>LAP COMPLETE</h2>
+      <div class="finish-time" id="finishTime">0:00.00</div>
+      <div class="finish-rows">
+        <div><span>BEST</span><span id="finishBest">--:--.--</span></div>
+        <div><span>DELTA</span><span id="finishDelta">--</span></div>
+      </div>
+      <div class="btn-row">
+        <button id="btnRetry" class="btn primary">RETRY (ENTER)</button>
+        <button id="btnFreeFly" class="btn">FREE FLY</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading">LOADING FLIGHT SYSTEMS…</div>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="js/util.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/world.js"></script>
+<script src="js/drone.js"></script>
+<script src="js/race.js"></script>
+<script src="js/hud.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

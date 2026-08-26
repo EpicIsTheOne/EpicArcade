@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="data:,">
+<title>GRAYLINE — Night Shift</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="view" width="1280" height="720"></canvas>
+    <div id="scanlines"></div>
+
+    <div id="hud" class="hidden">
+      <div class="hud-block" id="hud-clock">12:00 AM</div>
+      <div class="hud-block mid">
+        <div id="hud-power-row">
+          <span id="power-pct">100%</span>
+          <div id="power-bar"><div id="power-fill"></div></div>
+          <span id="pips"></span>
+        </div>
+      </div>
+      <div class="hud-block right" id="hud-night">NIGHT 1</div>
+    </div>
+
+    <div id="warn" class="hidden">LOW POWER</div>
+
+    <div id="feedinfo" class="hidden">
+      <span id="feed-label">CAM 01</span>
+      <span id="feed-sig">SIG 00%</span>
+      <span id="feed-boost" class="hidden">BOOST</span>
+      <span id="rec-dot"></span><span id="rec-txt">REC</span>
+    </div>
+
+    <div id="sidebar" class="hidden"></div>
+
+    <div id="ctrls" class="hidden">
+      <button class="kbtn wide" id="b-cam">FEEDS</button>
+      <button class="kbtn" id="b-light-L">W·LIGHT</button>
+      <button class="kbtn" id="b-door-L">W·DOOR</button>
+      <button class="kbtn mid" id="b-hatch">HATCH</button>
+      <button class="kbtn" id="b-door-R">E·DOOR</button>
+      <button class="kbtn" id="b-light-R">E·LIGHT</button>
+      <button class="kbtn hold" id="b-boost">BOOST</button>
+      <button class="kbtn small" id="b-mute">MUTE</button>
+    </div>
+
+    <div id="toasts"></div>
+    <div id="overlay"></div>
+    <canvas id="fxview" width="1280" height="720" class="hidden"></canvas>
+  </div>
+</div>
+
+<script src="js/util.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/world.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

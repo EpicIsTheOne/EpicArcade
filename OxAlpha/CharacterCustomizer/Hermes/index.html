@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Character Customizer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎭</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">
+      <span class="logo-badge">🎭</span>
+      <div>
+        <h1>Character Customizer</h1>
+        <small>Layered 2D avatar workshop — mix, match &amp; randomize</small>
+      </div>
+    </div>
+    <button type="button" id="btn-random" class="btn btn-primary" title="Randomize (R)">🎲 Randomize</button>
+    <button type="button" id="btn-reset" class="btn" title="Reset to default">↺ Reset</button>
+    <button type="button" id="btn-photo" class="btn" title="Photo mode (P)">📷 Photo mode</button>
+    <button type="button" id="btn-help" class="btn" title="Help (?)">?</button>
+  </header>
+
+  <main>
+    <aside class="panel left-panel" aria-label="Customization options">
+      <nav id="tabs" aria-label="Categories"></nav>
+      <div id="options"></div>
+    </aside>
+
+    <section class="stage" id="stage" aria-label="Character preview stage">
+      <div class="stage-floor"></div>
+      <div id="tilt" style="width:100%;display:flex;justify-content:center;">
+        <div id="char-host"></div>
+      </div>
+      <div id="sparkles"></div>
+      <div class="stage-hint">Tip: press <kbd>R</kbd> to randomize · <kbd>P</kbd> for photo mode</div>
+    </section>
+
+    <aside class="panel right-panel" aria-label="Presets and saved characters">
+      <div>
+        <div class="rail-title">Presets <small style="letter-spacing:0;text-transform:none;">keys 1–6</small></div>
+        <div id="presets"></div>
+      </div>
+      <div>
+        <div class="rail-title">Saved characters</div>
+        <div id="slots"></div>
+      </div>
+      <div class="rail-actions">
+        <button type="button" id="btn-download" class="btn">⬇ Download PNG</button>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<!-- photo mode overlay chrome -->
+<button type="button" id="exit-photo" class="photo-btn" title="Exit photo mode (Esc)">✕ Exit photo</button>
+<button type="button" id="btn-download-photo" class="photo-btn">⬇ Download PNG</button>
+<div class="photo-caption">Click ✕ or press Esc to return to the editor</div>
+
+<!-- help overlay -->
+<div id="help" role="dialog" aria-modal="true" aria-labelledby="help-title">
+  <div class="help-card">
+    <h2 id="help-title">🎭 Welcome to the Character Customizer!</h2>
+    <p class="sub">Build a character from layered 2D art — everything updates instantly.</p>
+    <div class="help-row"><span><kbd>R</kbd></span><span>Randomize a brand-new character</span></div>
+    <div class="help-row"><span><kbd>P</kbd> / <kbd>Esc</kbd></span><span>Enter / leave clean photo mode</span></div>
+    <div class="help-row"><span><kbd>1</kbd> – <kbd>6</kbd></span><span>Load presets (Adventurer, Pop Star…)</span></div>
+    <div class="help-row"><span><kbd>?</kbd></span><span>Show this help panel</span></div>
+    <div class="help-row"><span>Save slots →</span><span>Store up to 3 characters locally in your browser</span></div>
+    <div class="help-row"><span>Download PNG →</span><span>Export your character as an image</span></div>
+    <div class="help-foot"><button type="button" id="help-close" class="btn btn-primary">Start customizing</button></div>
+  </div>
+</div>
+
+<div id="toast" role="status"></div>
+
+<script src="js/character.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

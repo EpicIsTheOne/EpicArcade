@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Factory Tycoon</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app"></div>
+
+<div id="loadingTag">BOOTING FACTORY…</div>
+
+<div id="hud" class="hidden">
+  <div id="crosshair"></div>
+
+  <div id="moneyPanel" class="panel">
+    <div id="moneyVal">$0</div>
+    <div class="sub">income <b id="incomeVal">$0.0/s</b></div>
+    <div class="sub">lifetime <span id="totalVal">$0</span></div>
+  </div>
+
+  <div id="topBtns">
+    <button id="btnShop">Shop<span class="k">B</span></button>
+    <button id="btnHelp">Help<span class="k">H</span></button>
+    <button id="btnMute">Sound: On<span class="k">M</span></button>
+    <button id="btnPause">Menu<span class="k">Esc</span></button>
+  </div>
+
+  <div id="demolishBadge" class="hidden">DEMOLISH MODE — click a machine to sell it back (60%)</div>
+
+  <div id="toolbarWrap">
+    <div id="hintbar"><b>LMB</b> place<span class="sep">·</span><b>R</b> rotate<span class="sep">·</span><b>X</b> demolish<span class="sep">·</span><b>B</b> shop<span class="sep">·</span><b>WASD</b> move<span class="sep">·</span><b>Shift</b> sprint</div>
+    <div id="toolbar"></div>
+  </div>
+
+  <div id="infoCard" class="panel hidden">
+    <div id="infoName"></div>
+    <div id="infoStatus"></div>
+    <div id="infoBuf"></div>
+  </div>
+
+  <div id="toasts"></div>
+  <div id="floaters"></div>
+  <div id="savedTag">saved ✓</div>
+</div>
+
+<!-- SHOP -->
+<div id="shopModal" class="modalBack hidden">
+  <div class="modal">
+    <div class="modalHead">
+      <h2>🏭 Company HQ</h2>
+      <button class="x" id="shopClose">✕</button>
+    </div>
+    <div class="tabs">
+      <button data-tab="upgrades" class="on">Upgrades</button>
+      <button data-tab="land">Land</button>
+      <button data-tab="stats">Stats</button>
+    </div>
+    <div class="modalBody">
+      <div id="tab-upgrades"></div>
+      <div id="tab-land" class="hidden"></div>
+      <div id="tab-stats" class="hidden"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PAUSE -->
+<div id="pauseModal" class="modalBack hidden">
+  <div class="modal" style="width:auto">
+    <div class="modalHead"><h2>⏸ Paused</h2></div>
+    <div class="modalBody">
+      <div class="pauseCol">
+        <button class="primary" id="resumeBtn">▶ Resume</button>
+        <button id="saveBtn">💾 Save Now</button>
+        <button id="helpBtn2">❓ Help</button>
+        <div class="volRow">🔊 <input type="range" id="volRange" min="0" max="100" value="80"></div>
+        <button class="danger" id="newGameBtn">🗑 New Game (erase save)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HELP -->
+<div id="helpModal" class="modalBack hidden">
+  <div class="modal">
+    <div class="modalHead">
+      <h2>📘 How to run a factory</h2>
+      <button class="x" id="helpClose">✕</button>
+    </div>
+    <div class="modalBody">
+      <div class="helpCols">
+        <h3>Goal</h3>
+        <div style="grid-column:1/-1">Build a self-running production line: <b>extract ore → smelt ingots → craft goods → sell</b>. Reinvest profits into faster machines, better recipes and new land.</div>
+        <h3>Controls</h3>
+        <div><span class="hk">W A S D</span> walk</div>
+        <div><span class="hk">Mouse</span> look (click world to lock)</div>
+        <div><span class="hk">Shift</span> sprint</div>
+        <div><span class="hk">Space</span> jump</div>
+        <div><span class="hk">1–6</span> pick machine to build</div>
+        <div><span class="hk">R / Wheel</span> rotate blueprint</div>
+        <div><span class="hk">LMB</span> place / demolish</div>
+        <div><span class="hk">X</span> toggle demolish mode</div>
+        <div><span class="hk">B</span> shop (upgrades &amp; land)</div>
+        <div><span class="hk">H</span> this help</div>
+        <div><span class="hk">M</span> mute · <span class="hk">F</span> quick-save · <span class="hk">Esc</span> menu</div>
+        <h3>The machines</h3>
+        <div style="grid-column:1/-1; line-height:1.7">
+          ⛏ <b>Extractor</b> — must sit <i>on an ore deposit</i>, auto-mines forever.<br>
+          ➡ <b>Conveyor</b> — carries items; arrows show flow direction.<br>
+          🔥 <b>Smelter</b> — ore → ingot (3× sale value).<br>
+          ⚙️ <b>Assembler</b> — crafts Gears (2 iron) and Circuits (iron + copper).<br>
+          📦 <b>Storage</b> — 16-slot buffer that smooths bottlenecks.<br>
+          💰 <b>Market</b> — buys anything you feed it, instantly.
+        </div>
+        <div class="helpTip">💡 Watch the status lights: <b style="color:#4ade80">green</b> = working, <b style="color:#ffd28a">yellow</b> = output jammed, <b style="color:#ff5d5d">red</b> = starved. A red extractor next to a slow smelter means it's time to upgrade or add machines.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- START -->
+<div id="startOverlay" class="hidden">
+  <h1>FACTORY TYCOON</h1>
+  <h2>BUILD · AUTOMATE · EXPAND</h2>
+  <button class="go primary" id="startBtn">▶ START SHIFT</button>
+  <div class="foot">click to lock mouse · WASD to walk · progress autosaves</div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

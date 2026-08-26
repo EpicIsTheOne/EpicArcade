@@ -1,0 +1,1904 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Conveyor Tycoon</title>
+<link rel="icon" href="data:,">
+<style>
+
+[hidden] { display: none !important; }
+:root {
+  --bg: #10141b;
+  --bg2: #161c26;
+  --panel: rgba(18, 24, 33, 0.92);
+  --line: rgba(255, 255, 255, 0.08);
+  --text: #dbe4ee;
+  --muted: #8a97a8;
+  --accent: #57d7ff;
+  --green: #7ce38b;
+  --red: #ff6b6b;
+  --gold: #ffd166;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+  background: radial-gradient(1200px 800px at 50% -10%, #1a2230 0%, var(--bg) 55%);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+#hud {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 18px;
+  background: linear-gradient(180deg, rgba(28, 36, 50, 0.85), rgba(20, 26, 37, 0.75));
+  border-bottom: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+  z-index: 20;
+}
+.hud-left { min-width: 220px; }
+.stat-big { font-size: 26px; font-weight: 700; color: var(--green); letter-spacing: 0.5px; text-shadow: 0 0 14px rgba(124, 227, 139, 0.35); font-variant-numeric: tabular-nums; }
+.stat-sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 1px; }
+.hud-title { display: flex; align-items: center; gap: 9px; font-size: 17px; letter-spacing: 3px; color: var(--muted); font-weight: 300; }
+.hud-title b { color: var(--text); font-weight: 700; }
+.logo-dot { width: 12px; height: 12px; border-radius: 3px; background: linear-gradient(135deg, var(--accent), #7c8cff); box-shadow: 0 0 12px rgba(87, 215, 255, 0.7); }
+.hud-right { display: flex; gap: 8px; min-width: 220px; justify-content: flex-end; }
+
+.hbtn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 6px 11px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.hbtn:hover { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.2); }
+.hbtn.danger { color: var(--red); }
+kbd {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 10.5px;
+  font-family: inherit;
+  color: var(--muted);
+}
+
+#stage { position: relative; flex: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+canvas#game {
+  border-radius: 12px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  cursor: default;
+}
+canvas#game.tooling { cursor: crosshair; }
+
+#paused-badge {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+  background: rgba(255, 209, 102, 0.14);
+  border: 1px solid rgba(255, 209, 102, 0.45);
+  color: var(--gold);
+  padding: 7px 16px; border-radius: 99px;
+  font-size: 13px; font-weight: 600; letter-spacing: 1px;
+  backdrop-filter: blur(4px);
+  z-index: 15;
+}
+
+#tooltip {
+  position: absolute;
+  max-width: 260px;
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  pointer-events: none;
+  z-index: 30;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+}
+#tooltip h4 { font-size: 13px; margin-bottom: 4px; display: flex; align-items: center; gap: 7px; }
+#tooltip .dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+#tooltip .muted { color: var(--muted); }
+#tooltip .bar { height: 5px; background: rgba(255, 255, 255, 0.09); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+#tooltip .bar > i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+#toolbar {
+  display: flex; gap: 8px; align-items: stretch; justify-content: center;
+  padding: 10px 14px 12px;
+  background: linear-gradient(0deg, rgba(16, 20, 27, 0.95), rgba(20, 26, 37, 0.65));
+  border-top: 1px solid var(--line);
+  z-index: 20;
+}
+.tcard {
+  position: relative;
+  min-width: 96px;
+  padding: 8px 10px 7px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text);
+  transition: transform 0.12s, border-color 0.12s, background 0.12s;
+}
+.tcard:hover { background: rgba(255, 255, 255, 0.09); transform: translateY(-2px); }
+.tcard.sel { border-color: var(--accent); background: rgba(87, 215, 255, 0.1); box-shadow: 0 0 0 1px var(--accent), 0 6px 18px rgba(87, 215, 255, 0.15); }
+.tcard.poor .tcost { color: var(--red); }
+.tcard .tname { font-size: 12.5px; font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.tcard .ticon { display: inline-flex; width: 17px; height: 17px; }
+.tcard .ticon svg { width: 17px; height: 17px; }
+.tcard .tcost { font-size: 11.5px; color: var(--gold); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.tcard .tdesc { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+.tcard .key {
+  position: absolute; top: 6px; right: 7px;
+  font-size: 10px; color: var(--muted);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px; padding: 1px 5px;
+}
+
+.panel {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(480px, calc(100vw - 40px));
+  max-height: calc(100vh - 120px);
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 14px;
+  z-index: 40;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  display: flex; flex-direction: column;
+}
+.panel-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; border-bottom: 1px solid var(--line); }
+.panel-head h2 { font-size: 16px; font-weight: 700; letter-spacing: 0.4px; }
+.xclose { background: none; border: none; color: var(--muted); font-size: 14px; cursor: pointer; padding: 4px 6px; border-radius: 6px; }
+.xclose:hover { color: var(--text); background: rgba(255, 255, 255, 0.08); }
+.panel-body { padding: 12px 18px 18px; overflow-y: auto; }
+.panel-body section { margin-bottom: 16px; }
+.panel-body h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin-bottom: 8px; }
+.muted { color: var(--muted); font-weight: 400; }
+
+.srow { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 13px; }
+.srow .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 7px; vertical-align: -1px; }
+.srow .val { font-variant-numeric: tabular-nums; color: var(--text); }
+.srow .val.money { color: var(--green); }
+
+.upg-row { display: flex; align-items: center; justify-content: space-between; padding: 7px 0; gap: 10px; font-size: 13px; }
+.upg-row .upg-info b { display: block; font-size: 13px; }
+.upg-row .upg-info span { font-size: 11.5px; color: var(--muted); }
+
+.btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn:hover { background: rgba(255, 255, 255, 0.14); }
+.btn.primary { background: linear-gradient(135deg, #2f9dc9, #2377d6); border-color: transparent; font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.12); }
+.btn.danger { color: var(--red); border-color: rgba(255, 107, 107, 0.35); }
+.btn.big { font-size: 15px; padding: 12px 34px; border-radius: 11px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.obj-row { display: flex; align-items: center; gap: 9px; padding: 4px 0; font-size: 13px; color: var(--muted); }
+.obj-row.done { color: var(--green); }
+.obj-row .check { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid currentColor; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; flex: none; }
+
+.help-body p { font-size: 13px; line-height: 1.6; margin-bottom: 10px; }
+table.keys { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 10px; }
+table.keys td { padding: 4px 6px 4px 0; vertical-align: top; }
+table.keys td:first-child { white-space: nowrap; width: 110px; }
+
+#modal {
+  position: fixed; inset: 0; background: rgba(5, 8, 12, 0.6);
+  display: flex; align-items: center; justify-content: center; z-index: 60;
+  backdrop-filter: blur(3px);
+}
+.modal-card {
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px; padding: 22px 24px; width: min(400px, 90vw);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+.modal-card h3 { font-size: 16px; margin-bottom: 8px; }
+.modal-card p { font-size: 13px; color: var(--muted); line-height: 1.55; margin-bottom: 16px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+#intro {
+  position: fixed; inset: 0; z-index: 70;
+  background: radial-gradient(1000px 700px at 50% 20%, rgba(47, 157, 201, 0.12), transparent 60%), rgba(10, 13, 19, 0.88);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(6px);
+}
+.intro-card {
+  text-align: center;
+  background: rgba(20, 27, 38, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 44px 52px 38px;
+  max-width: 520px;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.65), 0 0 60px rgba(47, 157, 201, 0.12);
+}
+.intro-logo { font-size: 38px; font-weight: 800; letter-spacing: 4px; color: var(--text); }
+.intro-logo span { color: var(--accent); margin-left: 10px; font-weight: 300; }
+.tagline { color: var(--muted); margin: 8px 0 20px; font-size: 14px; letter-spacing: 0.6px; }
+.intro-card ul { list-style: none; text-align: left; margin: 0 auto 20px; max-width: 360px; }
+.intro-card li { font-size: 13.5px; line-height: 1.5; padding: 5px 0 5px 24px; position: relative; color: var(--text); }
+.intro-card li::before { content: "\25B8"; position: absolute; left: 6px; color: var(--accent); }
+.intro-card .hint { font-size: 12px; color: var(--muted); margin-bottom: 22px; }
+.save-note { margin-top: 14px; font-size: 12.5px; color: var(--green); }
+
+#toasts { position: fixed; right: 16px; bottom: 86px; display: flex; flex-direction: column; gap: 8px; z-index: 50; pointer-events: none; }
+.toast {
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 3px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: toast-in 0.25s ease-out;
+  max-width: 320px;
+}
+.toast.gold { border-left-color: var(--gold); }
+.toast.out { animation: toast-out 0.3s ease-in forwards; }
+@keyframes toast-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes toast-out { to { transform: translateX(24px); opacity: 0; } }
+
+::-webkit-scrollbar { width: 9px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hud">
+    <div class="hud-left">
+      <div id="money" class="stat-big">$0</div>
+      <div id="income" class="stat-sub">+$0/min</div>
+    </div>
+    <div class="hud-title"><span class="logo-dot"></span><span>CONVEYOR<b>TYCOON</b></span></div>
+    <div class="hud-right">
+      <button id="btn-stats" class="hbtn">Stats <kbd>Tab</kbd></button>
+      <button id="btn-help" class="hbtn">Help <kbd>H</kbd></button>
+      <button id="btn-mute" class="hbtn">Sound: On</button>
+      <button id="btn-reset" class="hbtn danger">Reset</button>
+    </div>
+  </header>
+  <main id="stage">
+    <canvas id="game"></canvas>
+    <div id="paused-badge" hidden>PAUSED &mdash; press Space to resume</div>
+    <div id="tooltip" hidden></div>
+  </main>
+  <footer id="toolbar"></footer>
+</div>
+
+<div id="stats-panel" class="panel" hidden>
+  <div class="panel-head"><h2>Factory Stats</h2><button class="xclose" data-close="stats-panel">&#10005;</button></div>
+  <div class="panel-body">
+    <section>
+      <h3>Income <span class="muted">(last 60s)</span></h3>
+      <canvas id="sparkline" width="300" height="64"></canvas>
+      <div id="stat-money-rows"></div>
+    </section>
+    <section>
+      <h3>Production (lifetime)</h3>
+      <div id="stat-prod-rows"></div>
+    </section>
+    <section>
+      <h3>Upgrades</h3>
+      <div id="stat-upgrade-rows"></div>
+    </section>
+    <section>
+      <h3>Objectives</h3>
+      <div id="stat-objective-rows"></div>
+    </section>
+  </div>
+</div>
+
+<div id="help-panel" class="panel" hidden>
+  <div class="panel-head"><h2>How to Play</h2><button class="xclose" data-close="help-panel">&#10005;</button></div>
+  <div class="panel-body help-body">
+    <p><b>Goal:</b> mine ore, refine it into valuable goods, and sell them. Reinvest profits into a bigger factory.</p>
+    <table class="keys">
+      <tr><td><kbd>1</kbd>&ndash;<kbd>8</kbd></td><td>Select build tool</td></tr>
+      <tr><td><kbd>R</kbd> / wheel</td><td>Rotate ghost (or hovered building)</td></tr>
+      <tr><td><kbd>X</kbd></td><td>Demolish tool (70% refund)</td></tr>
+      <tr><td>Right-click</td><td>Quick-demolish hovered building</td></tr>
+      <tr><td>Drag</td><td>Paint conveyor lines (auto-turns)</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>Pause simulation</td></tr>
+      <tr><td><kbd>Tab</kbd></td><td>Stats &amp; upgrades</td></tr>
+      <tr><td><kbd>H</kbd></td><td>This panel</td></tr>
+    </table>
+    <p><b>Tips:</b> Extractors must sit on an ore deposit and eject forward. Machines accept items from any side and eject out their arrow side. Belts carry ~2 items per tile &mdash; parallel lines beat one giant snake. Markets sell anything; raw ore sells cheap, refined goods sell big.</p>
+  </div>
+</div>
+
+<div id="modal" hidden>
+  <div class="modal-card">
+    <h3 id="modal-title">Reset factory?</h3>
+    <p id="modal-text">This wipes your save and starts over with $650. There is no undo.</p>
+    <div class="modal-actions">
+      <button id="modal-cancel" class="btn">Cancel</button>
+      <button id="modal-ok" class="btn danger">Reset everything</button>
+    </div>
+  </div>
+</div>
+
+<div id="intro" hidden>
+  <div class="intro-card">
+    <div class="intro-logo">CONVEYOR<span>TYCOON</span></div>
+    <p class="tagline">Build it. Feed it. Automate everything.</p>
+    <ul>
+      <li>Drop <b>extractors</b> on ore deposits</li>
+      <li>Connect <b>conveyors</b> into smelters, assemblers and fabricators</li>
+      <li>Sell ingots, gears, circuits and robots at the <b>market</b></li>
+      <li>Upgrade belts &amp; machines, expand, optimize</li>
+    </ul>
+    <p class="hint">Drag to paint belts &middot; R rotates &middot; right-click demolishes &middot; H for help</p>
+    <button id="intro-start" class="btn primary big">Start Building</button>
+    <div id="intro-save-note" class="save-note" hidden>Save detected &mdash; your factory has been restored.</div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+"use strict";
+
+const GRID_W = 30;
+const GRID_H = 22;
+
+const DIRS = [
+  { x: 0, y: -1 },
+  { x: 1, y: 0 },
+  { x: 0, y: 1 },
+  { x: -1, y: 0 }
+];
+
+const ITEMS = {
+  iron_ore:    { name: "Iron Ore",     color: "#9fb2c8", value: 4,  tier: 0 },
+  copper_ore:  { name: "Copper Ore",   color: "#e08d58", value: 5,  tier: 0 },
+  coal:        { name: "Coal",         color: "#565a66", value: 3,  tier: 0 },
+  iron_ingot:  { name: "Iron Ingot",   color: "#cdd8e6", value: 12, tier: 1 },
+  copper_ingot:{ name: "Copper Ingot", color: "#f0a05a", value: 14, tier: 1 },
+  steel:       { name: "Steel",        color: "#8fa3b8", value: 30, tier: 2 },
+  gear:        { name: "Gear",         color: "#b9c4d6", value: 34, tier: 2 },
+  wire:        { name: "Wire",         color: "#ffb35c", value: 17, tier: 2 },
+  circuit:     { name: "Circuit",      color: "#7fd18b", value: 48, tier: 3 },
+  robot:       { name: "Robot",        color: "#7ec8ff", value: 190, tier: 4, glow: true }
+};
+
+const RECIPES = {
+  smelter: [
+    { in: { iron_ore: 2 },              out: ["iron_ingot"],            time: 2.0 },
+    { in: { copper_ore: 2 },            out: ["copper_ingot"],          time: 2.0 },
+    { in: { iron_ingot: 2, coal: 1 },   out: ["steel"],                 time: 3.0 }
+  ],
+  assembler: [
+    { in: { iron_ingot: 2 },            out: ["gear"],                  time: 2.4 },
+    { in: { copper_ingot: 1 },          out: ["wire", "wire"],          time: 1.6 }
+  ],
+  fabricator: [
+    { in: { wire: 1, iron_ingot: 1 },   out: ["circuit"],               time: 3.0 },
+    { in: { steel: 1, gear: 1, circuit: 2 }, out: ["robot"],            time: 5.0 }
+  ]
+};
+
+const BUILDINGS = {
+  belt:       { name: "Conveyor",  cost: 10,  color: "#55617a", dir: true },
+  extractor:  { name: "Extractor", cost: 120, color: "#c9b458", dir: true, onDeposit: true,
+                desc: "Mines a deposit, ejects forward" },
+  smelter:    { name: "Smelter",   cost: 180, color: "#e07b4f", dir: true, recipes: RECIPES.smelter },
+  assembler:  { name: "Assembler", cost: 380, color: "#5b8fd6", dir: true, recipes: RECIPES.assembler },
+  fabricator: { name: "Fabricator",cost: 900, color: "#a06ee0", dir: true, recipes: RECIPES.fabricator },
+  seller:     { name: "Market",    cost: 40,  color: "#57d78b", dir: false, desc: "Sells anything that enters" },
+  storage:    { name: "Storage",   cost: 80,  color: "#4fbdb8", dir: false, cap: 120, desc: "Buffers up to 120 items" }
+};
+
+const TOOLS = [
+  { id: "select",     key: "1", name: "Inspect", icon: "cursor" },
+  { id: "belt",       key: "2", name: "Conveyor", icon: "belt" },
+  { id: "extractor",  key: "3", name: "Extractor", icon: "drill" },
+  { id: "smelter",    key: "4", name: "Smelter", icon: "flame" },
+  { id: "assembler",  key: "5", name: "Assembler", icon: "gear" },
+  { id: "fabricator", key: "6", name: "Fabricator", icon: "chip" },
+  { id: "seller",     key: "7", name: "Market", icon: "dollar" },
+  { id: "storage",    key: "8", name: "Storage", icon: "crate" },
+  { id: "delete",     key: "X", name: "Demolish", icon: "x", refundNote: true }
+];
+
+const DEPOSITS = [
+  { x: 3,  y: 4,  res: "iron_ore" },
+  { x: 4,  y: 4,  res: "iron_ore" },
+  { x: 3,  y: 5,  res: "iron_ore" },
+  { x: 4,  y: 5,  res: "iron_ore" },
+  { x: 5,  y: 5,  res: "iron_ore" },
+  { x: 4,  y: 6,  res: "iron_ore" },
+  { x: 9,  y: 14, res: "iron_ore" },
+  { x: 10, y: 14, res: "iron_ore" },
+  { x: 9,  y: 15, res: "iron_ore" },
+  { x: 16, y: 7,  res: "iron_ore" },
+  { x: 17, y: 7,  res: "iron_ore" },
+  { x: 16, y: 8,  res: "iron_ore" },
+  { x: 13, y: 3,  res: "copper_ore" },
+  { x: 14, y: 3,  res: "copper_ore" },
+  { x: 13, y: 4,  res: "copper_ore" },
+  { x: 22, y: 15, res: "copper_ore" },
+  { x: 23, y: 15, res: "copper_ore" },
+  { x: 22, y: 16, res: "copper_ore" },
+  { x: 23, y: 16, res: "copper_ore" },
+  { x: 24, y: 15, res: "copper_ore" },
+  { x: 25, y: 4,  res: "coal" },
+  { x: 26, y: 4,  res: "coal" },
+  { x: 25, y: 5,  res: "coal" },
+  { x: 18, y: 11, res: "coal" },
+  { x: 19, y: 11, res: "coal" }
+];
+
+const DEPOSIT_MAP = {};
+for (const d of DEPOSITS) DEPOSIT_MAP[d.x + "," + d.y] = d.res;
+
+const UPGRADES = {
+  belt: {
+    name: "Belt Speed",
+    levels: [
+      { cost: 500,  mul: 1.4, label: "+40% belt speed" },
+      { cost: 1500, mul: 1.4, label: "+40% belt speed" },
+      { cost: 4000, mul: 1.4, label: "+40% belt speed" }
+    ]
+  },
+  oc: {
+    name: "Machine Overclock",
+    levels: [
+      { cost: 800,  mul: 1.25, label: "+25% machine speed" },
+      { cost: 2200, mul: 1.25, label: "+25% machine speed" },
+      { cost: 6000, mul: 1.25, label: "+25% machine speed" }
+    ]
+  }
+};
+
+const OBJECTIVES = [
+  { id: "first_sale", label: "Make your first sale",        test: s => s.stats.earnedTotal >= 1 },
+  { id: "k1",         label: "Earn $1,000 total",           test: s => s.stats.earnedTotal >= 1000 },
+  { id: "gear",       label: "Produce a Gear",              test: s => (s.produced.gear | 0) > 0 },
+  { id: "steel",      label: "Produce Steel",               test: s => (s.produced.steel | 0) > 0 },
+  { id: "circuit",    label: "Produce a Circuit",           test: s => (s.produced.circuit | 0) > 0 },
+  { id: "robot",      label: "Assemble a Robot",            test: s => (s.produced.robot | 0) > 0 },
+  { id: "rich",       label: "Hold $5,000 at once",         test: s => s.money >= 5000 }
+];
+
+const SIM = {
+  START_MONEY: 650,
+  REFUND: 0.7,
+  BELT_SPEED: 1.5,
+  EXTRACT_TIME: 1.8,
+  GAP: 0.5,
+  ENTRY_GAP: 0.55,
+  INPUT_CAP: 6,
+  OUT_CAP: 6
+};
+
+</script>
+<script>
+"use strict";
+
+const SND = (() => {
+  let ctx = null;
+  let master = null;
+  let muted = localStorage.getItem("ct_muted") === "1";
+  let lastSell = 0;
+  let lastDeny = 0;
+
+  function ensure() {
+    if (ctx) return true;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return false;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = muted ? 0 : 0.5;
+      master.connect(ctx.destination);
+    } catch (e) { return false; }
+    return true;
+  }
+
+  function tone(freq, dur, type, vol, slideTo) {
+    if (!ensure()) return;
+    if (ctx.state === "suspended") { ctx.resume(); }
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type || "sine";
+    o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(20, slideTo), t + dur);
+    g.gain.setValueAtTime(vol || 0.15, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+
+  return {
+    unlock() { ensure(); if (ctx && ctx.state === "suspended") ctx.resume(); },
+    get muted() { return muted; },
+    toggleMute() {
+      muted = !muted;
+      localStorage.setItem("ct_muted", muted ? "1" : "0");
+      if (master) master.gain.value = muted ? 0 : 0.5;
+      return muted;
+    },
+    place()  { tone(300, 0.09, "square", 0.08, 190); },
+    rotate() { tone(430, 0.05, "square", 0.05); },
+    remove() { tone(220, 0.14, "square", 0.07, 90); },
+    click()  { tone(520, 0.04, "triangle", 0.06); },
+    deny()   { const n = performance.now(); if (n - lastDeny > 180) { lastDeny = n; tone(140, 0.12, "sawtooth", 0.07, 110); } },
+    sell(value) {
+      const n = performance.now();
+      if (n - lastSell < 90) return;
+      lastSell = n;
+      const base = value >= 100 ? 880 : value >= 40 ? 740 : value >= 12 ? 620 : 500;
+      tone(base, 0.09, "sine", 0.09);
+      tone(base * 1.5, 0.07, "sine", 0.04);
+    },
+    achieve() { tone(523, 0.11, "triangle", 0.1); setTimeout(() => tone(784, 0.16, "triangle", 0.1), 90); }
+  };
+})();
+
+</script>
+<script>
+"use strict";
+
+const VIEW = {
+  tool: "select",
+  dir: 1,
+  hover: null,
+  dragging: false,
+  paused: false,
+  mouse: { x: -1, y: -1, sx: 0, sy: 0 }
+};
+
+let G = null;
+
+const SAVE_KEY = "conveyorTycoonSaveV1";
+
+function idx(x, y) { return y * GRID_W + x; }
+function inBounds(x, y) { return x >= 0 && y >= 0 && x < GRID_W && y < GRID_H; }
+function depositAt(x, y) { return DEPOSIT_MAP[x + "," + y] || null; }
+
+function newGame() {
+  G = {
+    money: SIM.START_MONEY,
+    time: 0,
+    cells: new Map(),
+    upg: { belt: 0, oc: 0 },
+    stats: { earnedTotal: 0, soldCounts: {}, spentTotal: 0 },
+    produced: {},
+    recentSales: [],
+    incomeSamples: [],
+    sampleTimer: 0,
+    flags: {},
+    fx: []
+  };
+}
+
+function makeCell(t, x, y, d) {
+  const c = { t, x, y, d: d | 0 };
+  if (t === "belt") { c.items = []; }
+  else if (t === "extractor") { c.res = depositAt(x, y); c.pt = SIM.EXTRACT_TIME * 0.4; c.out = []; }
+  else if (t === "seller") { c.flash = 0; }
+  else if (t === "storage") { c.inv = {}; c.count = 0; }
+  else { c.inv = {}; c.out = []; c.work = null; }
+  return c;
+}
+
+function getCell(x, y) { return G.cells.get(idx(x, y)) || null; }
+
+function canPlace(t, x, y) {
+  if (!inBounds(x, y)) return false;
+  if (getCell(x, y)) return false;
+  if (BUILDINGS[t].onDeposit && !depositAt(x, y)) return false;
+  return true;
+}
+
+function place(t, x, y, d, opts) {
+  opts = opts || {};
+  const def = BUILDINGS[t];
+  if (!def || !canPlace(t, x, y)) return false;
+  if (!opts.free) {
+    if (G.money < def.cost) return false;
+    G.money -= def.cost;
+    G.stats.spentTotal += def.cost;
+  }
+  G.cells.set(idx(x, y), makeCell(t, x, y, d));
+  return true;
+}
+
+function refundOf(t) { return Math.floor(BUILDINGS[t].cost * SIM.REFUND); }
+
+function remove(x, y) {
+  const c = getCell(x, y);
+  if (!c) return 0;
+  G.cells.delete(idx(x, y));
+  const r = refundOf(c.t);
+  G.money += r;
+  return r;
+}
+
+function beltMul() { let m = 1; for (let i = 0; i < G.upg.belt; i++) m *= UPGRADES.belt.levels[i].mul; return m; }
+function ocMul() { let m = 1; for (let i = 0; i < G.upg.oc; i++) m *= UPGRADES.oc.levels[i].mul; return m; }
+
+function upgradeNext(id) {
+  const u = UPGRADES[id];
+  if (G.upg[id] >= u.levels.length) return null;
+  return u.levels[G.upg[id]];
+}
+function buyUpgrade(id) {
+  const nxt = upgradeNext(id);
+  if (!nxt || G.money < nxt.cost) { SND.deny(); return false; }
+  G.money -= nxt.cost;
+  G.stats.spentTotal += nxt.cost;
+  G.upg[id]++;
+  SND.achieve();
+  toast(UPGRADES[id].name + " upgraded!", "gold");
+  return true;
+}
+
+function edgePoint(edge) {
+  switch (edge) {
+    case 0: return { x: 0.5, y: 0 };
+    case 1: return { x: 1, y: 0.5 };
+    case 2: return { x: 0.5, y: 1 };
+    default: return { x: 0, y: 0.5 };
+  }
+}
+function itemPoint(item) {
+  const entryEdge = (item.edir + 2) % 4;
+  const exitEdge = item.exitEdge != null ? item.exitEdge : item.edir;
+  const a = edgePoint(entryEdge), b = edgePoint(exitEdge);
+  const t = Math.max(0, Math.min(1, item.pos));
+  if ((entryEdge + 2) % 4 === exitEdge) return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+  const cx = 0.5, cy = 0.5;
+  const u = 1 - t;
+  return {
+    x: u * u * a.x + 2 * u * t * cx + t * t * b.x,
+    y: u * u * a.y + 2 * u * t * cy + t * t * b.y
+  };
+}
+
+function sellItem(name, cell) {
+  const v = ITEMS[name].value;
+  G.money += v;
+  G.stats.earnedTotal += v;
+  G.stats.soldCounts[name] = (G.stats.soldCounts[name] | 0) + 1;
+  G.recentSales.push({ t: G.time, v });
+  cell.flash = 1;
+  G.fx.push({ kind: "pop", x: cell.x + 0.5, y: cell.y + 0.2, text: "+$" + v, color: "#7ce38b", t: 0 });
+  SND.sell(v);
+}
+
+function receiveInto(cell, name) {
+  if (!cell) return false;
+  switch (cell.t) {
+    case "seller":
+      sellItem(name, cell);
+      return true;
+    case "storage": {
+      if (cell.count >= BUILDINGS.storage.cap) return false;
+      cell.inv[name] = (cell.inv[name] | 0) + 1;
+      cell.count++;
+      return true;
+    }
+    default: {
+      const def = BUILDINGS[cell.t];
+      if (!def || !def.recipes) return false;
+      if ((cell.inv[name] | 0) >= SIM.INPUT_CAP) return false;
+      cell.inv[name] = (cell.inv[name] | 0) + 1;
+      return true;
+    }
+  }
+}
+
+function tryTransferFrom(src, name) {
+  const d = DIRS[src.d];
+  const next = getCell(src.x + d.x, src.y + d.y);
+  if (!next) return false;
+  if (next.t === "belt") {
+    if (next.items.some(o => o.pos < SIM.ENTRY_GAP)) return false;
+    next.items.push({ n: name, pos: 0, edir: src.d });
+    return true;
+  }
+  return receiveInto(next, name);
+}
+
+function updateBelt(cell, dt) {
+  const items = cell.items;
+  items.sort((a, b) => b.pos - a.pos);
+  const spd = SIM.BELT_SPEED * beltMul();
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    it.exitEdge = cell.d;
+    let limit = 1;
+    if (i > 0) limit = items[i - 1].pos - SIM.GAP;
+    let np = it.pos + spd * dt;
+    if (limit < np) np = limit;
+    if (np > 1) np = 1;
+    if (np >= 1 || it.pos >= 1) {
+      if (tryTransferFrom(cell, it.n)) { items.splice(i, 1); i--; continue; }
+      np = 1;
+    }
+    if (np < it.pos) np = it.pos;
+    it.pos = np;
+  }
+}
+
+function pickRecipe(cell) {
+  const recs = BUILDINGS[cell.t].recipes;
+  for (let r = 0; r < recs.length; r++) {
+    const rec = recs[r];
+    let ok = true;
+    for (const k in rec.in) if ((cell.inv[k] | 0) < rec.in[k]) { ok = false; break; }
+    if (ok) return r;
+  }
+  return -1;
+}
+
+function updateMachine(cell, dt) {
+  const mul = ocMul();
+  if (!cell.work) {
+    const r = pickRecipe(cell);
+    if (r >= 0) {
+      const rec = BUILDINGS[cell.t].recipes[r];
+      for (const k in rec.in) cell.inv[k] -= rec.in[k];
+      cell.work = { r, pt: rec.time / mul };
+    }
+  } else {
+    cell.work.pt -= dt;
+    if (cell.work.pt <= 0) {
+      const rec = BUILDINGS[cell.t].recipes[cell.work.r];
+      if (cell.out.length + rec.out.length <= SIM.OUT_CAP) {
+        for (const o of rec.out) {
+          cell.out.push(o);
+          G.produced[o] = (G.produced[o] | 0) + 1;
+        }
+        checkObjectives();
+        cell.work = null;
+      } else {
+        cell.work.pt = 0;
+      }
+    }
+  }
+  tryEject(cell);
+}
+
+function updateExtractor(cell, dt) {
+  cell.pt -= dt * ocMul();
+  if (cell.pt <= 0) {
+    if (cell.out.length < 3) {
+      cell.out.push(cell.res);
+      G.produced[cell.res] = (G.produced[cell.res] | 0) + 1;
+      cell.pt += SIM.EXTRACT_TIME;
+    } else {
+      cell.pt = 0;
+    }
+  }
+  tryEject(cell);
+}
+
+function tryEject(cell) {
+  while (cell.out.length) {
+    if (tryTransferFrom(cell, cell.out[0])) cell.out.shift();
+    else break;
+  }
+}
+
+function incomePerMin() {
+  const cutoff = G.time - 60;
+  while (G.recentSales.length && G.recentSales[0].t < cutoff) G.recentSales.shift();
+  let sum = 0;
+  for (const s of G.recentSales) sum += s.v;
+  return sum;
+}
+
+function step(dt) {
+  if (VIEW.paused) return;
+  G.time += dt;
+
+  for (const cell of G.cells.values()) {
+    if (cell.t === "belt") updateBelt(cell, dt);
+  }
+  for (const cell of G.cells.values()) {
+    if (cell.t === "extractor") updateExtractor(cell, dt);
+    else if (cell.t === "smelter" || cell.t === "assembler" || cell.t === "fabricator") updateMachine(cell, dt);
+    else if (cell.t === "seller" && cell.flash > 0) cell.flash = Math.max(0, cell.flash - dt * 2.2);
+  }
+
+  G.sampleTimer -= dt;
+  if (G.sampleTimer <= 0) {
+    G.sampleTimer += 1;
+    G.incomeSamples.push(incomePerMin() / 60);
+    if (G.incomeSamples.length > 60) G.incomeSamples.shift();
+    checkObjectives();
+  }
+
+  for (let i = G.fx.length - 1; i >= 0; i--) {
+    const f = G.fx[i];
+    f.t += dt;
+    if (f.t > 1.2) G.fx.splice(i, 1);
+  }
+}
+
+function checkObjectives() {
+  for (const o of OBJECTIVES) {
+    if (!G.flags[o.id] && o.test(G)) {
+      G.flags[o.id] = true;
+      toast("Objective complete: " + o.label, "gold");
+      SND.achieve();
+    }
+  }
+}
+
+function serialize() {
+  const cells = [];
+  for (const c of G.cells.values()) {
+    const o = { t: c.t, x: c.x, y: c.y, d: c.d };
+    if (c.t === "belt") o.it = c.items.map(i => [i.n, Math.round(i.pos * 1000) / 1000, i.edir]);
+    if (c.inv && Object.keys(c.inv).length) o.inv = c.inv;
+    if (c.out && c.out.length) o.out = c.out.slice();
+    if (c.work) o.wk = [c.work.r, Math.round(c.work.pt * 100) / 100];
+    if (c.t === "storage") o.cnt = c.count;
+    cells.push(o);
+  }
+  return JSON.stringify({
+    v: 1,
+    money: G.money,
+    time: Math.round(G.time * 10) / 10,
+    upg: G.upg,
+    stats: G.stats,
+    produced: G.produced,
+    flags: G.flags,
+    incomeSamples: G.incomeSamples.slice(-60),
+    cells
+  });
+}
+
+function deserialize(json) {
+  try {
+    const data = JSON.parse(json);
+    if (!data || data.v !== 1 || typeof data.money !== "number") return false;
+    newGame();
+    G.money = data.money;
+    G.time = data.time || 0;
+    G.upg = Object.assign({ belt: 0, oc: 0 }, data.upg);
+    G.stats = Object.assign({ earnedTotal: 0, soldCounts: {}, spentTotal: 0 }, data.stats);
+    G.produced = data.produced || {};
+    G.flags = data.flags || {};
+    G.incomeSamples = data.incomeSamples || [];
+    for (const o of data.cells || []) {
+      if (!inBounds(o.x, o.y) || !BUILDINGS[o.t]) continue;
+      if (BUILDINGS[o.t].onDeposit && !depositAt(o.x, o.y)) continue;
+      const c = makeCell(o.t, o.x, o.y, o.d);
+      if (o.it) c.items = o.it.filter(a => ITEMS[a[0]]).map(a => ({ n: a[0], pos: a[1], edir: a[2] }));
+      if (o.inv) c.inv = Object.assign(c.inv, o.inv);
+      if (o.out) c.out = o.out.filter(n => ITEMS[n]);
+      if (o.wk) c.work = { r: o.wk[0], pt: o.wk[1] };
+      if (o.cnt != null) { c.count = o.cnt; }
+      G.cells.set(idx(o.x, o.y), c);
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function save() {
+  try { localStorage.setItem(SAVE_KEY, serialize()); return true; } catch (e) { return false; }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    return deserialize(raw);
+  } catch (e) { return false; }
+}
+function wipeSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} }
+
+window.CT = {
+  VIEW,
+  defs: { ITEMS, BUILDINGS, RECIPES, DEPOSIT_MAP, GRID_W, GRID_H },
+  G: () => G,
+  snapshot() {
+    return {
+      money: G.money,
+      income: incomePerMin(),
+      cells: G.cells.size,
+      produced: Object.assign({}, G.produced),
+      earnedTotal: G.stats.earnedTotal,
+      upgrades: Object.assign({}, G.upg),
+      paused: VIEW.paused
+    };
+  },
+  place(x, y, t, d, free) { return place(t, x, y, d, { free: !!free }); },
+  remove(x, y) { return remove(x, y); },
+  giveMoney(n) { G.money += n; },
+  setMoney(n) { G.money = n; },
+  save, load,
+  reset() { wipeSave(); newGame(); },
+  serialize
+};
+
+</script>
+<script>
+"use strict";
+
+const render = (() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  let TILE = 40;
+  let dpr = 1;
+  let speckleCache = {};
+
+  function resize() {
+    const stage = document.getElementById("stage");
+    const availW = stage.clientWidth - 28;
+    const availH = stage.clientHeight - 28;
+    TILE = Math.max(18, Math.floor(Math.min(availW / GRID_W, availH / GRID_H)));
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    canvas.width = GRID_W * TILE * dpr;
+    canvas.height = GRID_H * TILE * dpr;
+    canvas.style.width = GRID_W * TILE + "px";
+    canvas.style.height = GRID_H * TILE + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function hash2(x, y) {
+    let h = x * 374761393 + y * 668265263;
+    h = (h ^ (h >> 13)) * 1274126177;
+    return ((h ^ (h >> 16)) >>> 0) / 4294967295;
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function shade(hex, amt) {
+    const n = parseInt(hex.slice(1), 16);
+    let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    r = Math.max(0, Math.min(255, Math.round(r + amt)));
+    g = Math.max(0, Math.min(255, Math.round(g + amt)));
+    b = Math.max(0, Math.min(255, Math.round(b + amt)));
+    return "rgb(" + r + "," + g + "," + b + ")";
+  }
+
+  function drawTerrain() {
+    ctx.fillStyle = "#151b24";
+    ctx.fillRect(0, 0, GRID_W * TILE, GRID_H * TILE);
+    for (let y = 0; y < GRID_H; y++) {
+      for (let x = 0; x < GRID_W; x++) {
+        const h = hash2(x, y);
+        ctx.fillStyle = (x + y) % 2 === 0 ? "rgba(255,255,255,0.014)" : "rgba(0,0,0,0.05)";
+        ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+        if (h > 0.965) {
+          ctx.fillStyle = "rgba(255,255,255,0.02)";
+          ctx.fillRect(x * TILE + TILE * 0.3, y * TILE + TILE * 0.35, TILE * 0.4, TILE * 0.25);
+        }
+      }
+    }
+    ctx.strokeStyle = "rgba(255,255,255,0.03)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 1; x < GRID_W; x++) { ctx.moveTo(x * TILE + 0.5, 0); ctx.lineTo(x * TILE + 0.5, GRID_H * TILE); }
+    for (let y = 1; y < GRID_H; y++) { ctx.moveTo(0, y * TILE + 0.5); ctx.lineTo(GRID_W * TILE, y * TILE + 0.5); }
+    ctx.stroke();
+
+    for (const dep of DEPOSITS) {
+      drawDeposit(dep.x, dep.y, dep.res);
+    }
+  }
+
+  function speckles(key, seed) {
+    if (!speckleCache[key]) {
+      const c = document.createElement("canvas");
+      c.width = 64; c.height = 64;
+      const cx = c.getContext("2d");
+      for (let i = 0; i < 42; i++) {
+        const rx = hash2(seed, i), ry = hash2(i, seed);
+        const s = 1.5 + hash2(seed + i, 7) * 3.5;
+        cx.fillStyle = "rgba(255,255,255," + (0.08 + hash2(i, i + 1) * 0.22).toFixed(2) + ")";
+        cx.beginPath();
+        cx.arc(rx * 60 + 2, ry * 60 + 2, s / 2, 0, Math.PI * 2);
+        cx.fill();
+      }
+      speckleCache[key] = c;
+    }
+    return speckleCache[key];
+  }
+
+  function drawDeposit(x, y, res) {
+    const px = x * TILE, py = y * TILE;
+    const col = ITEMS[res].color;
+    ctx.fillStyle = shade(col, -95);
+    roundRect(px + 2, py + 2, TILE - 4, TILE - 4, 6);
+    ctx.fill();
+    ctx.save();
+    roundRect(px + 2, py + 2, TILE - 4, TILE - 4, 6);
+    ctx.clip();
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(speckles(res + x + y, x * 31 + y), px + 2, py + 2, TILE - 4, TILE - 4);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = col;
+    for (let i = 0; i < 3; i++) {
+      const a = hash2(x * 7 + i, y * 13 + i);
+      const b = hash2(y * 17 + i, x * 5 + i);
+      ctx.beginPath();
+      ctx.arc(px + 8 + a * (TILE - 16), py + 8 + b * (TILE - 16), 2.2 + a * 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.strokeStyle = shade(col, -40);
+    ctx.lineWidth = 1.5;
+    roundRect(px + 2, py + 2, TILE - 4, TILE - 4, 6);
+    ctx.stroke();
+  }
+
+  function arrowPath(px, py, size) {
+    const c = TILE / 2, s = size;
+    ctx.beginPath();
+    ctx.moveTo(px + c, py + c - s);
+    ctx.lineTo(px + c + s * 0.75, py + c + s * 0.45);
+    ctx.lineTo(px + c, py + c + s * 0.05);
+    ctx.lineTo(px + c - s * 0.75, py + c + s * 0.45);
+    ctx.closePath();
+  }
+
+  function drawBelts(tNow) {
+    const phase = (tNow * SIM.BELT_SPEED) % 1;
+    for (const cell of G.cells.values()) {
+      if (cell.t !== "belt") continue;
+      const px = cell.x * TILE, py = cell.y * TILE;
+      ctx.fillStyle = "#232a37";
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.save();
+      ctx.translate(px + TILE / 2, py + TILE / 2);
+      ctx.rotate(cell.d * Math.PI / 2);
+      ctx.fillStyle = "#1c222d";
+      ctx.fillRect(-TILE / 2, -TILE * 0.34, TILE, TILE * 0.68);
+      ctx.strokeStyle = "#39445a";
+      ctx.lineWidth = Math.max(1.5, TILE * 0.055);
+      ctx.beginPath();
+      ctx.moveTo(-TILE / 2, -TILE * 0.34); ctx.lineTo(TILE / 2, -TILE * 0.34);
+      ctx.moveTo(-TILE / 2, TILE * 0.34); ctx.lineTo(TILE / 2, TILE * 0.34);
+      ctx.stroke();
+      const n = 2;
+      for (let i = 0; i <= n; i++) {
+        const off = ((i + phase) / (n + 1)) * 2 - 1;
+        if (off < -0.95 || off > 0.95) continue;
+        const cx = off * TILE * 0.48;
+        ctx.strokeStyle = "rgba(122,140,175,0.55)";
+        ctx.lineWidth = Math.max(1.5, TILE * 0.06);
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(cx - TILE * 0.09, -TILE * 0.14);
+        ctx.lineTo(cx + TILE * 0.07, 0);
+        ctx.lineTo(cx - TILE * 0.09, TILE * 0.14);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawItem(item, cellX, cellY) {
+    const p = itemPoint(item);
+    const px = (cellX + p.x) * TILE;
+    const py = (cellY + p.y) * TILE;
+    const info = ITEMS[item.n];
+    const s = TILE * 0.36;
+    ctx.save();
+    if (info.glow) { ctx.shadowColor = info.color; ctx.shadowBlur = 10; }
+    ctx.fillStyle = info.color;
+    roundRect(px - s / 2, py - s / 2, s, s, s * 0.28);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(0,0,0,0.45)";
+    ctx.lineWidth = 1.2;
+    roundRect(px - s / 2, py - s / 2, s, s, s * 0.28);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.font = "700 " + Math.round(s * 0.72) + "px Segoe UI, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(info.name[0], px, py + s * 0.04);
+    ctx.restore();
+  }
+
+  function drawItems() {
+    for (const cell of G.cells.values()) {
+      if (cell.t !== "belt") continue;
+      for (const it of cell.items) drawItem(it, cell.x, cell.y);
+    }
+  }
+
+  function statusOf(cell) {
+    if (cell.t === "extractor") return cell.out.length >= 3 ? "jam" : "work";
+    if (cell.work) return "work";
+    if (cell.out && cell.out.length >= SIM.OUT_CAP) return "jam";
+    return "idle";
+  }
+
+  function drawMachineBody(cell) {
+    const def = BUILDINGS[cell.t];
+    const px = cell.x * TILE, py = cell.y * TILE;
+    const pad = TILE * 0.1;
+    const st = statusOf(cell);
+
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    roundRect(px + pad, py + pad + 2, TILE - pad * 2, TILE - pad * 2, TILE * 0.16);
+    ctx.fill();
+
+    const grad = ctx.createLinearGradient(px, py, px, py + TILE);
+    grad.addColorStop(0, shade(def.color, -20));
+    grad.addColorStop(1, shade(def.color, -70));
+    ctx.fillStyle = grad;
+    roundRect(px + pad, py + pad, TILE - pad * 2, TILE - pad * 2, TILE * 0.16);
+    ctx.fill();
+    ctx.strokeStyle = st === "jam" ? "rgba(255,107,107,0.9)" : "rgba(255,255,255,0.18)";
+    ctx.lineWidth = 1.4;
+    roundRect(px + pad, py + pad, TILE - pad * 2, TILE - pad * 2, TILE * 0.16);
+    ctx.stroke();
+
+    ctx.save();
+    ctx.translate(px + TILE / 2, py + TILE / 2);
+    ctx.rotate(cell.d * Math.PI / 2);
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    arrowPath(-TILE / 2, -TILE / 2, TILE * 0.16);
+    ctx.fill();
+    ctx.restore();
+
+    const led = st === "work" ? "#7ce38b" : st === "jam" ? "#ff6b6b" : "#5a6577";
+    if (st === "work") { ctx.shadowColor = led; ctx.shadowBlur = 7; }
+    ctx.fillStyle = led;
+    ctx.beginPath();
+    ctx.arc(px + TILE - pad - 4.5, py + pad + 4.5, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if (cell.work) {
+      const recs = BUILDINGS[cell.t].recipes;
+      const total = recs[cell.work.r].time;
+      const prog = 1 - Math.max(0, cell.work.pt) / total;
+      ctx.strokeStyle = "rgba(255,255,255,0.15)";
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(px + TILE / 2, py + TILE / 2, TILE * 0.27, -Math.PI / 2, Math.PI * 1.5);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.beginPath();
+      ctx.arc(px + TILE / 2, py + TILE / 2, TILE * 0.27, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
+      ctx.stroke();
+    } else {
+      ctx.font = "700 " + Math.max(9, Math.round(TILE * 0.26)) + "px Segoe UI, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(0,0,0,0.4)";
+      const label = { smelter: "Sm", assembler: "As", fabricator: "Fa" }[cell.t];
+      if (label) ctx.fillText(label, px + TILE / 2, py + TILE / 2 + 1);
+    }
+  }
+
+  function drawExtractor(cell, tNow) {
+    const px = cell.x * TILE, py = cell.y * TILE;
+    const pad = TILE * 0.12;
+    ctx.fillStyle = "rgba(0,0,0,0.35)";
+    roundRect(px + pad, py + pad + 2, TILE - pad * 2, TILE - pad * 2, TILE * 0.18);
+    ctx.fill();
+    const grad = ctx.createLinearGradient(px, py, px, py + TILE);
+    grad.addColorStop(0, "#8f8449");
+    grad.addColorStop(1, "#5d5630");
+    ctx.fillStyle = grad;
+    roundRect(px + pad, py + pad, TILE - pad * 2, TILE - pad * 2, TILE * 0.18);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(255,255,255,0.2)";
+    ctx.lineWidth = 1.4;
+    roundRect(px + pad, py + pad, TILE - pad * 2, TILE - pad * 2, TILE * 0.18);
+    ctx.stroke();
+
+    const cx = px + TILE / 2, cy = py + TILE / 2 - TILE * 0.06;
+    ctx.save();
+    ctx.translate(cx, cy);
+    const spinning = !VIEW.paused && cell.out.length < 3;
+    ctx.rotate(spinning ? tNow * 4 : 0);
+    ctx.strokeStyle = "rgba(240,230,190,0.9)";
+    ctx.lineWidth = Math.max(1.6, TILE * 0.07);
+    for (let i = 0; i < 3; i++) {
+      ctx.rotate(Math.PI * 2 / 3);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(TILE * 0.19, 0);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.fillStyle = "#2c2a1a";
+    ctx.beginPath();
+    ctx.arc(cx, cy, TILE * 0.07, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = ITEMS[cell.res].color;
+    roundRect(px + TILE * 0.32, py + TILE - pad - TILE * 0.16, TILE * 0.36, TILE * 0.12, 2);
+    ctx.fill();
+
+    const prog = 1 - Math.min(1, cell.pt / SIM.EXTRACT_TIME);
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, TILE * 0.3, -Math.PI / 2, Math.PI * 1.5);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(255,225,120,0.9)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, TILE * 0.3, -Math.PI / 2, -Math.PI / 2 + prog * Math.PI * 2);
+    ctx.stroke();
+  }
+
+  function drawSeller(cell, tNow) {
+    const px = cell.x * TILE, py = cell.y * TILE;
+    const pad = TILE * 0.1;
+    if (cell.flash > 0) {
+      ctx.fillStyle = "rgba(124,227,139," + (cell.flash * 0.35).toFixed(2) + ")";
+      roundRect(px + 1, py + 1, TILE - 2, TILE - 2, 7);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#1e3a2a";
+    roundRect(px + pad, py + pad, TILE - pad * 2, TILE - pad * 2, TILE * 0.16);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(124,227,139,0.55)";
+    ctx.lineWidth = 1.5;
+    roundRect(px + pad, py + pad, TILE - pad * 2, TILE - pad * 2, TILE * 0.16);
+    ctx.stroke();
+    ctx.fillStyle = "#7ce38b";
+    ctx.font = "800 " + Math.round(TILE * 0.4) + "px Segoe UI, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("$", px + TILE / 2, py + TILE / 2 + 1);
+    const pulse = 0.5 + 0.5 * Math.sin(tNow * 2.4);
+    ctx.strokeStyle = "rgba(124,227,139," + (0.12 + pulse * 0.14).toFixed(2) + ")";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(px + TILE / 2, py + TILE / 2, TILE * 0.44 + pulse * 2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  function drawStorage(cell) {
+    const px = cell.x * TILE, py = cell.y * TILE;
+    const pad = TILE * 0.1;
+    ctx.fillStyle = "#17333a";
+    roundRect(px + pad, py + pad, TILE - pad * 2, TILE - pad * 2, TILE * 0.14);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(79,189,184,0.6)";
+    ctx.lineWidth = 1.5;
+    roundRect(px + pad, py + pad, TILE - pad * 2, TILE - pad * 2, TILE * 0.14);
+    ctx.stroke();
+    const cap = BUILDINGS.storage.cap;
+    const frac = Math.min(1, cell.count / cap);
+    ctx.fillStyle = "rgba(79,189,184,0.35)";
+    const bh = (TILE - pad * 2 - 6) * frac;
+    ctx.fillRect(px + pad + 3, py + TILE - pad - 3 - bh, TILE - pad * 2 - 6, bh);
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px + pad + 3, py + TILE - pad - 3);
+    ctx.lineTo(px + TILE - pad - 3, py + TILE - pad - 3);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(220,245,245,0.85)";
+    ctx.font = "600 " + Math.max(8, Math.round(TILE * 0.22)) + "px Segoe UI, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(String(cell.count | 0), px + TILE / 2, py + TILE * 0.36);
+  }
+
+  function drawFx() {
+    for (const f of G.fx) {
+      const k = f.t / 1.2;
+      ctx.globalAlpha = 1 - k;
+      ctx.font = "700 " + Math.max(11, Math.round(TILE * 0.34)) + "px Segoe UI, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = f.color;
+      ctx.strokeStyle = "rgba(0,0,0,0.7)";
+      ctx.lineWidth = 3;
+      const px = f.x * TILE, py = f.y * TILE - k * TILE * 0.8;
+      ctx.strokeText(f.text, px, py);
+      ctx.fillText(f.text, px, py);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawGhost() {
+    const hv = VIEW.hover;
+    if (!hv) return;
+    const { x, y } = hv;
+    const px = x * TILE, py = y * TILE;
+
+    if (VIEW.tool !== "select" && VIEW.tool !== "delete" && inBounds(x, y)) {
+      const ok = canPlace(VIEW.tool, x, y);
+      ctx.save();
+      ctx.globalAlpha = 0.55;
+      ctx.fillStyle = ok ? "rgba(124,227,139,0.25)" : "rgba(255,107,107,0.3)";
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.restore();
+      const def = BUILDINGS[VIEW.tool];
+      if (def.dir) {
+        ctx.save();
+        ctx.translate(px + TILE / 2, py + TILE / 2);
+        ctx.rotate(VIEW.dir * Math.PI / 2);
+        ctx.fillStyle = "rgba(255,255,255,0.85)";
+        arrowPath(-TILE / 2, -TILE / 2, TILE * 0.2);
+        ctx.fill();
+        ctx.restore();
+      }
+      if (def.onDeposit && !depositAt(x, y)) {
+        ctx.fillStyle = "rgba(255,180,120,0.95)";
+        ctx.font = "600 " + Math.max(8, Math.round(TILE * 0.2)) + "px Segoe UI, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("needs ore", px + TILE / 2, py - 4);
+      }
+    }
+    if (VIEW.tool === "delete" && getCell(x, y)) {
+      ctx.save();
+      ctx.fillStyle = "rgba(255,107,107,0.35)";
+      ctx.fillRect(px, py, TILE, TILE);
+      ctx.strokeStyle = "#ff6b6b";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(px + 1, py + 1, TILE - 2, TILE - 2);
+      ctx.restore();
+    }
+
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = 1.6;
+    const L = Math.max(5, TILE * 0.22);
+    ctx.beginPath();
+    ctx.moveTo(px + 1, py + 1 + L); ctx.lineTo(px + 1, py + 1); ctx.lineTo(px + 1 + L, py + 1);
+    ctx.moveTo(px + TILE - 1 - L, py + 1); ctx.lineTo(px + TILE - 1, py + 1); ctx.lineTo(px + TILE - 1, py + 1 + L);
+    ctx.moveTo(px + TILE - 1, py + TILE - 1 - L); ctx.lineTo(px + TILE - 1, py + TILE - 1); ctx.lineTo(px + TILE - 1 - L, py + TILE - 1);
+    ctx.moveTo(px + 1 + L, py + TILE - 1); ctx.lineTo(px + 1, py + TILE - 1); ctx.lineTo(px + 1, py + TILE - 1 - L);
+    ctx.stroke();
+  }
+
+  function draw(tNow) {
+    ctx.clearRect(0, 0, GRID_W * TILE, GRID_H * TILE);
+    drawTerrain();
+    drawBelts(tNow);
+    for (const cell of G.cells.values()) {
+      if (cell.t === "extractor") drawExtractor(cell, tNow);
+      else if (cell.t === "seller") drawSeller(cell, tNow);
+      else if (cell.t === "storage") drawStorage(cell);
+      else if (cell.t !== "belt") drawMachineBody(cell);
+    }
+    drawItems();
+    drawGhost();
+    drawFx();
+  }
+
+  return { resize, draw, canvas };
+})();
+
+</script>
+<script>
+"use strict";
+
+const ui = (() => {
+  const $ = id => document.getElementById(id);
+  const canvas = $("game");
+  const tooltip = $("tooltip");
+  let hudTimer = 0;
+  let dragLast = null;
+  let dragMoved = false;
+
+  const ICONS = {
+    cursor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l7 17 2.4-7.1L21.5 10z"/></svg>',
+    belt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h14"/><path d="M13 6l6 6-6 6"/></svg>',
+    drill: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4v16M4 12h16"/></svg>',
+    flame: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c1 4-4 5-4 10a4 4 0 008 0c0-2-1-3-1-3s3 1 3 4a6 6 0 01-12 0C6 8 11 7 12 3z"/></svg>',
+    gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3.5M12 18.5V22M2 12h3.5M18.5 12H22M4.9 4.9l2.5 2.5M16.6 16.6l2.5 2.5M19.1 4.9l-2.5 2.5M7.4 16.6l-2.5 2.5"/></svg>',
+    chip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>',
+    dollar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M16.5 6.5c-.8-1.2-2.4-2-4.5-2-2.5 0-4.5 1.3-4.5 3.4 0 4.6 9 2.6 9 7.2 0 2.1-2 3.4-4.5 3.4-2.1 0-3.7-.8-4.5-2"/></svg>',
+    crate: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/></svg>',
+    x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 5l14 14M19 5L5 19"/></svg>'
+  };
+
+  function fmt$(n) { return "$" + Math.floor(n).toLocaleString("en-US"); }
+
+  function toast(text, cls) {
+    const box = $("toasts");
+    const el = document.createElement("div");
+    el.className = "toast" + (cls ? " " + cls : "");
+    el.textContent = text;
+    box.appendChild(el);
+    while (box.children.length > 4) box.removeChild(box.firstChild);
+    setTimeout(() => {
+      el.classList.add("out");
+      setTimeout(() => el.remove(), 320);
+    }, 3400);
+  }
+  window.toast = toast;
+
+  function buildToolbar() {
+    const bar = $("toolbar");
+    bar.innerHTML = "";
+    for (const t of TOOLS) {
+      const def = BUILDINGS[t.id];
+      const card = document.createElement("button");
+      card.className = "tcard";
+      card.dataset.tool = t.id;
+      let costLine = "";
+      if (def && def.cost != null) costLine = '<div class="tcost">' + fmt$(def.cost) + (t.refundNote ? ' <span class="muted">(70% back)</span>' : "") + "</div>";
+      let desc = "";
+      if (t.id === "delete") desc = '<div class="tdesc">Right-click works anywhere</div>';
+      else if (t.id === "select") desc = '<div class="tdesc">Hover buildings for info</div>';
+      card.innerHTML =
+        '<span class="key">' + t.key + "</span>" +
+        '<div class="tname"><span class="ticon">' + (ICONS[t.icon] || "") + "</span>" + (def ? def.name : t.name) + "</div>" +
+        costLine + desc;
+      card.addEventListener("click", () => { SND.click(); setTool(t.id); });
+      bar.appendChild(card);
+    }
+    refreshToolbarAfford();
+  }
+
+  function setTool(id) {
+    VIEW.tool = id;
+    VIEW.dragging = false;
+    dragLast = null;
+    document.querySelectorAll(".tcard").forEach(c => c.classList.toggle("sel", c.dataset.tool === id));
+    canvas.classList.toggle("tooling", id !== "select");
+  }
+
+  function refreshToolbarAfford() {
+    document.querySelectorAll(".tcard").forEach(c => {
+      const def = BUILDINGS[c.dataset.tool];
+      c.classList.toggle("poor", !!(def && def.cost && G.money < def.cost));
+    });
+  }
+
+  function tileFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = Math.floor((e.clientX - rect.left) / (rect.width / GRID_W));
+    const y = Math.floor((e.clientY - rect.top) / (rect.height / GRID_H));
+    return { x, y };
+  }
+
+  function screenPos(e) {
+    const stageRect = $("stage").getBoundingClientRect();
+    return { x: e.clientX - stageRect.left, y: e.clientY - stageRect.top };
+  }
+
+  function attemptPlace(t, x, y, d) {
+    const def = BUILDINGS[t];
+    if (!canPlace(t, x, y)) { SND.deny(); return false; }
+    if (G.money < def.cost) { SND.deny(); toast("Not enough funds for " + def.name + " (" + fmt$(def.cost) + ")"); return false; }
+    if (place(t, x, y, d)) { SND.place(); return true; }
+    return false;
+  }
+
+  function removeAt(x, y) {
+    const c = getCell(x, y);
+    if (!c) return;
+    const r = remove(x, y);
+    SND.remove();
+    G.fx.push({ kind: "pop", x: x + 0.5, y: y + 0.35, text: "+" + fmt$(r), color: "#ffd166", t: 0 });
+  }
+
+  function dirBetween(a, b) {
+    if (b.x > a.x) return 1;
+    if (b.x < a.x) return 3;
+    if (b.y > a.y) return 2;
+    if (b.y < a.y) return 0;
+    return VIEW.dir;
+  }
+
+  function pathSteps(a, b) {
+    const pts = [];
+    let x = a.x, y = a.y;
+    while (x !== b.x) { x += Math.sign(b.x - x); pts.push({ x, y }); }
+    while (y !== b.y) { y += Math.sign(b.y - y); pts.push({ x, y }); }
+    return pts;
+  }
+
+  function beltClick(x, y) {
+    const c = getCell(x, y);
+    if (c && c.t === "belt") {
+      c.d = (c.d + 1) % 4;
+      SND.rotate();
+      return;
+    }
+    attemptPlace("belt", x, y, VIEW.dir);
+  }
+
+  function beltDragTo(pt) {
+    if (!dragLast) { dragLast = pt; return; }
+    for (const step of pathSteps(dragLast, pt)) {
+      const d = dirBetween(dragLast, step);
+      const prev = getCell(dragLast.x, dragLast.y);
+      if (prev && prev.t === "belt") prev.d = d;
+      const cur = getCell(step.x, step.y);
+      if (!cur) {
+        if (attemptPlace("belt", step.x, step.y, d)) VIEW.dir = d;
+      } else if (cur.t === "belt") {
+        cur.d = d;
+        VIEW.dir = d;
+      }
+      dragLast = step;
+    }
+  }
+
+  function onMouseDown(e) {
+    if (e.button !== 0) return;
+    SND.unlock();
+    const p = tileFromEvent(e);
+    if (!inBounds(p.x, p.y)) return;
+    VIEW.dragging = true;
+    dragMoved = true;
+    dragLast = p;
+    switch (VIEW.tool) {
+      case "belt": beltClick(p.x, p.y); break;
+      case "extractor": case "smelter": case "assembler": case "fabricator": case "seller": case "storage":
+        attemptPlace(VIEW.tool, p.x, p.y, VIEW.dir);
+        break;
+      case "delete": removeAt(p.x, p.y); break;
+    }
+  }
+
+  function onMouseMove(e) {
+    const p = tileFromEvent(e);
+    const sp = screenPos(e);
+    VIEW.mouse.sx = sp.x; VIEW.mouse.sy = sp.y;
+    VIEW.hover = inBounds(p.x, p.y) ? p : null;
+    if (VIEW.dragging && dragMoved) {
+      if (VIEW.tool === "belt") beltDragTo(p);
+      else if (VIEW.tool === "delete") {
+        if (dragLast && (dragLast.x !== p.x || dragLast.y !== p.y)) removeAt(p.x, p.y);
+        dragLast = p;
+      } else dragLast = p;
+    }
+  }
+
+  function onMouseUp() {
+    VIEW.dragging = false;
+    dragLast = null;
+  }
+
+  function onContextMenu(e) {
+    e.preventDefault();
+    const p = tileFromEvent(e);
+    if (inBounds(p.x, p.y) && getCell(p.x, p.y)) removeAt(p.x, p.y);
+  }
+
+  function onWheel(e) {
+    const def = BUILDINGS[VIEW.tool];
+    if (VIEW.tool !== "select" && VIEW.tool !== "delete" && def && def.dir) {
+      e.preventDefault();
+      VIEW.dir = (VIEW.dir + (e.deltaY > 0 ? 1 : 3)) % 4;
+      SND.rotate();
+    }
+  }
+
+  const KEYMAP = {};
+  for (const t of TOOLS) KEYMAP[t.key.toLowerCase()] = t.id;
+
+  function onKeyDown(e) {
+    if ($("intro").hidden === false) return;
+    const k = e.key.toLowerCase();
+    if (k === "tab") { e.preventDefault(); togglePanel("stats-panel"); return; }
+    if (k === "h" || k === "?") { togglePanel("help-panel"); return; }
+    if (k === "escape") {
+      if (!$("modal").hidden) closeModal();
+      else closePanels();
+      return;
+    }
+    if (k === " ") { e.preventDefault(); togglePause(); return; }
+    if (KEYMAP[k]) { setTool(KEYMAP[k]); SND.click(); return; }
+    if (k === "r") {
+      const hv = VIEW.hover;
+      const c = hv && getCell(hv.x, hv.y);
+      if (c && BUILDINGS[c.t].dir) { c.d = (c.d + 1) % 4; SND.rotate(); }
+      else { VIEW.dir = (VIEW.dir + 1) % 4; SND.rotate(); }
+    }
+  }
+
+  function togglePause() {
+    VIEW.paused = !VIEW.paused;
+    $("paused-badge").hidden = !VIEW.paused;
+    SND.click();
+  }
+
+  function togglePanel(id) {
+    const el = $(id);
+    const show = el.hidden;
+    closePanels();
+    if (show) {
+      el.hidden = false;
+      if (id === "stats-panel") refreshStats();
+    }
+  }
+  function closePanels() {
+    $("stats-panel").hidden = true;
+    $("help-panel").hidden = true;
+  }
+
+  function closeModal() { $("modal").hidden = true; }
+
+  function recipeText(rec) {
+    const ins = Object.keys(rec.in).map(k => rec.in[k] + "\u00d7 " + ITEMS[k].name).join(" + ");
+    const outs = rec.out.map(n => ITEMS[n].name).join(" + ");
+    return ins + " \u2192 " + outs;
+  }
+
+  function tooltipHTML() {
+    const hv = VIEW.hover;
+    if (!hv) return null;
+    const dep = depositAt(hv.x, hv.y);
+    const c = getCell(hv.x, hv.y);
+
+    if (!c) {
+      if (!dep) return null;
+      return "<h4><span class='dot' style='background:" + ITEMS[dep].color + "'></span>" + ITEMS[dep].name + " deposit</h4>" +
+        "<span class='muted'>Place an Extractor here to mine it.</span>";
+    }
+    const def = BUILDINGS[c.t];
+    let html = "<h4><span class='dot' style='background:" + def.color + "'></span>" + def.name + "</h4>";
+
+    if (c.t === "belt") {
+      html += "<span class='muted'>Carrying:</span> " + (c.items.length ? c.items.map(i => ITEMS[i.n].name).join(", ") : "empty");
+    } else if (c.t === "extractor") {
+      html += "<div>Mining <b>" + ITEMS[c.res].name + "</b> \u2014 1 per " + SIM.EXTRACT_TIME + "s (\u2248" + Math.round(60 / SIM.EXTRACT_TIME * ocMul()) + "/min)</div>";
+      html += "<span class='muted'>Output queue:</span> " + c.out.length + "/3";
+      const prog = 1 - Math.min(1, c.pt / SIM.EXTRACT_TIME);
+      html += "<div class='bar'><i style='width:" + Math.round(prog * 100) + "%'></i></div>";
+    } else if (c.t === "seller") {
+      html += "<span class='muted'>Instantly sells anything that enters.</span>";
+      html += "<div>Lifetime revenue: <b style='color:#7ce38b'>" + fmt$(G.stats.earnedTotal) + "</b></div>";
+    } else if (c.t === "storage") {
+      html += "<div>Stored: <b>" + (c.count | 0) + " / " + BUILDINGS.storage.cap + "</b></div>";
+      for (const k in c.inv) html += "<div><span class='swatch' style='background:" + ITEMS[k].color + "'></span>" + ITEMS[k].name + ": " + c.inv[k] + "</div>";
+      html += "<div class='bar'><i style='width:" + Math.round(100 * c.count / BUILDINGS.storage.cap) + "%'></i></div>";
+    } else {
+      const recs = BUILDINGS[c.t].recipes;
+      for (const r of recs) {
+        const parts = Object.keys(r.in).map(k => {
+          const have = c.inv[k] | 0;
+          return "<span style='color:" + (have >= r.in[k] ? "#7ce38b" : "#8a97a8") + "'>" + have + "/" + r.in[k] + " " + ITEMS[k].name + "</span>";
+        }).join(", ");
+        html += "<div>" + parts + " \u2192 <b>" + r.out.map(n => ITEMS[n].name).join("+") + "</b> <span class='muted'>(" + r.time + "s)</span></div>";
+      }
+      if (c.work) {
+        const rec = recs[c.work.r];
+        const prog = 1 - Math.max(0, c.work.pt) / rec.time;
+        html += "<div class='muted'>Working: " + recipeText(rec) + "</div>";
+        html += "<div class='bar'><i style='width:" + Math.round(prog * 100) + "%'></i></div>";
+      } else {
+        html += "<div class='muted'>Waiting for inputs\u2026</div>";
+      }
+      if (c.out.length) html += "<div><span class='muted'>Ready output:</span> " + c.out.map(n => ITEMS[n].name).join(", ") + " (" + c.out.length + "/" + SIM.OUT_CAP + ")</div>";
+    }
+    return html;
+  }
+
+  function positionTooltip() {
+    const stage = $("stage");
+    const stw = stage.clientWidth, sth = stage.clientHeight;
+    let x = VIEW.mouse.sx + 16, y = VIEW.mouse.sy + 16;
+    const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+    if (x + tw > stw - 10) x = VIEW.mouse.sx - tw - 14;
+    if (y + th > sth - 10) y = VIEW.mouse.sy - th - 14;
+    tooltip.style.left = Math.max(6, x) + "px";
+    tooltip.style.top = Math.max(6, y) + "px";
+  }
+
+  function tick(dtReal) {
+    hudTimer -= dtReal;
+    if (hudTimer <= 0) {
+      hudTimer = 0.25;
+      $("money").textContent = fmt$(G.money);
+      $("income").textContent = "+" + fmt$(incomePerMin()) + "/min";
+      refreshToolbarAfford();
+    }
+    const html = tooltipHTML();
+    if (html && !VIEW.dragging) {
+      tooltip.innerHTML = html;
+      tooltip.hidden = false;
+      positionTooltip();
+    } else {
+      tooltip.hidden = true;
+    }
+  }
+
+  function drawSparkline() {
+    const cv = $("sparkline");
+    const c = cv.getContext("2d");
+    const w = cv.width, h = cv.height;
+    c.clearRect(0, 0, w, h);
+    const data = G.incomeSamples;
+    const max = Math.max(1, ...data);
+    c.strokeStyle = "rgba(255,255,255,0.08)";
+    c.beginPath();
+    c.moveTo(0, h - 1); c.lineTo(w, h - 1);
+    c.stroke();
+    if (data.length > 1) {
+      c.beginPath();
+      c.moveTo(0, h);
+      data.forEach((v, i) => {
+        const x = i / 59 * w;
+        const y = h - (v / max) * (h - 8) - 2;
+        c.lineTo(x, y);
+      });
+      c.lineTo((data.length - 1) / 59 * w, h);
+      c.closePath();
+      c.fillStyle = "rgba(87,215,255,0.18)";
+      c.fill();
+      c.beginPath();
+      data.forEach((v, i) => {
+        const x = i / 59 * w;
+        const y = h - (v / max) * (h - 8) - 2;
+        if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+      });
+      c.strokeStyle = "#57d7ff";
+      c.lineWidth = 1.6;
+      c.stroke();
+    }
+  }
+
+  function refreshStats() {
+    const ipm = incomePerMin();
+    let rows = "";
+    rows += "<div class='srow'><span>Balance</span><span class='val money'>" + fmt$(G.money) + "</span></div>";
+    rows += "<div class='srow'><span>Income</span><span class='val money'>" + fmt$(ipm) + "/min</span></div>";
+    rows += "<div class='srow'><span>Lifetime earned</span><span class='val'>" + fmt$(G.stats.earnedTotal) + "</span></div>";
+    rows += "<div class='srow'><span>Lifetime spent</span><span class='val'>" + fmt$(G.stats.spentTotal) + "</span></div>";
+    $("stat-money-rows").innerHTML = rows;
+    drawSparkline();
+
+    let prod = "";
+    const keys = Object.keys(G.produced).filter(k => G.produced[k] > 0)
+      .sort((a, b) => (ITEMS[a].tier - ITEMS[b].tier) || (ITEMS[b].value - ITEMS[a].value));
+    if (!keys.length) prod = "<div class='srow muted'>Nothing produced yet.</div>";
+    for (const k of keys) {
+      prod += "<div class='srow'><span><span class='swatch' style='background:" + ITEMS[k].color + "'></span>" + ITEMS[k].name + "</span><span class='val'>" + G.produced[k].toLocaleString("en-US") + "</span></div>";
+    }
+    let soldExtra = "";
+    const soldKeys = Object.keys(G.stats.soldCounts).filter(k => G.stats.soldCounts[k] > 0);
+    if (soldKeys.length) {
+      soldExtra = "<div class='srow muted' style='margin-top:4px'>Sold: " + soldKeys.map(k => G.stats.soldCounts[k] + "\u00d7 " + ITEMS[k].name).join(", ") + "</div>";
+    }
+    $("stat-prod-rows").innerHTML = prod + soldExtra;
+
+    let upg = "";
+    for (const id of Object.keys(UPGRADES)) {
+      const u = UPGRADES[id];
+      const lvl = G.upg[id];
+      const nxt = upgradeNext(id);
+      upg += "<div class='upg-row'><div class='upg-info'><b>" + u.name + " <span class='muted'>Lv " + lvl + "/" + u.levels.length + "</span></b><span>" +
+        (nxt ? nxt.label : "Fully upgraded") + "</span></div>" +
+        (nxt ? "<button class='btn' data-upg='" + id + "' " + (G.money < nxt.cost ? "disabled" : "") + ">" + fmt$(nxt.cost) + "</button>"
+             : "<span class='muted'>MAX</span>") + "</div>";
+    }
+    $("stat-upgrade-rows").innerHTML = upg;
+    $("stat-upgrade-rows").querySelectorAll("button[data-upg]").forEach(b => {
+      b.addEventListener("click", () => { buyUpgrade(b.dataset.upg); refreshStats(); });
+    });
+
+    let obj = "";
+    for (const o of OBJECTIVES) {
+      const done = !!G.flags[o.id];
+      obj += "<div class='obj-row" + (done ? " done" : "") + "'><span class='check'>" + (done ? "\u2713" : "") + "</span>" + o.label + "</div>";
+    }
+    $("stat-objective-rows").innerHTML = obj;
+  }
+
+  function bindStatic() {
+    $("btn-stats").addEventListener("click", () => { SND.click(); togglePanel("stats-panel"); });
+    $("btn-help").addEventListener("click", () => { SND.click(); togglePanel("help-panel"); });
+    $("btn-mute").addEventListener("click", () => {
+      SND.unlock();
+      const m = SND.toggleMute();
+      $("btn-mute").textContent = "Sound: " + (m ? "Off" : "On");
+    });
+    if (SND.muted) $("btn-mute").textContent = "Sound: Off";
+
+    $("btn-reset").addEventListener("click", () => { $("modal").hidden = false; });
+    $("modal-cancel").addEventListener("click", closeModal);
+    $("modal-ok").addEventListener("click", () => {
+      CT.reset();
+      closeModal();
+      closePanels();
+      toast("Factory wiped. Fresh start!", "gold");
+    });
+
+    document.querySelectorAll(".xclose").forEach(b => b.addEventListener("click", () => { $(b.dataset.close).hidden = true; }));
+
+    canvas.addEventListener("mousedown", onMouseDown);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    canvas.addEventListener("contextmenu", onContextMenu);
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("keydown", onKeyDown);
+
+    setInterval(() => { if (!$("stats-panel").hidden) refreshStats(); }, 1000);
+  }
+
+  return { buildToolbar, bindStatic, setTool, tick, togglePanel, closePanels, fmt$, toast, togglePause };
+})();
+
+</script>
+<script>
+"use strict";
+
+(function () {
+  const canvas = document.getElementById("game");
+
+  let loaded = false;
+  try { loaded = CT.load(); } catch (e) { loaded = false; }
+  if (!loaded || !G) newGame();
+
+  ui.buildToolbar();
+  ui.setTool("select");
+  ui.bindStatic();
+
+  const intro = document.getElementById("intro");
+  intro.hidden = false;
+  if (loaded) {
+    document.getElementById("intro-save-note").hidden = false;
+    document.getElementById("intro-start").textContent = "Resume Building";
+  }
+
+  document.getElementById("intro-start").addEventListener("click", () => {
+    SND.unlock();
+    SND.click();
+    intro.hidden = true;
+  });
+
+  function resizeAll() { render.resize(); }
+  window.addEventListener("resize", resizeAll);
+  resizeAll();
+
+  setInterval(() => CT.save(), 5000);
+  window.addEventListener("beforeunload", () => CT.save());
+
+  let last = performance.now();
+  let acc = 0;
+  const STEP = 1 / 60;
+
+  function frame(now) {
+    let dtReal = (now - last) / 1000;
+    last = now;
+    if (dtReal > 0.25) dtReal = 0.25;
+    acc += dtReal;
+    let guard = 0;
+    while (acc >= STEP && guard < 6) { step(STEP); acc -= STEP; guard++; }
+    if (guard >= 6) acc = 0;
+    ui.tick(dtReal);
+    render.draw(now / 1000);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  setTimeout(() => render.resize(), 50);
+})();
+
+</script>
+</body>
+</html>

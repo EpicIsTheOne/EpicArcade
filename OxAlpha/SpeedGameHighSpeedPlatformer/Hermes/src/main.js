@@ -1,572 +1,566 @@
+// main.js — VELOCITY RUSH: original high-speed 3D action platformer.
+// Boot, render loop, state machine, gameplay events, scoring, QA hooks.
 import * as THREE from 'three';
-import { Gfx } from './engine/gfx.js';
+import { EffectComposer } from '../vendor/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from '../vendor/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '../vendor/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from '../vendor/addons/postprocessing/OutputPass.js';
+
 import { Input } from './engine/input.js';
-import { audio } from './engine/audio.js';
-import { PhysicsWorld } from './game/physics.js';
+import { CollisionWorld } from './engine/physics.js';
+import { ParticleSystem, TrailRibbon, SpeedLines } from './engine/fx.js';
+import { makeSky, makeClouds, applyThemeLights, THEMES } from './engine/sky.js';
+import { AudioEngine } from './engine/audio.js';
+import { Character } from './game/character.js';
 import { Player } from './game/player.js';
-import { ChaseCam } from './game/camera.js';
-import { Fx } from './game/fx.js';
-import { Enemies } from './game/enemies.js';
-import { OrbField } from './game/objects.js';
-import {
-  Spring, DashPanel, Mover, FanZone, Checkpoint, GoalRing,
-  Prism, LavaPool, SpikeStrip, Crate, LaserGate, makeSign,
-} from './game/objects.js';
-import { Rail } from './game/objects.js';
-import { LevelKit } from './game/levels/kit.js';
-import { buildL1 } from './game/levels/l1.js';
-import { buildL2 } from './game/levels/l2.js';
-import { buildL3 } from './game/levels/l3.js';
-import { buildSandbox } from './game/levels/sandbox.js';
-import { TUNE, LEVELS, rankFor } from './game/gamedata.js';
-import { saveData, recordResult, persist, isUnlocked } from './game/save.js';
-import { clamp, damp, fmtTime } from './game/mathutil.js';
-import { Ui } from './engine/ui.js';
+import { ChaseCamera } from './game/camera.js';
+import { Level } from './game/level.js';
+import { HUD } from './game/hud.js';
+import { Save } from './game/save.js';
+import { Autopilot, VirtualInput } from './game/autopilot.js';
+import { LEVELS, getLevelDef } from './levels/index.js';
 
-const LEVEL_BUILDERS = {
-  coast: buildL1, city: buildL2, foundry: buildL3, sandbox: buildSandbox,
-};
+const SIM_DT = 1 / 240;
 
-const UP = new THREE.Vector3(0, 1, 0);
-const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3();
+function qaLog(...a) { console.log('[QA]', ...a); }
 
 class Game {
   constructor() {
-    const params = new URLSearchParams(location.search);
-    this.params = params;
-    this.autotest = params.has('autotest');
+    this.qa = new URLSearchParams(location.search).get('qa') === '1';
+    this.autopilotOn = new URLSearchParams(location.search).get('autopilot') === '1';
+    const gfxParam = new URLSearchParams(location.search).get('gfx');
 
-    this.canvas = document.getElementById('gl');
-    this.gfx = new Gfx(this.canvas);
-    const s = saveData();
-    this.gfx.setQuality(params.get('gfx') || s.settings.gfx || 'high');
+    // ---- renderer ----
+    const canvas = document.getElementById('gl');
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.06;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-    this.input = new Input(this.canvas);
-    this.input.sens = s.settings.sens;
-    this.input.invertX = !!s.settings.invertX;
-    this.input.invertY = !!s.settings.invertY;
-    audio.volMaster = s.settings.volMaster; audio.volMusic = s.settings.volMusic; audio.volSfx = s.settings.volSfx;
+    // ---- quality ----
+    this.quality = gfxParam || this.detectQuality();
 
-    this.scene = null;
-    this.world = new PhysicsWorld();
-    this.fx = null;
-    this.player = new Player(this.world, {
-      onEvent: (n, d) => this.onPlayerEvent(n, d),
-      findChainTarget: (...a) => this.findChainTarget(...a),
-    });
-    this.player.input = this.input;
-    this.cam = new ChaseCam(this.gfx.camera, this.world);
-    this.sunDir = new THREE.Vector3(0.4, 0.8, 0.3);
-
-    this.mode = 'boot';           // boot|title|select|play|pause|results
-    this.levelId = null;
-    this.meta = null;
-    this.time = 0;
-    this.elapsedAll = 0;
-
-    // registries
-    this.springs = []; this.panels = []; this.moversList = []; this.fans = [];
-    this.checkpoints = []; this.hazards = []; this.crates = []; this.rails = [];
-    this.specials = []; this.tickFns = [];
-    this.orbs = null; this.enemies = null;
-    this.goalObj = null;
-
-    // run stats
-    this.score = 0; this.deaths = 0; this.comboN = 0; this.comboT = 0;
-    this.prismsGot = 0; this.chipsGot = 0; this.cores = 0; this.totalPrisms = 0;
-    this.stylePts = 0;
-
-    this.ui = new Ui(this);
-    this.acc = 0;
-    this.reticleTarget = null;
-
-    window.addEventListener('resize', () => this.gfx.resize());
-    this.input.onFirstGesture = () => { audio.init(); audio.resume(); };
-
-    this.lastT = performance.now();
-    requestAnimationFrame(() => this.frame());
-
-    this.setupAutotest();
-    // boot into menu backdrop
-    this.loadLevel('coast', { backdrop: true });
-    this.mode = 'title';
-    this.ui.show('title');
-  }
-
-  // ================= LEVEL LOADING =================
-  clearRegistries() {
-    this.springs.length = 0; this.panels.length = 0; this.moversList.length = 0;
-    this.fans.length = 0; this.checkpoints.length = 0; this.hazards.length = 0;
-    this.crates.length = 0; this.rails.length = 0; this.specials.length = 0;
-    this.tickFns.length = 0;
-    this.goalObj = null;
-  }
-
-  loadLevel(id, { backdrop = false } = {}) {
-    this.clearRegistries();
+    // ---- scene basics ----
     this.scene = new THREE.Scene();
-    this.gfx.scene = this.scene;
-    if (this.gfx.composer) {
-      for (const p of this.gfx.composer.passes) if (p.scene !== undefined) p.scene = this.scene;
-    }
-    this.world.clear();
-    this.killY = -100;
-    this.fogColor = 0x888888;
+    this.camera3d = new THREE.PerspectiveCamera(74, innerWidth / innerHeight, 0.1, 5000);
+    this.chaseCam = new ChaseCamera(this.camera3d);
 
-    this.orbs = new OrbField(this.scene);
-    this.enemies = new Enemies(this.scene, this);
-    this.fx = new Fx(this.scene);
-    const themeName = id === 'sandbox' ? 'coast' : (LEVELS.find((l) => l.id === id)?.theme || id);
-    this.kit = new LevelKit(this.scene, this.world, this, themeName, 12345 + id.length * 7);
+    // composer
+    this.composer = new EffectComposer(this.renderer);
+    this.renderPass = new RenderPass(this.scene, this.camera3d);
+    this.composer.addPass(this.renderPass);
+    this.bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.65, 0.82);
+    this.composer.addPass(this.bloomPass);
+    this.composer.addPass(new OutputPass());
 
-    const meta = LEVEL_BUILDERS[id](this);
-    this.meta = meta;
-    this.levelId = id;
-    this.killY = meta.killY ?? -100;
-    this.orbs.build();
-    this.totalPrisms = meta.prismTotal ?? 0;
+    // systems
+    this.world = null;
+    this.input = new Input(canvas);
+    this.audio = new AudioEngine();
+    this.save = new Save();
+    this.hud = new HUD(this);
+    this.fx = new ParticleSystem(this.scene);
+    this.speedLines = new SpeedLines(document.getElementById('speedlines'));
+    this.trailL = new TrailRibbon(this.scene, '#5ff5e0', 42, 0.26);
+    this.trailR = new TrailRibbon(this.scene, '#9fe8ff', 42, 0.26);
+    this.character = new Character(this.scene);
+    this.player = new Player(this);
+    this.autopilot = new Autopilot(this);
+    this.applyQuality();
 
-    if (!this._playerInScene) { this.player.addTo(this.scene); this._playerInScene = true; }
+    this.state = 'TITLE';
+    this.levelId = null;
+    this.levelName = '';
+    this.level = null;
+    this.sky = null; this.clouds = null; this.lights = null;
+    this.finished = false;
+    this.runTime = 0; this.penalty = 0;
+    this.sparkCount = 0; this.boltCount = 0;
+    this.kills = 0;
+    this.orbs = [];
+    this._fadeEl = null;
 
-    if (!backdrop) {
-      this.player.spawn(meta.spawn.pos, meta.spawn.yaw || 0);
-      this.time = 0; this.score = 0; this.deaths = 0; this.cores = 0;
-      this.prismsGot = 0; this.chipsGot = 0; this.comboN = 0; this.stylePts = 0;
-      this.player.boostMeter = 50;
-      this.player.orbs = 0;
-      this.audioTrack(meta.music);
-      this.cam.snapBehind(this.player);
-      this.mode = 'play';
-      this.ui.show(null);
-      this.ui.objective(meta.intro || '');
-      this.ui.hudVisible(true);
-      if (!this.autotest) this.input.requestLock();
-    }
-  }
+    // apply persisted settings
+    const s = this.save.data.settings;
+    if (s.quality && s.quality !== 'auto' && !gfxParam) { this.quality = s.quality; this.applyQuality(); }
+    this.input.invertX = s.invertX; this.input.invertY = s.invertY;
+    if (s.music !== undefined) this.audio.setMusic(s.music);
+    if (s.sfx !== undefined) this.audio.setSfx(s.sfx);
 
-  audioTrack(name) {
-    audio.setTrack(name);
-    audio.setIntensity(this.mode === 'play' ? 1 : 0.35);
-  }
-
-  restartLevel() { this.loadLevel(this.levelId); }
-  quitToMenu() {
-    this.loadLevel('coast', { backdrop: true });
-    this.mode = 'select';
-    this.ui.show('select');
-    this.ui.hudVisible(false);
-    this.input.exitLock();
-    audio.setIntensity(0.35);
-  }
-
-  // ================= helpers used by level files =================
-  sign(text, pos, rotY = 0, scale = 1) { makeSign(this.scene, text, pos, rotY, scale); }
-  platform(w, d, pos, opts = {}) { return this.kit.platform(w, d, pos, opts); }
-  box(w, h, d, pos, rotY = 0, mat = null, opts = undefined) { return this.kit.box(w, h, d, pos, rotY, mat, opts || {}); }
-  channel(points, crossR, width, mat, a0, a1, closed) { return this.kit.channel(points, crossR, width, mat, a0, a1, closed); }
-  loop(entry, yaw, radius, width, mat) { return this.kit.loop(entry, yaw, radius, width, mat); }
-  spring(pos, dir, power, color) { this.springs.push(new Spring(this.scene, pos, dir, power, color)); }
-  panel(pos, rotY, power, opts) { this.panels.push(new DashPanel(this.scene, pos, rotY, power, opts)); }
-  mover(size, pathFn, dur = 6, phase = 0) { this.moversList.push(new Mover(this.scene, this.world, size, pathFn, { dur, phase })); }
-  fan(center, half, force) { this.fans.push(new FanZone(this.scene, center, half, force)); }
-  checkpoint(pos, yaw = 0) { this.checkpoints.push(new Checkpoint(this.scene, pos, yaw, this.checkpoints.length)); }
-  goal(pos, yaw = 0) { this.goalObj = new GoalRing(this.scene, pos, yaw); }
-  rail(points, opts) { const r = new Rail(this.scene, this.world, points, opts); this.rails.push(r); return r; }
-  laserGate(a, b, opts) { this.hazards.push(new LaserGate(this.scene, a, b, opts)); }
-  spikes(x, z, w, d, y, rotY = 0) { this.hazards.push(new SpikeStrip(this.scene, x, z, w, d, y, rotY)); }
-  lavaPool(x, z, w, d, y) { this.hazards.push(new LavaPool(this.scene, x, z, w, d, y)); }
-  crate(pos) { this.crates.push(new Crate(this.scene, pos)); }
-  prism(pos) { this.specials.push(new Prism(this.scene, pos, 'prism')); }
-  chip(pos) { this.specials.push(new Prism(this.scene, pos, 'chip')); }
-  enemy(type, pos, opts = {}) { return this.enemies.add(type, pos, opts); }
-  orbLine(a, b, n) { this.orbs.line(a, b, n); }
-  orbArc(pts, n) { this.orbs.arcPoints(pts, n); }
-  orbCircle(c, r, n, axis, rotY) { this.orbs.circle(c, r, n, axis, rotY); }
-
-  spawnProjectile(pos, vel) { this.enemies.projectiles.spawn(pos, vel); }
-  onProjectileDestroyed(pp) {
-    this.fx.explosion(pp, 0xff5577);
-    this.addScore(25, pp, '+25');
-    audio.explode();
-  }
-
-  // ================= scoring / events =================
-  addScore(n, worldPos, label = null, cssColor = '#ffe14d') {
-    this.score += n;
-    if (label && worldPos && !this.autotest) this.fx.floatText(worldPos, label, cssColor);
-  }
-
-  onOrb() {
-    this.cores++;
-    this.comboN++; this.comboT = 2.2;
-    this.addScore(10);
-    this.player.addBoost(6);
-    audio.orb(this.comboN);
-  }
-
-  onSpecial(sp) {
-    if (sp.kind === 'prism') {
-      this.prismsGot++;
-      this.addScore(400, sp.pos, 'PRISM! +400', '#9ff3ff');
-      this.player.addBoost(100);
-      audio.prism();
-      this.ui.toast(`Prism ${this.prismsGot}/${this.totalPrisms}`);
-    } else {
-      this.chipsGot++;
-      this.addScore(300, sp.pos, 'SECRET! +300', '#ff7080');
-      this.player.addBoost(50);
-      audio.chip();
-      this.ui.toast('Star Chip found!');
-    }
-    this.fx.burst(sp.pos, { count: 20, speed: 8, color: sp.kind === 'prism' ? 0x19e6ff : 0xff3040, life: 0.8 });
-  }
-
-  onEnemyKilled(e, impactVel) {
-    this.comboN++; this.comboT = 2.5;
-    const pts = 100;
-    this.addScore(pts, e.chainPos, `+${pts}`, '#ffb0c0');
-    this.player.addBoost(20);
-    this.fx.explosion(e.chainPos, 0xff8830);
-    audio.explode();
-    this.cam.addShake(0.22);
-  }
-
-  onCrateBreak(c) {
-    this.addScore(25, c.pos, '+25');
-    this.fx.burst(c.pos.clone().add(_v1.set(0, 0.5, 0)), { count: 16, speed: 7, colors: [0xc98a4b, 0x8a5a30], size: 7, grav: -14, life: 0.7 });
-    // burst of orbs
-    for (let i = 0; i < 5; i++) {
-      const it = { pos: c.pos.clone().add(_v1.set((Math.random() - .5) * 1.5, 1 + Math.random(), (Math.random() - .5) * 1.5)), taken: false, phase: Math.random() * 6 };
-      this.orbs.items.push(it);
-    }
-    // rebuild instanced mesh to fit new count
-    this.scene.remove(this.orbs.inst);
-    this.orbs.build();
-    audio.crate();
-  }
-
-  onSpring(s) { audio.spring(); this.fx.ring(s.pos.clone().addScaledVector(s.dir, 0.8), 4, 0xff5577, s.dir); }
-  onPanel(p) {
-    audio.panel();
-    this.fx.sparks(p.pos.clone().add(_v1.set(0, 0.5, 0)), p.dir, 12, 0x57f2ff);
-    this.stylePts += 10;
-  }
-  onCheckpoint(cp) {
-    audio.checkpoint();
-    this.ui.cpToast('CHECKPOINT');
-    this.fx.ring(cp.pos.clone().add(_v1.set(0, 2.9, 0)), 5, 0x37ffb0);
-    this.player.addBoost(25);
-  }
-
-  onHazardTouch(kind) {
-    if (kind === 'lava') { this.player.die(); }
-    else this.player.hurt(this.player.pos.clone());
-  }
-
-  findChainTarget(pos, vel, maxDist) {
-    // aim blend: mostly camera-forward so targets are what you SEE
-    _v1.copy(this.gfx.camera.getWorldDirection(_v2));
-    _v2.copy(vel); _v2.y = 0;
-    const hs = _v2.length();
-    _v1.multiplyScalar(Math.max(hs, 12));
-    _v1.addScaledVector(_v2, 0.8);
-    _v1.normalize();
-    return this.enemies.findChainTarget(pos, _v1, maxDist);
-  }
-
-  onPlayerEvent(name, data) {
-    const p = this.player;
-    switch (name) {
-      case 'jump': audio.jump(); this.fx.dust(p.pos.clone().addScaledVector(p.up, -p.r), 6); break;
-      case 'doubleJump': audio.doubleJump(); this.fx.ring(p.pos.clone(), 2.5, 0x9ff3ff, p.up.clone().negate()); this.stylePts += 10; break;
-      case 'land': {
-        const hard = data.impact > 16;
-        if (data.impact > 3) {
-          audio.land(hard);
-          this.fx.dust(p.pos.clone().addScaledVector(p.up, -p.r), hard ? 14 : 6);
-          if (hard) this.charSquash();
-        }
-        break;
-      }
-      case 'chainStart': audio.chainDash(); this.stylePts += 15; break;
-      case 'chainHit':
-        audio.chainHit();
-        this.cam.addShake(0.3);
-        this.fx.explosion(data.target.chainPos, 0x9ff3ff);
-        break;
-      case 'chainMiss': break;
-      case 'stompStart': audio.wallrun(); break;
-      case 'wallrun': audio.wallrun(); this.stylePts += 10; break;
-      case 'walljump': audio.jump(); this.fx.sparks(p.pos.clone(), p.wallN, 10); break;
-      case 'rail': audio.wallrun(); this.stylePts += 15; break;
-      case 'railLaunch': this.fx.ring(p.pos.clone(), 3.5, 0x37e0ff); break;
-      case 'spring': break;
-      case 'panel': break;
-      case 'driftBoost':
-        audio.boost();
-        this.fx.sparks(p.pos.clone().addScaledVector(p.up, -p.r * 0.5), p.heading, 16, 0xffd94a);
-        this.addScore(15);
-        this.stylePts += 15;
-        break;
-      case 'quickstep': this.fx.sparks(p.pos.clone(), UP, 5, 0xbfefff); break;
-      case 'spin': this.fx.ring(p.pos.clone(), 3, 0x9ff3ff); break;
-      case 'hurt': {
-        const scattered = this.orbs.scatterFrom(p.pos, data.scatter);
-        p.invuln = 2;
-        p.orbs = 0;
-        audio.hurt();
-        this.cam.addShake(0.7);
-        this.ui.flash();
-        this.ui.toast(`-${scattered} cores!`);
-        break;
-      }
-      case 'death': {
-        this.deaths++;
-        audio.death();
-        this.cam.addShake(0.8);
-        this.ui.flash(0.75);
-        this.ui.toast('Down! Respawning...');
-        setTimeout(() => {
-          if (this.mode !== 'play') return;
-          p.respawn();
-          p.boostMeter = Math.max(p.boostMeter, 50);
-          p.orbs = 0;
-          this.cam.snapBehind(p);
-        }, 1050);
-        break;
-      }
-    }
-  }
-
-  charSquash() { this.player.char.squash(0.72); }
-
-  // ================= GOAL / RESULTS =================
-  onGoal() {
-    if (this.mode !== 'play') return;
-    this.mode = 'results';
-    audio.goal();
-    this.input.exitLock();
-    const t = this.time;
-    const timeBonus = clamp(Math.round(1600 * (this.meta.par * 1.45 - t) / this.meta.par), 0, 1800);
-    const noDeath = this.deaths === 0 ? 400 : 0;
-    const finalScore = this.score + timeBonus + noDeath;
-    const rank = rankFor(finalScore);
-    const res = {
-      time: t, score: finalScore, rank,
-      cores: this.cores, coresTotal: this.orbs.items.length,
-      prisms: this.prismsGot, prismsTotal: this.totalPrisms,
-      chips: this.chipsGot, deaths: this.deaths,
-      timeBonus, noDeath, style: this.stylePts,
-    };
-    const isRec = recordResult(this.levelId, res);
-    audio.setIntensity(0.35);
-    setTimeout(() => { audio.rank(rank); }, 700);
-    this.ui.showResults(res, isRec);
-    this.ui.hudVisible(false);
-  }
-
-  nextLevel() {
-    const idx = LEVELS.findIndex((l) => l.id === this.levelId);
-    const nxt = LEVELS[idx + 1];
-    if (nxt) { this.loadLevel(nxt.id); this.ui.hudVisible(true); }
-    else this.quitToMenu();
-  }
-
-  retry() { this.loadLevel(this.levelId); this.ui.hudVisible(true); }
-
-  // ================= MAIN LOOP =================
-  frame() {
-    requestAnimationFrame(() => this.frame());
-    const now = performance.now();
-    let dt = Math.min(0.05, (now - this.lastT) / 1000);
-    this.lastT = now;
-    this.elapsedAll += dt;
-
-    const playing = this.mode === 'play';
-    // pause handling
-    if (playing && this.input.pauseHit) this.setPause(true);
-    else if (this.mode === 'pause' && (this.input.hit('Escape') || this.input.hit('KeyP'))) this.setPause(false);
-    if ((this.mode === 'play') && this.input.helpHit) this.ui.toggleHelp();
-    else if (this.mode === 'help') { /* handled in ui */ }
-
-    if (playing) {
-      this.simulate(dt);
-    } else if (this.mode === 'title' || this.mode === 'select' || this.mode === 'results') {
-      this.menuCamera(dt);
-    }
-
-    // global updates
-    this.fx.update(dt, this.gfx.camera);
-    this.fx.updateFloaters(dt, this.gfx.camera);
-    this.kit && this.kit.tickEnv(dt);
-    for (const fn of this.tickFns) fn(dt, this.elapsedAll);
-    this.gfx.updateSun(this.player.pos, this.sunDir);
-    const spNorm = clamp((playing ? this.player.displaySpeed : 0) / 46, 0, 1.15);
-    const boosting = playing && (this.player.boosting || this.player.panelTimer > 0);
-    audio.setMotion(spNorm, {
-      grinding: playing && this.player.state === 'rail',
-      wall: playing && this.player.state === 'wall',
-      boost: boosting,
+    window.addEventListener('resize', () => this.resize());
+    document.addEventListener('pointerlockchange', () => {
+      if (!document.pointerLockElement && this.state === 'PLAY' && !this.qa) this.pause();
     });
-    this.gfx.render(dt, this.elapsedAll, spNorm * (boosting ? 1 : 0.72));
-    this.input.endFrame();
-  }
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Escape' && this.state === 'PLAY') { /* lock loss handles pause */ }
+      if (e.code === 'KeyM' && this.state === 'PLAY') {
+        this.audio.setMusic(!this.audio.musicOn);
+        this.save.data.settings.music = this.audio.musicOn; this.save.flush();
+        this.hud.toast(this.audio.musicOn ? 'MUSIC ON' : 'MUSIC OFF');
+      }
+      if (e.code === 'KeyR' && this.state === 'PLAY' && !this.finished) this.respawnPlayer(false);
+    });
 
-  setPause(on) {
-    if (on) {
-      this.mode = 'pause';
-      this.ui.show('pause');
-      this.input.exitLock();
-      audio.setIntensity(0.3);
-    } else {
-      this.mode = 'play';
-      this.ui.show(null);
-      audio.setIntensity(1);
-      this.lastT = performance.now();
-      if (!this.autotest) this.input.requestLock();
-    }
-  }
+    this.hud.buildTitleMenu();
+    this.hud.showScreen('title-screen');
+    // idle scene behind title: coast theme sky + clouds
+    this.previewScene();
 
-  simulate(dt) {
-    const p = this.player;
-    this.time += dt;
-
-    // music intensity follows action
-    audio.setIntensity(p.boosting || p.panelTimer > 0 ? 1.45 : 1);
-
-    // ---- wish direction (camera-relative) ----
-    const camF = this.gfx.camera.getWorldDirection(_v1).clone();
-    camF.y = 0;
-    if (camF.lengthSq() < 0.001) camF.set(0, 0, 1);
-    camF.normalize();
-    const right = _v2.crossVectors(camF, UP).normalize().clone();
-    p.camFwd.copy(camF); p.camRight.copy(right);
-    const wish = new THREE.Vector3()
-      .addScaledVector(camF, this.input.moveZ)
-      .addScaledVector(right, this.input.moveX);
-    if (wish.lengthSq() > 1) wish.normalize();
-
-    // ---- movers tick once per frame ----
-    for (const m of this.moversList) m.tick(dt);
-
-    // ---- fixed-step physics ----
-    const h = 1 / TUNE.physicsHz;
-    this.acc += dt;
-    let steps = 0;
-    while (this.acc >= h && steps < 10) {
-      p.step(h, wish);
-      this.acc -= h;
-      steps++;
-    }
-    if (steps >= 10) this.acc = 0;
-
-    // kill plane
-    if (p.pos.y < this.killY && p.state !== 'dead') p.die();
-
-    // rail magnetism while airborne
-    if (p.state === 'air') {
-      for (const r of this.rails) { if (p.tryRail(r)) break; }
-    }
-
-    // ---- world objects ----
-    for (const o of this.springs) o.update(dt, p, this);
-    for (const o of this.panels) o.update(dt, p, this);
-    for (const o of this.fans) o.update(dt, p, this);
-    for (const o of this.checkpoints) o.update(dt, p, this);
-    for (const o of this.hazards) o.update(dt, p, this);
-    for (const o of this.crates) o.update(dt, p, this);
-    for (const o of this.specials) o.update(dt, p, this);
-    if (this.goalObj) this.goalObj.update(dt, p, this);
-    this.orbs.update(dt, p, this);
-    this.enemies.update(dt, p);
-
-    // combo decay
-    if (this.comboT > 0) { this.comboT -= dt; if (this.comboT <= 0) this.comboN = 0; }
-
-    // chain-dash reticle target
-    if (p.state === 'air') {
-      this.reticleTarget = this.findChainTarget(p.pos, p.vel, TUNE.chainDashRadius);
-    } else this.reticleTarget = null;
-
-    // visuals
-    p.frameUpdate(dt);
-    this.cam.update(dt, p, this.input, {});
-    this.updateReticleFx();
-    this.ui.hudTick(dt);
-  }
-
-  updateReticleFx() {
-    this.ui.setReticleLocked(!!this.reticleTarget);
-  }
-
-  menuCamera(dt) {
-    // slow orbit around the level spawn for menu backdrop
-    const c = this.gfx.camera;
-    const t = this.elapsedAll * 0.08;
-    const cx = Math.sin(t) * 26, cz = Math.cos(t) * 26;
-    const focus = this.player.pos;
-    c.position.lerp(_v1.set(focus.x + cx, focus.y + 11 + Math.sin(t * 0.7) * 3, focus.z + cz), 1 - Math.exp(-2 * dt));
-    c.up.set(0, 1, 0);
-    c.lookAt(focus.x, focus.y + 2, focus.z);
-    c.fov = 62; c.updateProjectionMatrix();
-    this.player.char.root.visible = true;
-    this.player.frameUpdate(dt, {});
-  }
-
-  setupAutotest() {
-    if (!this.autotest) return;
-    const g = this;
-    window.__kr = {
-      v: 1,
-      ready: true,
-      get mode() { return g.mode; },
-      get level() { return g.levelId; },
-      state() {
-        const p = g.player;
-        return {
-          mode: g.mode, level: g.levelId,
-          pos: p.pos.toArray(),
-          vel: p.vel.toArray(),
-          speed: p.displaySpeed,
-          horizSpeed: p.horizSpeed,
-          state: p.state, grounded: p.grounded,
-          up: p.up.toArray(),
-          orbs: g.cores, boost: p.boostMeter, score: g.score,
-          time: g.time, deaths: g.deaths,
-          camYaw: g.cam.yaw, fov: g.gfx.camera.fov,
-          prisms: g.prismsGot, chips: g.chipsGot,
-          checkpointsActive: g.checkpoints.filter((c) => c.active).length,
-        };
-      },
-      start(levelId) { g.loadLevel(levelId || 'sandbox'); },
-      key(code, down) {
-        g.input.keys[code] = down;
-        if (down) g.input.pressed[code] = true;
-        else g.input.released[code] = true;
-      },
-      nudgeMouse(dx, dy) { g.input.pointerLocked = true; g.input.mouseDX += dx; g.input.mouseDY += dy; },
-      getInput() { return { invertX: g.input.invertX, invertY: g.input.invertY, sens: g.input.sens }; },
-      tap(code) { g.input.pressed[code] = true; },
-      clearKeys() { g.input.keys = Object.create(null); },
-      teleport(x, y, z, yaw = 0) {
-        g.player.spawn(new THREE.Vector3(x, y, z), yaw);
-        g.cam.snapBehind(g.player);
-      },
-      give(boost) { g.player.boostMeter = boost ?? 100; },
-      finish() { g.onGoal(); },
-      log: [],
-      events: [],
+    // audio unlock on first gesture
+    const unlock = () => {
+      if (this.audio.ensure()) {
+        window.removeEventListener('pointerdown', unlock);
+        window.removeEventListener('keydown', unlock);
+      }
     };
-    const origEvent = this.onPlayerEvent.bind(this);
-    this.onPlayerEvent = (n, d) => { window.__kr.events.push(n); if (window.__kr.events.length > 200) window.__kr.events.shift(); origEvent(n, d); };
-    const origToast = this.ui.toast.bind(this.ui);
-    this.ui.toast = (m) => { window.__kr.log.push('toast:' + m); origToast(m); };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+
+    // QA hooks
+    window.addEventListener('error', (e) => { this.errorCount = (this.errorCount || 0) + 1; qaLog('error', e.message); });
+    window.addEventListener('unhandledrejection', (e) => { this.errorCount = (this.errorCount || 0) + 1; qaLog('error', String(e.reason)); });
+
+    this.ready = true;
+    qaLog('ready', { quality: this.quality, levels: LEVELS.length });
+    if (this.qa && this.autopilotOn) {
+      const lvl = new URLSearchParams(location.search).get('level') || 'coast';
+      setTimeout(() => this.startLevel(lvl), 300);
+    }
+
+    this.lastTime = performance.now();
+    this.acc = 0;
+    requestAnimationFrame((t) => this.frame(t));
+  }
+
+  detectQuality() {
+    try {
+      const gl = this.renderer.getContext();
+      const ext = gl.getExtension('WEBGL_debug_renderer_info');
+      const r = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : '';
+      if (/swiftshader|llvmpipe|software|basic render/i.test(String(r))) return 'low';
+    } catch { }
+    return (navigator.hardwareConcurrency || 4) >= 8 ? 'ultra' : 'high';
+  }
+
+  applyQuality() {
+    const q = this.quality;
+    const pr = Math.min(devicePixelRatio || 1, q === 'ultra' ? 2 : q === 'high' ? 1.6 : q === 'medium' ? 1.25 : 0.85);
+    this.renderer.setPixelRatio(pr);
+    this.renderer.shadowMap.enabled = q !== 'low';
+    this.bloomPass.enabled = q === 'high' || q === 'ultra';
+    this.bloomPass.strength = q === 'ultra' ? 0.62 : 0.45;
+    this.fxQuality = q;
+    this.resize();
+  }
+
+  applySettings() {
+    const s = this.save.data.settings;
+    this.input.invertX = s.invertX; this.input.invertY = s.invertY;
+    this.audio.setMusic(s.music); this.audio.setSfx(s.sfx);
+    if (s.quality !== 'auto') { this.quality = s.quality; }
+    this.applyQuality();
+    this.save.flush();
+  }
+
+  resize() {
+    const w = innerWidth, h = innerHeight;
+    this.camera3d.aspect = w / h;
+    this.camera3d.updateProjectionMatrix();
+    this.renderer.setSize(w, h);
+    this.composer.setSize(w, h);
+    this.speedLines.resize(w, h);
+  }
+
+  previewScene() {
+    // simple animated backdrop for title
+    this.clearWorldScene();
+    const theme = THEMES.coast;
+    this.scene.background = new THREE.Color(theme.skyTop);
+    this.scene.fog = new THREE.Fog(theme.fog.color, theme.fog.near, theme.fog.far);
+    this.sky = makeSky(theme); this.scene.add(this.sky);
+    this.clouds = makeClouds(theme); this.scene.add(this.clouds);
+    this.lights = applyThemeLights(this.scene, theme);
+    const demoIsle = new THREE.Mesh(new THREE.CylinderGeometry(30, 34, 10, 10),
+      new THREE.MeshStandardMaterial({ color: 0xd9c08a, roughness: .9 }));
+    demoIsle.position.set(0, -14, -40);
+    this.lights.sun.target.position.copy(demoIsle.position);
+    this.scene.add(demoIsle);
+    this._titleProps = [demoIsle];
+  }
+
+  clearWorldScene() {
+    for (const o of [this.sky, this.clouds]) if (o) this.scene.remove(o);
+    if (this._titleProps) { for (const o of this._titleProps) this.scene.remove(o); this._titleProps = null; }
+    if (this.lights) { this.scene.remove(this.lights.hemi, this.lights.sun, this.lights.sun.target); }
+    if (this.level) { this.level.dispose(); this.level = null; }
+    this.sky = this.clouds = this.lights = null;
+    this.orbs.forEach(o => this.scene.remove(o.mesh)); this.orbs.length = 0;
+  }
+
+  /* ============================ level flow ============================ */
+  startLevel(id) {
+    const def = getLevelDef(id);
+    this.state = 'LOADING';
+    this.hud.showScreen('loading-screen');
+    // async-ish build to let the loader paint
+    setTimeout(() => {
+      this.clearWorldScene();
+      this.world = new CollisionWorld(10);
+      const theme = THEMES[def.themeKey];
+      this.scene.fog = new THREE.Fog(theme.fog.color, theme.fog.near, theme.fog.far);
+      this.sky = makeSky(theme); this.scene.add(this.sky);
+      this.clouds = makeClouds(theme, theme.night ? 18 : 26); this.scene.add(this.clouds);
+      this.lights = applyThemeLights(this.scene, theme);
+
+      this.level = new Level(this, def);
+      this.levelId = id;
+      this.levelName = def.name;
+
+      this.player.hearts = 3;
+      this.player.boostMeter = 50;
+      this.player.stats = { maxSpeed: 0, grindTime: 0, jumps: 0, springsHit: 0, panelsHit: 0, dives: 0, divesHit: 0, falls: 0, hitsTaken: 0 };
+      this.player.spawnAt(def.spawn, def.spawnYaw || 0);
+      this.chaseCam.snapBehind(this.player);
+      this.trailL.clear(); this.trailR.clear();
+
+      this.finished = false;
+      this.runTime = 0; this.penalty = 0;
+      this.sparkCount = 0; this.boltCount = 0; this.kills = 0;
+      this.sparkTotal = this.level.sparkCount();
+      this.boltTotal = this.level.boltCount();
+
+      this.hud.showScreen(null);
+      this.state = 'PLAY';
+      if (!this.qa) this.input.requestLock();
+      this.audio.playTrack(def.music);
+      qaLog('level_started', id);
+      if (this.autopilotOn) this.autopilot.reset();
+    }, 60);
+  }
+
+  pause() {
+    if (this.state !== 'PLAY') return;
+    this.state = 'PAUSED';
+    this.input.releaseLock();
+    this.hud.buildPauseMenu();
+    this.hud.showScreen('pause-screen');
+    this.audio.stopTrack();
+  }
+  resume() {
+    if (this.state !== 'PAUSED') return;
+    this.state = 'PLAY';
+    this.hud.showScreen(null);
+    this.input.requestLock();
+    this.audio.playTrack(getLevelDef(this.levelId).music);
+  }
+  quitToTitle() {
+    this.state = 'TITLE';
+    this.audio.stopTrack();
+    this.clearWorldScene();
+    this.world = null; this.level = null;
+    this.previewScene();
+    this.hud.buildTitleMenu();
+    this.hud.showScreen('title-screen');
+  }
+
+  respawnPlayer(softReboot) {
+    const p = this.player;
+    p.pos.copy(p.checkpoint);
+    p.vel.set(0, 0, 0);
+    p.yaw = p.cpYaw;
+    p.rail = null; p.dive.active = false;
+    p.grounded = false;
+    if (softReboot) {
+      p.hearts = 2;
+      this.penalty += 5;
+      this.hud.toast('SYSTEM REBOOT · +5s PENALTY');
+    }
+    this.chaseCam.snapBehind(p);
+    this.fx.burst(p.pos, 16, { color: '#7ff7e8', speed: 8, life: .5 });
+    this.audio.tone('sine', 220, 440, .2, .15);
+  }
+
+  levelComplete() {
+    if (this.finished) return;
+    this.finished = true;
+    this.audio.goalFanfare();
+    const time = this.runTime, par = this.level.par;
+    const maxTime = par * 1.75;
+    const timeScore = Math.round(5000 * THREE.MathUtils.clamp((maxTime - time) / (maxTime - par * 0.55), 0.08, 1));
+    const allSparks = this.sparkCount >= this.sparkTotal;
+    const sparkScore = this.sparkCount * 80 + (allSparks ? 800 : 0);
+    const boltScore = this.boltCount * 1500;
+    const combatScore = this.kills * 250;
+    const noHitScore = this.player.stats.hitsTaken === 0 ? 2000 : 0;
+    const total = timeScore + sparkScore + boltScore + combatScore + noHitScore;
+    const maxPossible = 5000 + (this.sparkTotal * 80 + 800) + this.boltTotal * 1500 + this.totalEnemies() * 250 + 2000;
+    const ratio = total / maxPossible;
+    const rank = ratio >= 0.86 ? 'S' : ratio >= 0.70 ? 'A' : ratio >= 0.52 ? 'B' : ratio >= 0.32 ? 'C' : 'D';
+
+    const idx = LEVELS.findIndex(l => l.id === this.levelId);
+    const next = LEVELS[idx + 1];
+    const data = {
+      levelName: this.levelName, time, penalty: this.penalty, timeScore,
+      sparks: this.sparkCount, sparkTotal: this.sparkTotal, sparkScore,
+      bolts: this.boltCount, boltTotal: this.boltTotal, boltScore,
+      kills: this.kills, combatScore, hits: this.player.stats.hitsTaken, noHitScore,
+      total, rank, hasNext: !!next, nextId: next ? next.id : null
+    };
+    const isBest = this.save.record(this.levelId, { score: total, rank, time: (time + this.penalty) * 1000 });
+    if (isBest) this.hud.toast('NEW RECORD!');
+    this.lastRank = rank;
+    qaLog('goal', { level: this.levelId, time: +(time).toFixed(2), rank, total });
+    setTimeout(() => { this.hud.showResults(data); this.state = 'RESULTS'; }, 1400);
+  }
+
+  totalEnemies() { return this.level ? this.level.enemies.length : 0; }
+
+  /* ============================ gameplay events ============================ */
+  findDiveTarget(pos, camYaw) {
+    if (!this.level) return null;
+    const vf = new THREE.Vector3(Math.sin(camYaw), 0, Math.cos(camYaw));
+    let best = null, bestD = 24;
+    for (const e of this.level.enemies) {
+      if (!e.alive) continue;
+      const to = e.pos.clone().sub(pos);
+      const d = to.length();
+      if (d > bestD) continue;
+      to.normalize();
+      const flat = new THREE.Vector3(to.x, 0, to.z);
+      if (flat.lengthSq() > 0.01 && flat.normalize().dot(vf) < 0.35) continue;
+      best = e; bestD = d;
+    }
+    return best;
+  }
+
+  killEnemy(e, cause) {
+    if (!e.alive) return;
+    e.kill(this.fx);
+    this.kills++;
+    this.player.grantBoost(10);
+    this.player.bumpCombo();
+    this.audio.explode();
+    this.chaseCam.kick(0.25);
+    this.hud.toast(`${cause.toUpperCase()}! +BOOST`, '');
+  }
+
+  spawnOrb(pos, vel) {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x111122, emissive: 0xff66aa, emissiveIntensity: 2 }));
+    m.position.copy(pos);
+    this.scene.add(m);
+    this.orbs.push({ mesh: m, vel: vel.clone(), t: 4.5 });
+  }
+
+  onSpark(pos) {
+    this.sparkCount++;
+    this.player.grantBoost(2.5);
+    this.player.bumpCombo();
+    this.audio.collect(this.player.combo);
+    this.fx.burst(pos, 5, { color: '#ffd166', speed: 4, life: .35, size: .45 });
+  }
+  onBolt(pos) {
+    this.boltCount++;
+    this.audio.secret();
+    this.fx.burst(pos, 24, { color: '#ff5964', speed: 9, life: .8, size: .6 });
+    this.hud.toast(`SECRET BOLT ${this.boltCount}/${this.boltTotal}!`, 'secret');
+  }
+  onSpring(pos) {
+    this.audio.spring();
+    this.fx.burst(pos, 12, { color: '#7ff7e8', speed: 7, life: .4 });
+    this.player.airTime = 0.3;
+  }
+  onPanel(pos) {
+    this.audio.dash();
+    this.fx.burst(pos, 14, { color: '#22e5ff', speed: 12, life: .35, size: .55 });
+    this.chaseCam.kick(0.12);
+  }
+  onCheckpoint(pos) {
+    this.audio.checkpointSnd();
+    this.hud.message('CHECKPOINT', 1.1);
+    this.fx.burst(pos, 14, { color: '#17c3b2', speed: 6, life: .5 });
+  }
+  onTrick(name) { this.hud.toast(name); }
+  onJump(pos) {
+    this.audio.jump();
+    this.fx.burst(pos, 6, { color: '#cfe8e4', speed: 3, life: .3, size: .5 });
+  }
+  onLand(pos, speed) {
+    this.audio.land();
+    if (speed > 20) this.fx.burst(pos, 10, { color: '#d9cdb4', speed: 5, life: .4 });
+  }
+  onHardImpact(pos, impact) {
+    this.chaseCam.kick(Math.min(0.7, impact / 70));
+    this.audio.hit();
+    this.fx.burst(pos, 14, { color: '#ffb454', speed: 8, life: .4 });
+  }
+  onPlayerHit() {
+    this.hud.damageFlash();
+    this.audio.hit();
+    this.chaseCam.kick(0.6);
+  }
+
+  /* ============================ main loop ============================ */
+  frame(now) {
+    requestAnimationFrame((t) => this.frame(t));
+    let dt = Math.min((now - this.lastTime) / 1000, 0.05);
+    this.lastTime = now;
+
+    const input = this.activeInput();
+
+    if (this.state === 'PLAY' || this.state === 'PAUSED') {
+      if (this.state === 'PLAY') {
+        // camera look (once per frame)
+        if (!this.autopilotOn) {
+          this.chaseCam.onMouse(input.consumedDX || 0, input.consumedDY || 0,
+            this.input.sensitivity, this.input.invertX, this.input.invertY);
+          this.chaseCam.distMul = THREE.MathUtils.clamp(this.chaseCam.distMul + input.wheel * 0.08, 0.6, 1.7);
+        }
+        // autopilot drives virtual input
+        if (this.autopilotOn) this.autopilot.update(dt);
+
+        // fixed-step sim
+        this.runTime += dt;
+        this.acc += dt;
+        let steps = 0;
+        while (this.acc >= SIM_DT && steps < 12) {
+          this.player.step(SIM_DT, input, this.chaseCam.yaw);
+          this.acc -= SIM_DT;
+          steps++;
+        }
+        this.level.update(dt, this.player);
+        this.updateOrbs(dt);
+      }
+      // visuals follow sim
+      this.updateCharacterVisuals(dt);
+      this.chaseCam.update(dt, this.player, this.world);
+      this.updateFx(dt);
+      this.hud.update(dt);
+      if (this.sky) this.sky.position.copy(this.camera3d.position);
+      if (this.clouds) this.clouds.position.x = this.camera3d.position.x * 0.9;
+      this.lights.sun.position.copy(this.player.pos).addScaledVector(THEMES[this.level.def.themeKey].sunDir, 260);
+      this.lights.sun.target.position.copy(this.player.pos);
+    } else if (this.state === 'TITLE') {
+      // slow orbit backdrop
+      const t = now * 0.00004;
+      this.camera3d.position.set(Math.sin(t) * 90, 26, Math.cos(t) * 90 - 40);
+      this.camera3d.up.set(0, 1, 0);
+      this.camera3d.lookAt(0, -6, -40);
+      if (this.clouds) this.clouds.rotation.y += dt * 0.004;
+    }
+
+    this.composer.render();
+    input.endFrame && input.endFrame();
+    void dt;
+  }
+
+  activeInput() {
+    return this.autopilotOn ? this.autopilot.vinput : this.input;
+  }
+
+  updateOrbs(dt) {
+    const p = this.player;
+    for (let i = this.orbs.length - 1; i >= 0; i--) {
+      const o = this.orbs[i];
+      o.t -= dt;
+      o.mesh.position.addScaledVector(o.vel, dt);
+      if (o.mesh.position.distanceTo(p.pos) < 1.1) {
+        if (p.hurt(o.mesh.position)) this.onPlayerHit();
+        o.t = 0;
+      }
+      if (o.t <= 0) { this.scene.remove(o.mesh); this.orbs.splice(i, 1); }
+    }
+  }
+
+  updateCharacterVisuals(dt) {
+    const p = this.player, c = this.character;
+    c.setVisible(true);
+    c.animate(dt, {
+      pos: p.pos, yaw: p.yaw,
+      speed01: THREE.MathUtils.clamp(p.speed / 95, 0, 1),
+      grounded: p.grounded && !p.rail,
+      airTime: p.airTime, vy: p.vel.y,
+      drifting: p.drifting, turnLean: p.turnLean,
+      grinding: !!p.rail,
+      dive: p.dive.active,
+      boosting: p.boosting,
+      landT: p.landT > 0 ? p.landT / 0.16 : 0,
+      vel: p.vel
+    });
+  }
+
+  updateFx(dt) {
+    const p = this.player;
+    this.fx.update(dt);
+    // boot trails
+    const sp01 = THREE.MathUtils.clamp(p.speed / 95, 0, 1);
+    const trailI = (p.boosting ? 1 : 0) * 0.9 + Math.max(0, sp01 - 0.55) * 1.6 + (p.rail ? 0.5 : 0) + (p.dive.active ? 1 : 0);
+    this.trailL.intensity = THREE.MathUtils.clamp(trailI, 0, 1);
+    this.trailR.intensity = this.trailL.intensity;
+    if (this.trailL.intensity > 0.04) {
+      const right = new THREE.Vector3(-Math.cos(p.yaw), 0, Math.sin(p.yaw));
+      const base = p.pos.clone().addScaledVector(right, 0.22); base.y -= 0.45;
+      const base2 = p.pos.clone().addScaledVector(right, -0.22); base2.y -= 0.45;
+      this.trailL.push(base, right.clone().multiplyScalar(0.4).setY(0.15));
+      this.trailR.push(base2, right.clone().multiplyScalar(0.4).setY(0.15));
+    }
+    // wind streak particles at high speed
+    if (sp01 > 0.45 && Math.random() < dt * 60 * sp01) {
+      const dir = new THREE.Vector3(p.vel.x, 0, p.vel.z).normalize();
+      const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar((Math.random() - 0.5) * 7);
+      const pt = p.pos.clone().addScaledVector(dir, 6 + Math.random() * 8).add(side);
+      pt.y += (Math.random() - 0.3) * 4;
+      this.fx.emit(pt.x, pt.y, pt.z, -dir.x * 30, 0, -dir.z * 30,
+        { color: '#dff6ff', life: .5, size: .38, gravity: 0, drag: 0.4, alpha: .7 });
+    }
+    // drift sparks
+    if (p.drifting && Math.random() < dt * 50) {
+      this.fx.emit(p.pos.x, p.pos.y - 0.7, p.pos.z,
+        (Math.random() - .5) * 4, 2 + Math.random() * 2, (Math.random() - .5) * 4,
+        { color: '#ff9f1c', life: .35, size: .4, gravity: 14 });
+    }
+    // boost flames
+    if (p.boosting && Math.random() < dt * 80) {
+      this.fx.emit(p.pos.x, p.pos.y - 0.5, p.pos.z,
+        -p.vel.x * .25, 1, -p.vel.z * .25,
+        { color: '#66e0ff', life: .3, size: .5, gravity: 0 });
+    }
+    this.speedLines.update(dt, THREE.MathUtils.clamp((sp01 - 0.5) * 1.8 + (p.boosting ? 0.25 : 0), 0, 1));
+    this.audio.boostLoop(p.boosting ? THREE.MathUtils.clamp(p.speed / 80, 0, 1) : 0);
+  }
+
+  /* ============================ QA ============================ */
+  qaState() {
+    const p = this.player;
+    return {
+      ready: !!this.ready,
+      state: this.state,
+      level: this.levelId,
+      finished: this.finished,
+      time: +(this.runTime + this.penalty).toFixed(2),
+      rank: this.lastRank || null,
+      sparks: `${this.sparkCount}/${this.sparkTotal || 0}`,
+      bolts: `${this.boltCount}/${this.boltTotal || 0}`,
+      kills: this.kills,
+      errors: this.errorCount || 0,
+      player: {
+        pos: p ? p.pos.toArray().map(v => +v.toFixed(1)) : null,
+        speed: p ? +p.speed.toFixed(1) : 0,
+        grounded: p ? p.grounded : false,
+        grinding: p ? !!p.rail : false,
+        boosting: p ? p.boosting : false,
+        hearts: p ? p.hearts : 0,
+        yaw: p ? +p.yaw.toFixed(2) : 0
+      },
+      camYaw: +this.chaseCam.yaw.toFixed(2),
+      stats: p ? p.stats : {},
+      waypointsLeft: this.autopilot ? (this.level ? this.level.def.waypoints.length - this.autopilot.wpIndex : 0) : 0
+    };
   }
 }
 
-// expose a couple of textures helpers needed by kit clouds
-window.addEventListener('error', (e) => {
-  console.error('window error:', e.message);
-});
-
-new Game();
+// bootstrap
+const game = new Game();
+window.__VR = game;
+export default game;

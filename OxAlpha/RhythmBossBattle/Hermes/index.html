@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<!-- PULSEBREAK — Rhythm Boss Battle (PBK.v1) -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>PULSEBREAK — Rhythm Boss Battle</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="game"></canvas>
+
+  <!-- HUD elements drawn on canvas; DOM used only for menus/overlays -->
+
+  <div id="menu" class="overlay">
+    <div class="menu-inner">
+      <h1 class="logo">PULSE<span>BREAK</span></h1>
+      <p class="tagline">a rhythm boss battle vs <b>THE CONDUCTOR</b></p>
+      <button id="btnStart" class="big-btn">&#9654; START THE ENCORE</button>
+      <div class="help-card">
+        <h2>HOW TO SURVIVE</h2>
+        <table>
+          <tr><td><kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd></td><td>hit notes as they cross the pulse line<br>(arrows <kbd>&#8592;</kbd><kbd>&#8595;</kbd><kbd>&#8593;</kbd><kbd>&#8594;</kbd> also work)</td></tr>
+          <tr><td><span class="k-amber"></span>STRIKE</td><td>damage THE CONDUCTOR</td></tr>
+          <tr><td><span class="k-cyan"></span>GUARD</td><td>block incoming shard attacks &mdash; miss one and you take the hit</td></tr>
+          <tr><td><span class="k-magenta"></span>SURGE</td><td>charge your resonance meter; at full power a special blast fires automatically</td></tr>
+        </table>
+        <p class="dim">Perfect timing deals more damage. Combos raise your score.<br>
+        Deplete the Conductor's health before the song ends &mdash; or his encore consumes you.</p>
+      </div>
+      <p class="foot dim">Esc / P pause &middot; R restart &middot; M mute</p>
+    </div>
+  </div>
+
+  <div id="pauseOverlay" class="overlay hidden">
+    <div class="menu-inner small">
+      <h1 class="logo sm">PAUSED</h1>
+      <button id="btnResume" class="big-btn">RESUME</button>
+      <button id="btnRestartPause" class="mid-btn dim2">RESTART&nbsp;&nbsp;(R)</button>
+      <button id="btnQuit" class="mid-btn dim2">QUIT TO MENU&nbsp;&nbsp;(Q)</button>
+    </div>
+  </div>
+
+  <div id="resultOverlay" class="overlay hidden">
+    <div class="menu-inner">
+      <div id="resultTitle" class="result-title win">ENCORE COMPLETE</div>
+      <div id="rankLetter" class="rank">S</div>
+      <div id="resultStats" class="result-stats"></div>
+      <button id="btnRetry" class="big-btn">RETRY&nbsp;&nbsp;(R)</button>
+      <button id="btnMenu" class="mid-btn dim2">MENU&nbsp;&nbsp;(Q)</button>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script src="js/song.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/game.js"></script>
+<script src="js/render.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

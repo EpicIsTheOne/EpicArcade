@@ -1,0 +1,5 @@
+{
+  "title": "The Chorus Below",
+  "description": "2-4 player co-op horror: restore power, decode the signal, escape the Chorus.",
+  "multiplayer": { "endpoint": "/ws/the-chorus-below" }
+}

@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON VOLTAGE — Rooftop Rhythm Duel</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23120b2e'/%3E%3Cpath d='M18 3 7 18h7l-2 11 13-16h-8z' fill='%2300e5ff'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="app">
+  <canvas id="cv" width="1280" height="720"></canvas>
+
+  <div id="ui">
+    <!-- TITLE -->
+    <div id="screen-title" class="screen on">
+      <div class="title-wrap">
+        <div class="logo">
+          <span class="logo-neon">NEON</span>
+          <span class="logo-volt">VOLTAGE</span>
+        </div>
+        <div class="tagline">// a rooftop rhythm duel //</div>
+        <div class="press-start" id="press-start">PRESS <b>ENTER</b> OR CLICK TO START</div>
+        <div class="controls-card">
+          <div class="cc-title">HOW TO JAM</div>
+          <div class="cc-grid">
+            <span><kbd>←</kbd><kbd>↓</kbd><kbd>↑</kbd><kbd>→</kbd> · <kbd>WASD</kbd> · <kbd>DFJK</kbd></span>
+            <span>hit arrows as they reach the ring — echo <b>VEXX's</b> phrases back</span>
+            <span><kbd>ENTER</kbd> confirm · <kbd>ESC</kbd> pause</span>
+          </div>
+        </div>
+        <div class="volume-row">
+          <span class="vol-label">VOL</span>
+          <input type="range" id="volume" min="0" max="100" value="80">
+        </div>
+      </div>
+      <div class="title-footer">original song · original characters · made from scratch</div>
+    </div>
+
+    <!-- SONG SELECT -->
+    <div id="screen-select" class="screen">
+      <div class="select-head">CHOOSE YOUR BATTLE</div>
+      <div class="song-card" id="song-card" tabindex="0">
+        <div class="song-art">
+          <div class="sa-bolt"></div>
+          <div class="sa-vs">VS</div>
+        </div>
+        <div class="song-meta">
+          <div class="song-name">NEON VOLTAGE</div>
+          <div class="song-sub">KAZ vs VEXX · Rooftop Showdown</div>
+          <div class="song-tags">
+            <span class="tag diff">HARDISH</span>
+            <span class="tag bpm" id="tag-bpm">148 BPM</span>
+            <span class="tag len" id="tag-len">1:41</span>
+          </div>
+          <div class="song-best" id="song-best">NO RECORD YET — set one.</div>
+        </div>
+        <div class="song-play">PLAY <span class="play-arrow">▶</span></div>
+      </div>
+      <div class="select-hint"><kbd>ENTER</kbd> play · <kbd>ESC</kbd> back</div>
+    </div>
+
+    <!-- PAUSE -->
+    <div id="screen-pause" class="screen overlay">
+      <div class="pause-box">
+        <div class="pause-title">PAUSED</div>
+        <div class="pause-stats" id="pause-stats"></div>
+        <div class="btn-col">
+          <button class="btn primary" id="btn-resume">RESUME</button>
+          <button class="btn" id="btn-restart">RESTART</button>
+          <button class="btn" id="btn-quit">QUIT TO MENU</button>
+        </div>
+        <div class="pause-hint"><kbd>ESC</kbd> resume</div>
+      </div>
+    </div>
+
+    <!-- RESULTS -->
+    <div id="screen-results" class="screen overlay">
+      <div class="results-box">
+        <div class="results-head" id="results-head">TRACK CLEARED!</div>
+        <div class="results-rank" id="results-rank">S</div>
+        <div class="results-grid" id="results-grid"></div>
+        <div class="results-record" id="results-record"></div>
+        <div class="btn-row">
+          <button class="btn primary" id="btn-retry">RETRY</button>
+          <button class="btn" id="btn-menu">MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAIL -->
+    <div id="screen-fail" class="screen overlay">
+      <div class="fail-box">
+        <div class="fail-title">SIGNAL LOST</div>
+        <div class="fail-sub">VEXX drowned you out… recharge and run it back.</div>
+        <div class="btn-row">
+          <button class="btn primary" id="btn-fail-retry">RETRY</button>
+          <button class="btn" id="btn-fail-menu">MENU</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="js/chart-data.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/characters.js"></script>
+<script src="js/stage.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

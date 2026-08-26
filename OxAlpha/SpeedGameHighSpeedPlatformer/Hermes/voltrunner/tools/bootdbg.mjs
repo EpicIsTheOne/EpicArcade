@@ -1,0 +1,12 @@
+import { chromium } from 'playwright-core';
+const exe = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const browser = await chromium.launch({ executablePath: exe, headless: true, args: ['--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader'] });
+const page = await (await browser.newContext()).newPage();
+page.on('console', m => console.log('[console]', m.type(), m.text().slice(0,400)));
+page.on('pageerror', e => console.log('[pageerror]', e.message.slice(0,600), '\n', (e.stack||'').split('\n').slice(0,4).join('\n')));
+page.on('requestfailed', r => console.log('[reqfail]', r.url(), r.failure()?.errorText));
+page.on('response', r => { if (r.status() >= 400) console.log('[http'+r.status()+']', r.url()); });
+await page.goto('http://127.0.0.1:9371/index.html?gfx=low', { waitUntil: 'load' });
+await page.waitForTimeout(5000);
+console.log('__volt:', await page.evaluate(() => !!window.__volt));
+await browser.close();

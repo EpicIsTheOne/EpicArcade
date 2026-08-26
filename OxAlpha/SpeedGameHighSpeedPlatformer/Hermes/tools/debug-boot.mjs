@@ -1,0 +1,16 @@
+import { chromium } from 'playwright-core';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const exe = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
+const browser = await chromium.launch({ executablePath: exe, headless: true, args: ['--enable-unsafe-swiftshader','--use-gl=angle','--use-angle=swiftshader'] });
+const page = await (await browser.newContext()).newPage();
+page.on('console', m => console.log('[console]', m.type(), m.text().slice(0, 300)));
+page.on('pageerror', e => console.log('[pageerror]', e.message.slice(0, 500)));
+page.on('requestfailed', r => console.log('[reqfail]', r.url().slice(-60), r.failure()?.errorText));
+await page.goto('http://127.0.0.1:8942/index.html?qa=1&gfx=low', { waitUntil: 'load' });
+await page.waitForTimeout(4000);
+const has = await page.evaluate(() => !!window.__VR);
+console.log('__VR exists:', has);
+await browser.close();

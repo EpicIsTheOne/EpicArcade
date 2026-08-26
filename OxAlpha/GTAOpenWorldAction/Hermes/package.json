@@ -1,0 +1,16 @@
+{
+  "name": "chrome-harbor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CHROME HARBOR - open world action game set in Port Vela. Browser-based, original IP.",
+  "type": "module",
+  "scripts": {
+    "start": "node dev-server.mjs"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
+  }
+}

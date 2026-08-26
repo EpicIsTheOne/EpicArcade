@@ -1,0 +1,27 @@
+// lose path: down the whole crew deterministically
+handlers.message(wsA, JSON.stringify({ t: "dbg", k: "unmonster" }));
+for (const w of [wsA, wsB]) {
+  handlers.message(w, JSON.stringify({ t: "dbg", k: "reviveme" }));
+}
+handlers.tick(0.05);
+handlers.message(wsA, JSON.stringify({ t: "dbg", k: "downme" }));
+handlers.tick(0.05);
+handlers.message(wsB, JSON.stringify({ t: "dbg", k: "downme" }));
+for (let i = 0; i < 5; i++) handlers.tick(0.05);
+snap = lastSnap();
+console.log("all-down -> ended:", snap.state === "ended", "lose:", !!(snap.end && !snap.end.win));
+
+// auto-return to lobby after 14s
+for (let i = 0; i < 320; i++) handlers.tick(0.05);
+snap = lastSnap();
+console.log("back to lobby:", snap.state === "lobby");
+
+// replayability: host starts a second run
+handlers.message(wsA, JSON.stringify({ t: "ready", v: true }));
+handlers.message(wsB, JSON.stringify({ t: "ready", v: true }));
+handlers.message(wsA, JSON.stringify({ t: "start" }));
+for (let i = 0; i < 80; i++) handlers.tick(0.05);
+snap = lastSnap();
+console.log("second run playing:", snap.state === "playing", "phase:", snap.phase);
+
+console.log("total events streamed:", evCount, "| total msgs:", clientLog.length);

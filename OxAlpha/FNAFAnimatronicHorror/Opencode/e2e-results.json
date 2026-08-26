@@ -1,0 +1,22 @@
+{
+  "errors": [],
+  "checks": {
+    "boot": "OK",
+    "monitorOpens": "OK",
+    "camMapCorrespondence": "OK",
+    "strixAtDoor": "OK",
+    "lookNonInverted": "{\"y0\":0.00006271999790198126,\"yRight\":0.00006271999790198126,\"yBack\":0.00006271999790198126,\"rightTurnsLeft\":false,\"returns\":true}",
+    "jumpscareToGameover": "OK",
+    "winAt6AM": "OK",
+    "progressSaved": "FAIL {\"progress\":{\"maxNight\":2,\"beaten\":{\"1\":true},\"memos\":[\"m1\"],\"poster\":0},\"settings\":{\"vol\":0.8,\"sens\":1,\"invX\":false,\"in"
+  },
+  "shots": [
+    "02-office.png",
+    "03-cam-stage.png",
+    "04-cam-dining.png",
+    "05-strix-door-light.png",
+    "07-jumpscare.png",
+    "06-gameover.png",
+    "08-6am.png"
+  ]
+}

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>CHROME HARBOR — Port Vela</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230b0e16'/%3E%3Cpath d='M6 21 L11 11 L16 17 L21 9 L26 21 Z' fill='%23ffb43a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="./styles.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/postprocessing/EffectComposer.js": "./vendor/addons/postprocessing/EffectComposer.js",
+    "three/addons/postprocessing/RenderPass.js": "./vendor/addons/postprocessing/RenderPass.js",
+    "three/addons/postprocessing/ShaderPass.js": "./vendor/addons/postprocessing/ShaderPass.js",
+    "three/addons/postprocessing/UnrealBloomPass.js": "./vendor/addons/postprocessing/UnrealBloomPass.js",
+    "three/addons/postprocessing/OutputPass.js": "./vendor/addons/postprocessing/OutputPass.js",
+    "three/addons/postprocessing/MaskPass.js": "./vendor/addons/postprocessing/MaskPass.js",
+    "three/addons/postprocessing/Pass.js": "./vendor/addons/postprocessing/Pass.js",
+    "three/addons/shaders/CopyShader.js": "./vendor/addons/shaders/CopyShader.js",
+    "three/addons/shaders/LuminosityHighPassShader.js": "./vendor/addons/shaders/LuminosityHighPassShader.js",
+    "three/addons/shaders/OutputShader.js": "./vendor/addons/shaders/OutputShader.js",
+    "three/addons/utils/BufferGeometryUtils.js": "./vendor/addons/utils/BufferGeometryUtils.js"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- ===================== HUD ===================== -->
+<div id="hud" class="hidden">
+  <div id="minimap-wrap">
+    <canvas id="minimap" width="360" height="360"></canvas>
+    <div id="minimap-ring"></div>
+    <div id="compass"><span id="compass-n">N</span></div>
+  </div>
+
+  <div id="vitals">
+    <div id="wanted-stars" aria-label="wanted level"></div>
+    <div class="bars">
+      <div class="bar hp"><i id="hp-fill"></i></div>
+      <div class="bar ar"><i id="ar-fill"></i></div>
+    </div>
+  </div>
+
+  <div id="money-box"><span id="money">$0</span><span id="money-delta"></span></div>
+
+  <div id="weapon-box">
+    <div id="weapon-name">FISTS</div>
+    <div id="weapon-ammo"></div>
+  </div>
+
+  <div id="speedo" class="hidden">
+    <span id="speed-val">0</span><span class="unit">MPH</span>
+    <div id="veh-name"></div>
+  </div>
+
+  <div id="objective-box" class="hidden">
+    <div id="objective-title"></div>
+    <div id="objective-text"></div>
+    <div id="objective-timer"></div>
+  </div>
+
+  <div id="prompt" class="hidden"></div>
+  <div id="banner" class="hidden"><div id="banner-title"></div><div id="banner-sub"></div></div>
+  <div id="district-toast" class="hidden"></div>
+  <div id="clockbox"><span id="clock">08:00</span><span id="daypart">MORNING</span></div>
+
+  <div id="crosshair" class="hidden"><i></i><b id="hitmark"></b></div>
+  <div id="damage-vignette"></div>
+  <div id="evade-bar" class="hidden"><label>EVADING</label><i id="evade-fill"></i></div>
+
+  <div id="help-overlay" class="hidden"></div>
+  <div id="bigmap-overlay" class="hidden"><canvas id="bigmap" width="1024" height="1024"></canvas><div id="bigmap-hint">M / ESC — close</div></div>
+  <div id="fps-counter" class="hidden"></div>
+</div>
+
+<div id="menu-root"></div>
+<div id="loading">
+  <div class="load-inner">
+    <div class="load-logo">CHROME<span>HARBOR</span></div>
+    <div class="load-sub">PORT VELA</div>
+    <div class="load-bar"><i id="load-fill"></i></div>
+    <div id="load-msg">Waking the city…</div>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

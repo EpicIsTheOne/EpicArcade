@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RETRO ARCADE HUB</title>
+<link rel="icon" href="data:,">
+<!-- RETRO-HUB-RUN02-CANONICAL-BUILD -->
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-theme="neon">
+
+<div id="app">
+  <header id="topbar">
+    <div id="logo">RETRO<span>·</span>ARCADE<span>·</span>HUB</div>
+    <div id="top-actions">
+      <button id="btn-help" class="tbtn" title="Help (H)">HELP [H]</button>
+      <button id="btn-mute" class="tbtn" title="Sound (M)">SND ON [M]</button>
+    </div>
+  </header>
+
+  <main id="lobby">
+    <p id="tagline">// 4 CABINETS &middot; LOCAL HIGH SCORES &middot; SCORE BIG TO UNLOCK CABINET THEMES //</p>
+
+    <section id="cab-row"><!-- cabinets injected by js/hub.js --></section>
+
+    <section id="panels">
+      <div class="panel" id="themes-panel">
+        <h3>CABINET THEMES</h3>
+        <div id="theme-row"></div>
+      </div>
+      <div class="panel" id="runs-panel">
+        <h3>RECENT RUNS</h3>
+        <ol id="runs-list"></ol>
+      </div>
+      <div class="panel" id="stats-panel">
+        <h3>LIFETIME</h3>
+        <div id="stats"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer id="footbar">&#8592;&#8594; SELECT CABINET &middot; ENTER PLAY &middot; T THEME &middot; P PAUSE &middot; M SOUND &middot; H HELP</footer>
+</div>
+
+<div id="game-layer" hidden>
+  <div id="cab-frame">
+    <div id="frame-top">
+      <span id="g-title">GAME</span>
+      <span id="frame-hint">ESC LOBBY &middot; P PAUSE &middot; M SOUND</span>
+    </div>
+    <div id="scr-wrap"><canvas id="game-canvas" width="800" height="600"></canvas></div>
+    <div id="frame-bottom"><span id="g-controls-hint"></span></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<div id="help-overlay" hidden>
+  <div class="help-card">
+    <h2>HOW TO PLAY <button id="help-close" class="tbtn">CLOSE [ESC]</button></h2>
+    <div id="help-general"></div>
+    <div id="help-games"></div>
+  </div>
+</div>
+
+<script src="js/storage.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/input.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/games/nova.js"></script>
+<script src="js/games/meteor.js"></script>
+<script src="js/games/brick.js"></script>
+<script src="js/games/turbo.js"></script>
+<script src="js/hub.js"></script>
+</body>
+</html>

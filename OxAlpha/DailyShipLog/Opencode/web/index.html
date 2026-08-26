@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Ship Log</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%93%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand" id="brandHome" title="Today's log">
+    <span class="brand-mark">&#9875;</span>
+    <span class="brand-text">DAILY<b>SHIP</b>LOG</span>
+  </div>
+  <div class="searchbox">
+    <svg class="ico" viewBox="0 0 24 24"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14"/></svg>
+    <input id="searchInput" type="search" placeholder="Search prompts &amp; sessions\u2026" autocomplete="off" spellcheck="false">
+    <kbd>/</kbd>
+  </div>
+  <div class="top-status">
+    <span class="live-pill" id="livePill" hidden><i class="dot dot-live"></i><span id="liveCount">0</span> active</span>
+    <button class="btn btn-ghost" id="refreshBtn" title="Force light refresh">&#8635;</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- LEFT RAIL -->
+  <aside class="rail">
+    <section class="panel calendar-panel">
+      <div class="panel-head">
+        <h2>CALENDAR</h2>
+        <div class="cal-nav">
+          <button id="prevMonth" class="btn btn-ghost" aria-label="Previous month">&#8249;</button>
+          <span id="calLabel"></span>
+          <button id="nextMonth" class="btn btn-ghost" aria-label="Next month">&#8250;</button>
+        </div>
+      </div>
+      <div class="cal-dow"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-legend">
+        <span><i class="lg lg-low"></i> some</span>
+        <span><i class="lg lg-mid"></i> busy</span>
+        <span><i class="lg lg-high"></i> heavy</span>
+        <span><i class="lg lg-ring"></i> live</span>
+      </div>
+      <div class="rail-actions">
+        <button class="btn btn-accent btn-block" id="todayBtn">TODAY</button>
+      </div>
+    </section>
+
+    <section class="panel" id="livePanel">
+      <div class="panel-head"><h2>ACTIVE NOW</h2><span class="count-badge" id="activeBadge">0</span></div>
+      <div id="liveList" class="live-list"><div class="muted pad">No active sessions.</div></div>
+    </section>
+
+    <section class="panel" id="projectsPanel">
+      <div class="panel-head"><h2>PROJECTS</h2><span class="count-badge" id="projBadge">0</span></div>
+      <div id="projList" class="proj-list"><div class="muted pad">Loading\u2026</div></div>
+    </section>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" id="main">
+    <div class="daynav" id="dayNav">
+      <button id="prevDay" class="btn btn-ghost" aria-label="Previous day">&#8249;</button>
+      <h1 id="dateTitle">\u2014</h1>
+      <button id="nextDay" class="btn btn-ghost" aria-label="Next day">&#8250;</button>
+      <span class="spacer"></span>
+      <span id="metaLine" class="meta-line"></span>
+    </div>
+    <div id="content"></div>
+  </main>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>

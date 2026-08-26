@@ -1,0 +1,7 @@
+{
+  "port": 10491,
+  "pid": 65244,
+  "root": "voltrunner/",
+  "startedAt": "2026-08-25T21:43:08.000Z",
+  "note": "isolated web root; kill ONLY this pid at cleanup"
+}

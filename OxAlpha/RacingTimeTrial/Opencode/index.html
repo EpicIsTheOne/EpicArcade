@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Racing Time Trial</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Ccircle cx=%278%27 cy=%278%27 r=%277%27 fill=%27%23ff7a29%27/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="hudTop">
+      <div class="hudBox" id="lapBox"><span class="hudLabel">LAP</span><span id="hudLap">1/3</span></div>
+      <div class="hudBox big" id="timeBox"><span id="hudTime">0:00.00</span></div>
+      <div class="hudBox" id="bestBox"><span class="hudLabel">BEST LAP</span><span id="hudBest">--:--.--</span></div>
+    </div>
+    <div id="deltas"></div>
+    <div id="msgCenter"></div>
+    <div id="wrongWay">WRONG WAY</div>
+    <div id="freeTag">FREE DRIVE &mdash; ESC to menu</div>
+    <div id="mmWrap"><canvas id="minimap" width="170" height="130"></canvas></div>
+    <div id="hudBottom">
+      <div id="boostWrap"><span class="hudLabel">BOOST</span><div id="boostBar"><div id="boostFill"></div></div><span class="keyHint">SHIFT</span></div>
+      <div id="speedo"><span id="hudSpeed">0</span><span class="unit">km/h</span></div>
+    </div>
+    <div id="hintBar">R restart &middot; T back to checkpoint &middot; SPACE handbrake &middot; SHIFT boost &middot; M mute &middot; ESC pause</div>
+  </div>
+
+  <div id="menuOverlay" class="overlay">
+    <div class="panel menuPanel">
+      <h1>RACING<span> TIME TRIAL</span></h1>
+      <p class="subtitle">Apex Circuit &mdash; 3 laps against the clock and your ghost</p>
+      <div class="medalTable" id="medalTable"></div>
+      <div class="controls">
+        <div><b>&uarr;&darr;&larr;&rarr; / WASD</b><span>drive</span></div>
+        <div><b>SPACE</b><span>handbrake drift</span></div>
+        <div><b>SHIFT</b><span>boost (earned by drifting)</span></div>
+        <div><b>R</b><span>instant restart</span></div>
+        <div><b>T</b><span>back to checkpoint</span></div>
+        <div><b>M / ESC</b><span>mute / pause</span></div>
+      </div>
+      <div class="btnRow">
+        <button id="btnRace">START RACE <span class="k">ENTER</span></button>
+        <button id="btnFree" class="alt">FREE DRIVE <span class="k">F</span></button>
+      </div>
+      <p class="foot">Drift through corners to charge boost. Beat the medals, then beat your ghost.</p>
+    </div>
+  </div>
+
+  <div id="countOverlay" class="overlay center hidden"><div id="countNum"></div></div>
+
+  <div id="pauseOverlay" class="overlay hidden">
+    <div class="panel smallPanel">
+      <h2>PAUSED</h2>
+      <div class="btnRow column">
+        <button id="btnResume">RESUME <span class="k">ESC</span></button>
+        <button id="btnRestartP" class="alt">RESTART RACE <span class="k">R</span></button>
+        <button id="btnQuitP" class="alt">QUIT TO MENU <span class="k">Q</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="resultsOverlay" class="overlay hidden">
+    <div class="panel smallPanel results">
+      <h2 id="resTitle">RACE COMPLETE</h2>
+      <div id="resMedal" class="medalBig"></div>
+      <div class="resRows">
+        <div><span>TOTAL TIME</span><b id="resTotal">-</b></div>
+        <div><span>BEST LAP</span><b id="resLap">-</b></div>
+        <div><span>PERSONAL BEST</span><b id="resPB">-</b></div>
+      </div>
+      <div id="resRecord" class="recordBadge hidden">NEW PERSONAL BEST</div>
+      <div class="btnRow">
+        <button id="btnRetry">RETRY <span class="k">R</span></button>
+        <button id="btnMenu" class="alt">MENU <span class="k">Q</span></button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="game.js?v=3"></script>
+</body>
+</html>

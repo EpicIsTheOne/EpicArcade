@@ -1,0 +1,51 @@
+{
+ "title": "Neon Drifter",
+ "bpm": 100.0,
+ "duration": 166.2,
+ "beatsPerBar": 4,
+ "audio": "audio/Neon Drifter.mp3",
+ "sections": [
+  {
+   "id": "dawn",
+   "name": "I \u00b7 DAWN",
+   "start": 0.0,
+   "end": 19.2
+  },
+  {
+   "id": "ignition",
+   "name": "II \u00b7 IGNITION",
+   "start": 19.2,
+   "end": 38.4
+  },
+  {
+   "id": "drive",
+   "name": "III \u00b7 NEON DRIVE",
+   "start": 38.4,
+   "end": 76.8
+  },
+  {
+   "id": "starlight",
+   "name": "IV \u00b7 STARLIGHT",
+   "start": 76.8,
+   "end": 96.0
+  },
+  {
+   "id": "convergence",
+   "name": "V \u00b7 CONVERGENCE",
+   "start": 96.0,
+   "end": 105.6
+  },
+  {
+   "id": "hyperdrive",
+   "name": "VI \u00b7 HYPERDRIVE",
+   "start": 105.6,
+   "end": 144.0
+  },
+  {
+   "id": "afterglow",
+   "name": "VII \u00b7 AFTERGLOW",
+   "start": 144.0,
+   "end": 163.2
+  }
+ ]
+}

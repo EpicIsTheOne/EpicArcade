@@ -1,0 +1,7 @@
+{
+  "title": "FNF Multiplayer Battle",
+  "description": "Head-to-head online rhythm battle: sing the chart, drain the pressure meter, take the crown.",
+  "multiplayer": {
+    "endpoint": "/ws/fnf-multiplayer-battle"
+  }
+}

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>FNF Multiplayer Battle</title>
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --p1:#22d3ee; --p2:#f472b6; --bg0:#07060f; --bg1:#120e24;
+    --gold:#ffd166;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:#050409}
+  body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif;color:#eef;-webkit-user-select:none;user-select:none}
+  #stage-wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(120% 100% at 50% 20%,var(--bg1),var(--bg0))}
+  canvas#game{display:block;width:100%;height:100%;touch-action:none}
+  .screen{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:10}
+  .screen.on{display:flex}
+  .panel{
+    text-align:center;padding:34px 46px;border-radius:22px;
+    background:linear-gradient(160deg,rgba(30,22,60,.92),rgba(12,9,28,.94));
+    border:1px solid rgba(140,120,255,.25);
+    box-shadow:0 24px 80px rgba(0,0,0,.65),0 0 60px rgba(90,60,220,.15) inset;
+    max-width:min(92vw,640px);max-height:92vh;overflow:auto;
+  }
+  h1.logo{
+    font-size:clamp(38px,6vw,64px);font-weight:900;font-style:italic;letter-spacing:-1px;line-height:.95;
+    background:linear-gradient(92deg,var(--p1) 10%,#818cf8 45%,var(--p2) 85%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    filter:drop-shadow(0 4px 18px rgba(129,90,255,.45));
+    margin-bottom:4px;
+  }
+  .tagline{color:#9d97c9;font-size:14px;margin-bottom:22px;letter-spacing:.14em;text-transform:uppercase}
+  button.btn{
+    display:block;width:100%;margin:10px 0;padding:14px 26px;font-size:17px;font-weight:800;font-style:italic;
+    letter-spacing:.06em;color:#fff;cursor:pointer;border-radius:14px;border:1px solid rgba(255,255,255,.16);
+    background:linear-gradient(180deg,#5b48d8,#3b2ba0);
+    transition:transform .08s ease,filter .12s ease,box-shadow .12s ease;
+    box-shadow:0 6px 20px rgba(59,43,160,.5);
+  }
+  button.btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.15)}
+  button.btn:active:not(:disabled){transform:translateY(0) scale(.98)}
+  button.btn:disabled{opacity:.42;cursor:not-allowed}
+  button.btn.pink{background:linear-gradient(180deg,#d84a9b,#a02b74);box-shadow:0 6px 20px rgba(160,43,116,.5)}
+  button.btn.ghost{background:transparent;border:1px solid rgba(160,150,220,.35);box-shadow:none;font-weight:600}
+  button.btn.small{width:auto;display:inline-block;padding:9px 20px;font-size:14px;margin:4px}
+  input.txt{
+    width:100%;padding:12px 16px;font-size:16px;border-radius:12px;text-align:center;
+    border:1px solid rgba(150,130,255,.35);background:rgba(8,6,20,.7);color:#fff;outline:none;margin:6px 0 2px;
+  }
+  input.txt:focus{border-color:var(--gold)}
+  .hint{color:#8f89bd;font-size:13px;margin-top:12px;line-height:1.55}
+  .hint b{color:#cfc9f5}
+  kbd{background:#241d4a;border:1px solid #4a3f8a;border-bottom-width:3px;border-radius:6px;padding:1px 7px;font-family:inherit;font-size:12px;font-weight:700}
+  .status-line{min-height:22px;color:var(--gold);font-size:14px;font-weight:700;margin-top:10px;letter-spacing:.04em}
+  .vs-chips{display:flex;justify-content:center;gap:14px;margin:16px 0 6px}
+  .chip{flex:1;padding:14px 10px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);min-width:170px}
+  .chip .nm{font-weight:900;font-style:italic;font-size:19px}
+  .chip .st{font-size:12px;letter-spacing:.12em;margin-top:5px;color:#8f89bd;text-transform:uppercase}
+  .chip.ready{border-color:var(--gold);box-shadow:0 0 24px rgba(255,209,102,.25)}
+  .chip.ready .st{color:var(--gold)}
+  .chip.c1 .nm{color:var(--p1)} .chip.c2 .nm{color:var(--p2)}
+  .big-msg{font-size:clamp(30px,5vw,52px);font-weight:900;font-style:italic}
+  .win-you{color:#6ee7a0}.win-opp{color:#fb7185}.win-draw{color:var(--gold)}
+  .stats-grid{display:flex;gap:10px;justify-content:center;margin:18px 0;flex-wrap:wrap}
+  .stat{padding:10px 18px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);min-width:104px}
+  .stat .v{font-size:22px;font-weight:900}
+  .stat .k{font-size:11px;letter-spacing:.14em;color:#8f89bd;text-transform:uppercase;margin-top:2px}
+  .stat.me{border-color:rgba(34,211,238,.4)} .stat.op{border-color:rgba(244,114,182,.4)}
+  .divider{height:1px;background:linear-gradient(90deg,transparent,rgba(150,130,255,.4),transparent);margin:16px 0}
+  #net-dot{position:fixed;top:12px;right:14px;z-index:40;font-size:11px;font-weight:800;letter-spacing:.12em;color:#8f89bd;display:flex;gap:7px;align-items:center}
+  #net-dot i{width:9px;height:9px;border-radius:50%;background:#f87171;display:inline-block;box-shadow:0 0 8px currentColor}
+  #net-dot.ok i{background:#4ade80}
+  #toast{position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:60;background:rgba(20,14,44,.95);border:1px solid rgba(255,209,102,.4);color:#ffe9ad;padding:10px 22px;border-radius:12px;font-weight:700;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;letter-spacing:.03em}
+  #toast.on{opacity:1}
+</style>
+</head>
+<body>
+<div id="stage-wrap"><canvas id="game"></canvas></div>
+<div id="net-dot"><i></i><span>OFFLINE</span></div>
+<div id="toast"></div>
+<div class="screen on" id="scr-menu">
+  <div class="panel">
+    <h1 class="logo">FNF MULTIPLAYER<br>BATTLE</h1>
+    <div class="tagline">Neon Rumble &middot; head-to-head rhythm duel</div>
+    <input class="txt" id="name-in" maxlength="12" placeholder="Your name" autocomplete="off">
+    <button class="btn pink" id="btn-quick">QUICK MATCH &mdash; FIND RIVAL</button>
+    <button class="btn" id="btn-practice">PRACTICE VS BOT</button>
+    <button class="btn ghost" id="btn-private">JOIN PRIVATE ROOM&hellip;</button>
+    <div class="status-line" id="menu-status"></div>
+    <div class="hint">Arrows or <kbd>D</kbd><kbd>F</kbd><kbd>J</kbd><kbd>K</kbd> to play &middot; beat the chart, push the pressure meter, empty your rival's side to win.</div>
+  </div>
+</div>
+<div class="screen" id="scr-room">
+  <div class="panel">
+    <h1 class="logo" style="font-size:34px">ROOM <span id="room-code" style="color:var(--gold)">----</span></h1>
+    <div class="tagline">Share the code with your rival</div>
+    <div class="vs-chips">
+      <div class="chip c1" id="chip-me"><div class="nm" id="me-nm">&mdash;</div><div class="st">waiting&hellip;</div></div>
+      <div style="font-size:34px;font-weight:900;align-self:center;color:#5b5486">VS</div>
+      <div class="chip c2" id="chip-op"><div class="nm" id="op-nm">&mdash;</div><div class="st">waiting&hellip;</div></div>
+    </div>
+    <button class="btn" id="btn-ready">READY UP</button>
+    <button class="btn ghost small" id="btn-room-back">&larr; Back</button>
+    <div class="status-line" id="room-status"></div>
+  </div>
+</div>
+<div class="screen" id="scr-results">
+  <div class="panel">
+    <div class="big-msg" id="res-title">VICTORY</div>
+    <div class="tagline" id="res-sub">full song cleared</div>
+    <div class="stats-grid" id="res-stats"></div>
+    <button class="btn" id="btn-rematch">REMATCH</button>
+    <button class="btn ghost" id="btn-menu-back">Back to menu</button>
+    <div class="status-line" id="res-status"></div>
+  </div>
+</div>
+<div class="screen" id="scr-left">
+  <div class="panel">
+    <div class="big-msg win-opp">RIVAL LEFT</div>
+    <div class="tagline" id="left-sub">connection lost mid-battle</div>
+    <button class="btn" id="btn-left-menu">Back to menu</button>
+  </div>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

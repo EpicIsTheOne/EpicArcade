@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STARWEAVE — Echoes of the Sundered Sky</title>
+<script type="importmap">{ "imports": { "three": "./vendor/three.core.js" } }</script>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+  <div id="ui-root"></div>
+
+  <!-- TITLE SCREEN -->
+  <div id="title-screen">
+    <canvas id="starfield"></canvas>
+    <div class="title-inner">
+      <div id="title-fan"></div>
+      <div class="logo-block">
+        <div class="logo-pre">the last weaver must rekindle the loom</div>
+        <h1 class="logo">STAR<span>WEAVE</span></h1>
+        <div class="logo-sub">✦ Echoes of the Sundered Sky ✦</div>
+      </div>
+      <div class="menu-block">
+        <button id="btn-new" class="menu-btn primary">Begin the Weave</button>
+        <button id="btn-continue" class="menu-btn hidden">Continue Journey</button>
+        <button id="btn-wipe-title" class="menu-btn subtle">Erase Save</button>
+      </div>
+      <div class="title-foot">an original gacha RPG prototype · all art, audio & systems generated locally · no purchases exist</div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

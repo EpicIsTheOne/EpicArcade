@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<!-- SKYLINE DASH · parkour playground · sweep-9f1928d5 prompt-31 piagent run-01 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SKYLINE DASH — Parkour Playground</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- HUD -->
+  <div id="hud">
+    <div id="topbar">
+      <div id="cpBox"><span class="lbl">CHECKPOINT</span><span id="cpVal">0 / 5</span></div>
+      <div id="timerBox"><span class="lbl">TIME</span><span id="timerVal">00:00.00</span></div>
+      <div id="pbBox"><span class="lbl">BEST</span><span id="pbVal">--:--.--</span></div>
+    </div>
+    <div id="toast"></div>
+    <div id="crosshair"><i></i></div>
+    <div id="dashBox"><span class="lbl">DASH</span><div id="pips"><i></i><i></i></div></div>
+    <div id="speedBox"><span id="speedVal">0.0</span><span class="unit">m/s</span></div>
+    <div id="stateTag"></div>
+  </div>
+  <div id="vignette"></div>
+  <div id="flash"></div>
+
+  <!-- Help panel -->
+  <aside id="help" class="hidden">
+    <h3>CONTROLS <span class="key-hint">H to close</span></h3>
+    <table>
+      <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Move</td></tr>
+      <tr><td><kbd>Mouse</kbd></td><td>Look</td></tr>
+      <tr><td><kbd>Shift</kbd></td><td>Sprint</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>Jump · Wall-jump</td></tr>
+      <tr><td><kbd>C</kbd>/<kbd>Ctrl</kbd></td><td>Slide (while running)</td></tr>
+      <tr><td><kbd>Q</kbd> / <kbd>RMB</kbd></td><td>Dash</td></tr>
+      <tr><td><kbd>R</kbd></td><td>Restart run</td></tr>
+      <tr><td><kbd>M</kbd></td><td>Mute</td></tr>
+      <tr><td><kbd>H</kbd></td><td>This panel</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Pause / release mouse</td></tr>
+    </table>
+    <p class="tip">Chain sprint → jump → dash across big gaps. Jump against a wall while airborne to <b>wall-jump</b>; leap onto a tall wall while sprinting to <b>wall-run</b>. Sliding under low bars keeps your speed.</p>
+  </aside>
+
+  <!-- Intro -->
+  <div class="overlay" id="intro">
+    <div class="card intro-card">
+      <h1>SKYLINE<span>DASH</span></h1>
+      <p class="tag">a compact parkour speedrun playground</p>
+      <div class="cols">
+        <div class="controls-mini">
+          <h4>CONTROLS</h4>
+          <table>
+            <tr><td><kbd>WASD</kbd></td><td>Move</td></tr>
+            <tr><td><kbd>Shift</kbd></td><td>Sprint</td></tr>
+            <tr><td><kbd>Space</kbd></td><td>Jump / Wall-jump</td></tr>
+            <tr><td><kbd>C</kbd></td><td>Slide</td></tr>
+            <tr><td><kbd>Q</kbd></td><td>Dash</td></tr>
+            <tr><td><kbd>R</kbd></td><td>Restart</td></tr>
+          </table>
+          <p class="tip">Full list: press <b>H</b> in game.</p>
+        </div>
+        <div class="medals-mini">
+          <h4>MEDALS</h4>
+          <div class="medal gold"><i></i>GOLD&nbsp;<b>≤ 50s</b></div>
+          <div class="medal silver"><i></i>SILVER&nbsp;<b>≤ 80s</b></div>
+          <div class="medal bronze"><i></i>BRONZE&nbsp;<b>≤ 130s</b></div>
+          <p class="tip">Timer starts when you cross the start line.<br>Falling returns you to the last checkpoint.</p>
+        </div>
+      </div>
+      <button id="btnPlay">▶&nbsp; CLICK TO PLAY</button>
+      <p class="tip dim">Pointer lock engages on click · <b>Esc</b> to pause</p>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div class="overlay hidden" id="pause">
+    <div class="card pause-card">
+      <h2>PAUSED</h2>
+      <p class="tip">Timer keeps state while paused mid-run — press R to restart.</p>
+      <button id="btnResume">▶&nbsp; RESUME</button>
+      <button id="btnRestartP" class="ghost">↻&nbsp; RESTART RUN</button>
+    </div>
+  </div>
+
+  <!-- Finish -->
+  <div class="overlay hidden" id="finishO">
+    <div class="card finish-card">
+      <div id="newPB" class="hidden">★ NEW PERSONAL BEST ★</div>
+      <h2 id="finishTitle">FINISH!</h2>
+      <div id="medalChip" class="medal gold"><i></i><span id="medalName">GOLD</span></div>
+      <div class="bigtime" id="finalTime">00:00.00</div>
+      <div class="finrows">
+        <div><span class="lbl">PERSONAL BEST</span><span id="finalPB">--</span></div>
+        <div><span class="lbl">DEATHS</span><span id="finalDeaths">0</span></div>
+        <div><span class="lbl">CHECKPOINTS</span><span id="finalCps">5 / 5</span></div>
+      </div>
+      <button id="btnAgain">↻&nbsp; RUN AGAIN&nbsp;&nbsp;<span class="kbd-inline">R</span></button>
+      <button id="btnRoam" class="ghost">≫&nbsp; FREE ROAM</button>
+    </div>
+  </div>
+
+<script src="vendor/three.min.js"></script>
+<script src="js/input.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/world.js"></script>
+<script src="js/player.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+{
+  "title": "Party Blitz",
+  "description": "4–8 player party chaos: 5 minigame rounds, live leaderboard, podium rematches.",
+  "multiplayer": { "endpoint": "/ws/party-minigames" }
+}

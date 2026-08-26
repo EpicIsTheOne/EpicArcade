@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>THE CHORUS BELOW — co-op horror</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ TITLE ============ -->
+  <section id="screen-title" class="screen">
+    <div class="scanlines"></div>
+    <div class="title-block">
+      <div class="sup">RELAY STATION 9 &mdash; UNDERCROFT ARRAY</div>
+      <h1 class="glitch" data-text="THE CHORUS BELOW">THE CHORUS BELOW</h1>
+      <div class="tagline">Four went down. The signal came back wrong.</div>
+      <div class="join-box">
+        <label>CALLSIGN</label>
+        <input id="name-input" maxlength="12" spellcheck="false" autocomplete="off" placeholder="ASH">
+        <button id="btn-descend" class="btn primary">DESCEND</button>
+        <div id="title-status" class="dim"></div>
+      </div>
+      <div class="menu-row">
+        <button id="btn-solo" class="btn ghost">SOLO SIMULATION</button>
+        <button id="btn-help" class="btn ghost">BRIEFING</button>
+      </div>
+      <div class="foot dim">best with headphones &amp; friends &middot; 2&ndash;4 operators</div>
+    </div>
+    <div id="help-overlay" class="overlay hidden">
+      <div class="panel">
+        <h2>BRIEFING</h2>
+        <p class="dim">Restore power. Align the array. Decode what is singing.<br>Then run.</p>
+        <table class="keys">
+          <tr><td>W A S D</td><td>move</td></tr>
+          <tr><td>MOUSE</td><td>aim light</td></tr>
+          <tr><td>SHIFT</td><td>sprint <span class="warn">(loud)</span></td></tr>
+          <tr><td>C / CTRL</td><td>crouch <span class="ok">(quiet)</span></td></tr>
+          <tr><td>E (hold)</td><td>interact / revive / enter locker</td></tr>
+          <tr><td>G</td><td>drop / hand off item</td></tr>
+          <tr><td>F</td><td>flashlight on/off <span class="warn">(they see light)</span></td></tr>
+          <tr><td>Q</td><td>ping location</td></tr>
+          <tr><td>1&ndash;4</td><td>radio callouts</td></tr>
+          <tr><td>TAB</td><td>objectives</td></tr>
+        </table>
+        <p class="dim small">If you are caught you go down. Teammates can pick you up before you bleed out.
+        If everyone drops at once, the station keeps you.</p>
+        <button id="btn-close-help" class="btn">RETURN</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LOBBY ============ -->
+  <section id="screen-lobby" class="screen hidden">
+    <div class="scanlines"></div>
+    <div class="lobby-wrap">
+      <div class="lobby-left">
+        <div class="sup">UPLINK TERMINAL // STATION 9</div>
+        <h2 class="glitch-sm" data-text="CREW MANIFEST">CREW MANIFEST</h2>
+        <ul id="lobby-players"></ul>
+        <div id="lobby-hint" class="dim">waiting for crew&hellip;</div>
+      </div>
+      <div class="lobby-right">
+        <div class="lobby-card">
+          <h3>DIVE PROTOCOL</h3>
+          <p class="dim small">Power fails. Something in the array sings through dead mouths.
+          Restore three fuses, throw twin switches, align the dishes, decode at both terminals &mdash;
+          together &mdash; and be standing in the airlock when the blast door opens.</p>
+          <p class="warn small">Do not sprint near it. Do not shine your light unless you must. Lockers save lives.</p>
+          <button id="btn-ready" class="btn primary wide">READY UP</button>
+          <button id="btn-start" class="btn danger wide hidden">BEGIN DESCENT</button>
+          <div id="start-countdown" class="big-count hidden"></div>
+        </div>
+        <div class="lobby-foot dim">
+          <span id="net-state">uplink: idle</span><br>
+          share this page's URL &mdash; anyone who opens it joins this facility
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="screen-game" class="screen hidden">
+    <canvas id="game-canvas"></canvas>
+    <div id="hud">
+      <div id="objective-box">
+        <div class="obj-title">OBJECTIVE</div>
+        <div id="objective-text">&hellip;</div>
+        <div id="objective-sub" class="dim small"></div>
+      </div>
+      <div id="crew-box"></div>
+      <div id="event-feed"></div>
+      <div id="interact-prompt" class="hidden"></div>
+      <div id="hold-bar-wrap" class="hidden"><div id="hold-bar"></div></div>
+      <div id="center-callout" class="hidden"></div>
+      <div id="chat-log"></div>
+      <div id="ping-layer"></div>
+      <div id="vignette-red"></div>
+      <div id="static-overlay"></div>
+      <div id="blackout"></div>
+    </div>
+    <div id="pause-menu" class="overlay hidden">
+      <div class="panel">
+        <h2>PAUSED</h2>
+        <div class="dim small mb">the station does not pause with you</div>
+        <table class="keys">
+          <tr><td>WASD / mouse</td><td>move &amp; aim</td></tr>
+          <tr><td>SHIFT / C</td><td>sprint / crouch</td></tr>
+          <tr><td>E hold</td><td>interact &middot; revive &middot; locker</td></tr>
+          <tr><td>G &middot; F &middot; Q</td><td>drop &middot; flashlight &middot; ping</td></tr>
+          <tr><td>1&ndash;4</td><td>radio callouts</td></tr>
+        </table>
+        <label class="vol-row">VOLUME <input id="vol-slider" type="range" min="0" max="100" value="80"></label>
+        <button id="btn-resume" class="btn primary wide">RESUME</button>
+        <button id="btn-quit" class="btn danger wide">ABANDON RUN</button>
+      </div>
+    </div>
+    <div id="dead-cam-tag" class="hidden">SIGNAL LOST &mdash; you are watching</div>
+  </section>
+
+  <!-- ============ END ============ -->
+  <section id="screen-end" class="screen hidden">
+    <div class="scanlines"></div>
+    <div class="end-wrap">
+      <h1 id="end-title" class="glitch">—</h1>
+      <div id="end-epilogue" class="dim"></div>
+      <div id="end-stats"></div>
+      <button id="btn-again" class="btn primary">RETURN TO UPLINK</button>
+    </div>
+  </section>
+
+  <!-- ============ DISCONNECT BANNER ============ -->
+  <div id="conn-banner" class="hidden">
+    <span id="conn-text">SIGNAL LOST</span>
+    <span id="conn-detail" class="dim"></span>
+  </div>
+
+</div>
+
+<script src="js/audio.js"></script>
+<script src="js/net.js"></script>
+<script src="js/render.js"></script>
+<script src="js/game.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<!-- SPX-RUN02-9F2 :: Shader Playground :: benchmark run-02 :: ox-alpha / piagent -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shader Playground — SPX Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2353d0ff'/%3E%3Cstop offset='1' stop-color='%23ff5fd0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='2' y='2' width='28' height='28' rx='7' fill='%230a0d13'/%3E%3Crect x='6' y='6' width='20' height='20' rx='4' fill='url(%23g)'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <aside id="panel">
+    <header id="brand">
+      <div class="logo">SHADER<span>PLAYGROUND</span></div>
+      <div class="sub">SPX studio · live GLSL FX</div>
+    </header>
+
+    <section class="grp" id="srcGroup">
+      <h3>Source</h3>
+      <div class="seg" id="srcSeg">
+        <button id="btnDemo" class="segb on" title="Built-in procedural demo artwork">Demo art</button>
+        <button id="btnImage" class="segb" title="Load your own image (file, drop or paste)">Load image…</button>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+      <div class="chips" id="procChips"></div>
+      <div class="hint" id="srcHint">Procedural — no media needed. Drop or paste an image any time.</div>
+    </section>
+
+    <div id="controls"></div>
+
+    <footer id="panelFoot"><kbd>H</kbd> help · <kbd>R</kbd> randomize · <kbd>S</kbd> snapshot · <kbd>Space</kbd> freeze</footer>
+  </aside>
+
+  <main id="stage">
+    <div id="topbar">
+      <select id="presetSel" title="Effect presets"></select>
+      <button id="btnSave" class="tb" title="Save current settings as a preset">Save</button>
+      <button id="btnDelete" class="tb" title="Delete the selected saved preset">Del</button>
+      <div class="spacer"></div>
+      <div id="fps" title="Render rate">-- fps</div>
+      <button id="btnReset" class="tb" title="Reset all settings">↺ Reset</button>
+      <button id="btnRand" class="tb accent" title="Randomize everything (R)">🎲 Randomize</button>
+      <button id="btnSnap" class="tb" title="Download PNG snapshot (S)">📷 Snapshot</button>
+      <button id="btnFull" class="tb" title="Fullscreen (F)">⛶</button>
+      <button id="btnHelp" class="tb" title="Help (H)">?</button>
+    </div>
+
+    <div id="wrap">
+      <canvas id="view"></canvas>
+      <div id="dropOverlay"><div>Drop image to use as source</div></div>
+      <div id="glFail" hidden>
+        <h2>WebGL unavailable</h2>
+        <p>This playground needs WebGL, which your browser has disabled or doesn't support.<br>Try a recent Chrome / Edge / Firefox with hardware acceleration on.</p>
+      </div>
+    </div>
+
+    <div id="statusbar"><span id="stLeft">—</span><span id="stRight">SPX-RUN02-9F2</span></div>
+  </main>
+
+</div>
+
+<div id="saveDialog" class="overlay" hidden>
+  <div class="dlg">
+    <h3>Save preset</h3>
+    <input id="presetName" maxlength="40" placeholder="Name this look…" autocomplete="off">
+    <div class="rowb">
+      <button id="sdCancel" class="tb">Cancel</button>
+      <button id="sdOk" class="tb primary">Save preset</button>
+    </div>
+  </div>
+</div>
+
+<div id="helpOverlay" class="overlay" hidden>
+  <div class="dlg help">
+    <h3>Shader Playground — help</h3>
+    <table class="keys">
+      <tr><td><kbd>R</kbd></td><td>Randomize all effects</td></tr>
+      <tr><td><kbd>S</kbd></td><td>Snapshot → download PNG</td></tr>
+      <tr><td><kbd>F</kbd></td><td>Toggle fullscreen</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>Freeze / unfreeze time (animation pauses, controls stay live)</td></tr>
+      <tr><td><kbd>H</kbd> / <kbd>Esc</kbd></td><td>Open / close this overlay</td></tr>
+      <tr><td>double-click a slider label</td><td>Reset that one control to default</td></tr>
+    </table>
+    <p><b>Sources:</b> pick one of four animated procedural scenes (no media required), use the built-in demo artwork,
+       or load your own image via the button, drag&nbsp;&&nbsp;drop, or pasting from the clipboard.</p>
+    <p><b>Presets:</b> built-ins are one-click looks; <i>Save</i> stores your current slider state in this browser
+       (with a thumbnail), and survives page reloads.</p>
+    <p><b>Tip:</b> effects stack — try <i>CRT Arcade</i> on an uploaded photo, or crank Swirl + Bloom on Nebula.</p>
+    <div class="rowb"><button id="helpClose" class="tb primary">Got it</button></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="js/schema.js"></script>
+<script src="js/gl.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

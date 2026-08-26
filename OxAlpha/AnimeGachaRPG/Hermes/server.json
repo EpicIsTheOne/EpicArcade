@@ -1,0 +1,7 @@
+{
+  "port": 53169,
+  "pid": 5022,
+  "note": "STARWOVEN static server (starwoven/ web root), verified via /js/rng.js content. Kill ONLY this pid at cleanup.",
+  "started": "2026-08-25T19:00:00Z",
+  "warning": "5733 probe was sniped by a foreign vite process before our bind; re-probed."
+}

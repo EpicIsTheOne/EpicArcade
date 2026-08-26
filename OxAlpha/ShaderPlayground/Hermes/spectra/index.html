@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<!-- SPECTRA-SPRUN02 · canonical entry for Shader Playground (run-02) -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPECTRA · Shader Playground</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%2322d3ee'/%3E%3Cstop offset='1' stop-color='%23f472b6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='13' fill='url(%23g)'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <header id="topbar">
+    <div class="brand">
+      <span class="logo-dot"></span>
+      <span class="brand-name">SPECTRA</span>
+      <span class="brand-sub">SHADER PLAYGROUND</span>
+    </div>
+    <div class="top-actions">
+      <span id="fps-chip" class="chip mono" title="Frames per second">— fps</span>
+      <label class="quality-wrap" title="Render scale">
+        <span>QUALITY</span>
+        <select id="quality" class="sel sel-mini">
+          <option value="0.5">50%</option>
+          <option value="0.75">75%</option>
+          <option value="1" selected>100%</option>
+        </select>
+      </label>
+      <button id="btn-play" class="ibtn" title="Play / pause animation (Space)" aria-label="Play or pause">
+        <svg id="ic-pause" viewBox="0 0 24 24"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+        <svg id="ic-play" viewBox="0 0 24 24" style="display:none"><path d="M8 5l11 7-11 7z"/></svg>
+      </button>
+      <button id="btn-shot" class="ibtn" title="Save snapshot as PNG (S)" aria-label="Save PNG snapshot">
+        <svg viewBox="0 0 24 24"><path d="M9 3l-1.8 2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.2L15 3H9zm3 5.5A4.5 4.5 0 1 1 7.5 13 4.5 4.5 0 0 1 12 8.5zm0 2A2.5 2.5 0 1 0 14.5 13 2.5 2.5 0 0 0 12 10.5z"/></svg>
+      </button>
+      <button id="btn-help" class="ibtn" title="Help & shortcuts (H)" aria-label="Help">
+        <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 17h-2v-2h2zm1.9-7.6c-.6.6-1.4 1.1-1.6 1.9-.1.5-.1 1-.1 1.7h-2c0-1 0-1.7.2-2.3.3-.9 1.2-1.5 1.8-2.1.5-.5.9-1 .9-1.7a2.1 2.1 0 0 0-4.2 0H8a4.1 4.1 0 0 1 8.2 0 3.9 3.9 0 0 1-1.3 2.5z"/></svg>
+      </button>
+      <button id="btn-full" class="ibtn" title="Fullscreen (F)" aria-label="Fullscreen">
+        <svg viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4V4zm10 0h6v6h-2V6h-4V4zM4 14h2v4h4v2H4v-6zm14 0h2v6h-6v-2h4v-4z"/></svg>
+      </button>
+      <button id="btn-panel" class="ibtn only-narrow" title="Toggle panel" aria-label="Toggle control panel">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16v12H4zm2 2v8h5V8zm7 0v8h5V8z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="main">
+    <div id="stage">
+      <canvas id="glc"></canvas>
+      <div id="badge" class="mono">PLASMA</div>
+      <div id="paused-pill" class="hidden">PAUSED</div>
+      <div id="drop-overlay" class="hidden">
+        <div class="drop-card">
+          <div class="drop-big">Drop image to use as source</div>
+          <div class="drop-small">PNG · JPG · GIF · WEBP — it stays local in your browser</div>
+        </div>
+      </div>
+      <div id="glfail" class="hidden">
+        <div class="fail-card">
+          <h2>WebGL unavailable</h2>
+          <p>This playground needs WebGL, which your browser blocked or doesn't support.<br>
+             Try a recent Chrome / Edge / Firefox with hardware acceleration enabled.</p>
+        </div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <div id="panel-scroll">
+        <details class="sec" open data-group="source">
+          <summary>SOURCE</summary>
+          <div class="sec-body">
+            <div id="src-seg" class="seg" role="tablist"></div>
+            <div id="image-row" class="img-row hidden">
+              <button id="btn-upload" class="btn btn-wide">Upload image…</button>
+              <input type="file" id="file-input" accept="image/*" class="visually-hidden">
+              <div class="demo-label">DEMO MEDIA</div>
+              <div class="demo-btns">
+                <button class="btn demo" data-demo="aurora">Aurora Ridge</button>
+                <button class="btn demo" data-demo="city">Neon City</button>
+                <button class="btn demo" data-demo="field">Color Field</button>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="sec" open data-group="motion">
+          <summary>MOTION</summary>
+          <div class="sec-body rows"></div>
+        </details>
+
+        <details class="sec" open data-group="warp">
+          <summary>WARP &amp; GEOMETRY</summary>
+          <div class="sec-body rows"></div>
+        </details>
+
+        <details class="sec" open data-group="color">
+          <summary>COLOR</summary>
+          <div class="sec-body rows"></div>
+        </details>
+
+        <details class="sec" open data-group="fx">
+          <summary>GLOW · GRAIN · CRT</summary>
+          <div class="sec-body rows"></div>
+        </details>
+
+        <details class="sec" open id="preset-sec">
+          <summary>PRESETS</summary>
+          <div class="sec-body">
+            <select id="preset-sel" class="sel"></select>
+            <div class="preset-grid">
+              <button id="btn-save-preset" class="btn">Save current…</button>
+              <button id="btn-del-preset" class="btn">Delete</button>
+              <button id="btn-randomize" class="btn accent">🎲 Randomize</button>
+              <button id="btn-reset" class="btn">Reset</button>
+            </div>
+          </div>
+        </details>
+      </div>
+    </aside>
+  </div>
+
+  <footer id="statusbar">
+    <span id="status-left" class="mono">—</span>
+    <span id="status-right">Drop an image anywhere · <b>H</b> help · <b>R</b> randomize · <b>Space</b> pause</span>
+  </footer>
+</div>
+
+<!-- Save preset dialog -->
+<div id="dlg-backdrop" class="overlay hidden">
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+    <h3 id="dlg-title">Save preset</h3>
+    <input id="dlg-name" class="text-input" type="text" maxlength="40" placeholder="Preset name" autocomplete="off">
+    <div class="dialog-actions">
+      <button id="dlg-cancel" class="btn">Cancel</button>
+      <button id="dlg-ok" class="btn accent">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help overlay -->
+<div id="help-backdrop" class="overlay hidden">
+  <div class="dialog help" role="dialog" aria-modal="true">
+    <h3>Help &amp; shortcuts</h3>
+    <table class="help-table">
+      <tr><td class="mono">Space</td><td>Play / pause the effect clock</td></tr>
+      <tr><td class="mono">R</td><td>Randomize all parameters</td></tr>
+      <tr><td class="mono">S</td><td>Save canvas snapshot as PNG</td></tr>
+      <tr><td class="mono">F</td><td>Toggle fullscreen</td></tr>
+      <tr><td class="mono">H</td><td>Show / hide this overlay</td></tr>
+      <tr><td class="mono">Esc</td><td>Close overlays</td></tr>
+    </table>
+    <p class="help-note">Everything runs locally in your browser on a single WebGL fragment shader —
+       no uploads, no network. Drop any image onto the canvas to feed it through the effect chain.
+       Presets are saved in this browser's local storage.</p>
+    <div class="dialog-actions"><button id="help-close" class="btn accent">Got it</button></div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script src="js/state.js"></script>
+<script src="js/demo.js"></script>
+<script src="js/gl.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
