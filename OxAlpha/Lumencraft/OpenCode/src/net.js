@@ -82,6 +82,10 @@ export class Net {
     this.onMobs = null;           // (ms) — mirrored mob snapshot
     this.onMobHit = null;         // ({id,dmg,kx,kz,by}) — routed to the host only
     this.onMobDie = null;         // ({id,killer}) — mob death broadcast
+    this.onDrops = null;          // (ds) — mirrored item-drop snapshot
+    this.onTaken = null;          // ({did,by}) — a pickup was granted
+    this.onDrop = null;           // ({did,id,count,x,y,z,vx,vy,vz,by}) — mirror injection, host only
+    this.onTake = null;           // ({did,tx,ty,tz,by}) — pickup claim, host arbitrates
     this.ui = null;               // attached for chest poll sync
     this._chestWire = new Map();  // "x,y,z" -> last sent JSON (dedup)
     this._chestPollT = 0;
@@ -334,6 +338,18 @@ export class Net {
       case 'mobdie':
         this.onMobDie?.(m);
         break;
+      case 'drops':
+        this.onDrops?.(m.ds);
+        break;
+      case 'drop':
+        this.onDrop?.(m);
+        break;
+      case 'take':
+        this.onTake?.(m);
+        break;
+      case 'taken':
+        this.onTaken?.(m);
+        break;
       case 'chat':
         this.onChat({ kind: 'chat', name: m.name, text: m.text });
         break;
@@ -458,6 +474,31 @@ export class Net {
   sendMobDie(id, killer) {
     if (!this.connected) return;
     this.ws.send(JSON.stringify({ op: 'mobdie', id: id | 0, killer: String(killer || '').slice(0, 16) }));
+  }
+
+  // ---- shared item drops ----
+  sendDrops(ds) {
+    if (!this.connected || !Array.isArray(ds)) return;
+    this.ws.send(JSON.stringify({ op: 'drops', ds }));
+  }
+
+  sendInjectDrop(o) {
+    if (!this.connected || !o) return;
+    this.ws.send(JSON.stringify({
+      op: 'drop', did: o.did, id: o.id, count: Math.max(1, Math.min(64, o.count | 0)),
+      x: +(+o.x).toFixed(2), y: +(+o.y).toFixed(2), z: +(+o.z).toFixed(2),
+      vx: (o.vx | 0) || undefined, vy: (o.vy | 0) || undefined, vz: (o.vz | 0) || undefined,
+    }));
+  }
+
+  sendTake(did, tx, ty, tz) {
+    if (!this.connected) return;
+    this.ws.send(JSON.stringify({ op: 'take', did, tx: +(tx).toFixed(2), ty: +(ty).toFixed(2), tz: +(tz).toFixed(2) }));
+  }
+
+  sendTaken(did, by) {
+    if (!this.connected) return;
+    this.ws.send(JSON.stringify({ op: 'taken', did, by: String(by || '').slice(0, 16) }));
   }
 
   /** shared day fraction while online (else null → caller keeps local clock) */

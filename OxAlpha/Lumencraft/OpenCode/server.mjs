@@ -24,6 +24,8 @@ const MAX_OBSERVERS = 24;    // map viewers per room (don't eat player slots)
 const SIGN_BLOCK_ID = 61;    // keep in sync with src/blocks.js B.SIGN
 const MAX_MOBS_SYNC = 40;    // mobs relayed per snapshot (host's excess stays private)
 const MOB_TYPE_RE = /^[a-z]{3,12}$/;
+const MAX_DROPS_SYNC = 64;   // item drops relayed per snapshot
+const DROP_DID_RE = /^[A-Za-z0-9]{1,8}:[A-Za-z0-9_-]{1,15}$/;
 
 function maxSigns() {
   return Number(process.env.MAX_SIGNS) || 200;
@@ -116,6 +118,53 @@ function validMobsOp(m) {
       if (typeof v !== 'number' || !Number.isFinite(v) || Math.abs(v) > 1e6) return false;
     }
     if (hp < -1 || hp > 1000) return false;
+  }
+  return true;
+}
+
+// ---- shared item drops (host-authoritative; server is a pure relay) ----
+function validDropDid(did) {
+  return typeof did === 'string' && DROP_DID_RE.test(did);
+}
+
+function validItemId(id) {
+  if (typeof id === 'number') return Number.isInteger(id) && id >= 0 && id < 256;
+  return typeof id === 'string' && /^[\w-]{1,24}$/.test(id);
+}
+
+// snapshot entry: [did, id, count, x, y, z]
+function validDropEntry(e) {
+  if (!Array.isArray(e) || e.length !== 6) return false;
+  const [did, id, count, x, y, z] = e;
+  if (!validDropDid(did) || !validItemId(id)) return false;
+  if (!Number.isInteger(count) || count < 1 || count > 64) return false;
+  for (const v of [x, y, z]) {
+    if (typeof v !== 'number' || !Number.isFinite(v) || Math.abs(v) > 1e6) return false;
+  }
+  return true;
+}
+
+function validDropsOp(m) {
+  if (!Array.isArray(m.ds) || m.ds.length > MAX_DROPS_SYNC) return false;
+  for (const e of m.ds) if (!validDropEntry(e)) return false;
+  return true;
+}
+
+function finiteCoords(m, keys) {
+  for (const k of keys) {
+    const v = m[k];
+    if (typeof v !== 'number' || !Number.isFinite(v) || Math.abs(v) > 1e6) return false;
+  }
+  return true;
+}
+
+// injection: {op:'drop', did, id, count, x, y, z, vx?, vy?, vz?}
+function validInjectOp(m) {
+  if (!validDropDid(m.did) || !validItemId(m.id)) return false;
+  if (!Number.isInteger(m.count) || m.count < 1 || m.count > 64) return false;
+  if (!finiteCoords(m, ['x', 'y', 'z'])) return false;
+  for (const k of ['vx', 'vy', 'vz']) {
+    if (m[k] !== undefined && (typeof m[k] !== 'number' || !Number.isFinite(m[k]) || Math.abs(m[k]) > 15)) return false;
   }
   return true;
 }
@@ -344,6 +393,14 @@ export default {
       broadcast(room, exceptId, { op: 'host', id: next });
     }
 
+    // sliding 1s rate bucket for player-paced action ops; returns false when flooded
+    function bumpAct(peer, cap) {
+      const now = Date.now();
+      peer.actT = (peer.actT || []).filter((t) => now - t < 1000);
+      peer.actT.push(now);
+      return peer.actT.length <= cap;
+    }
+
     return {
       open(ws) {
         // join is required as the first message; nothing to do yet
@@ -497,7 +554,8 @@ export default {
         // swapped handlers under a live socket): ask the client to re-join.
         if (!code) {
           if (msg.op === 'state' || msg.op === 'block' || msg.op === 'chat' || msg.op === 'died' ||
-              msg.op === 'mobs' || msg.op === 'mobhit' || msg.op === 'mobdie') {
+              msg.op === 'mobs' || msg.op === 'mobhit' || msg.op === 'mobdie' ||
+              msg.op === 'drops' || msg.op === 'drop' || msg.op === 'take') {
             const now = Date.now();
             if (!ws._rejoinAt || now - ws._rejoinAt > 2000) {
               ws._rejoinAt = now;
@@ -738,11 +796,64 @@ export default {
           return;
         }
 
-        if (msg.op === 'mobhit') {
+        // ---- shared item drops ----
+        if (msg.op === 'drops') {
           const now = Date.now();
-          peer.mobT = (peer.mobT || []).filter((t) => now - t < 1000);
-          peer.mobT.push(now);
-          if (peer.mobT.length > 15) return;
+          peer.dropT = (peer.dropT || []).filter((t) => now - t < 1000);
+          peer.dropT.push(now);
+          if (peer.dropT.length > 15) return;
+          if (room.hostId !== ws.id) return; // only the host publishes
+          if (!validDropsOp(msg)) return;
+          broadcast(room, ws.id, { op: 'drops', ds: msg.ds });
+          return;
+        }
+
+        if (msg.op === 'drop') { // injection from a mirror → host adopts & simulates
+          if (!bumpAct(peer, 25)) return;
+          if (room.hostId === ws.id || room.hostId == null) return; // host spawns locally
+          if (!validInjectOp(msg)) return;
+          const hostWs = room.peers.get(room.hostId)?.ws;
+          if (hostWs) {
+            try {
+              hostWs.send({
+                op: 'drop', did: msg.did, id: msg.id, count: msg.count,
+                x: msg.x, y: msg.y, z: msg.z,
+                vx: msg.vx | 0, vy: msg.vy | 0, vz: msg.vz | 0,
+                by: peer.name,
+              });
+            } catch {}
+          }
+          return;
+        }
+
+        if (msg.op === 'take') { // pickup claim from a mirror → host arbitrates
+          if (!bumpAct(peer, 12)) return;
+          if (room.hostId === ws.id || room.hostId == null) return;
+          if (!validDropDid(msg.did)) return;
+          if (!finiteCoords(msg, ['tx', 'ty', 'tz'])) return;
+          const hostWs = room.peers.get(room.hostId)?.ws;
+          if (hostWs) {
+            try {
+              hostWs.send({
+                op: 'take', did: msg.did,
+                tx: +msg.tx.toFixed(2), ty: +msg.ty.toFixed(2), tz: +msg.tz.toFixed(2),
+                by: peer.name,
+              });
+            } catch {}
+          }
+          return;
+        }
+
+        if (msg.op === 'taken') { // host grants a pickup → everyone stops showing it
+          if (!bumpAct(peer, 15)) return;
+          if (room.hostId !== ws.id) return;
+          if (!validDropDid(msg.did)) return;
+          broadcast(room, ws.id, { op: 'taken', did: msg.did, by: cleanName(msg.by, '') });
+          return;
+        }
+
+        if (msg.op === 'mobhit') {
+          if (!bumpAct(peer, 12)) return;
           if (room.hostId === ws.id || room.hostId == null) return; // host hits its own mobs locally
           const id = msg.id, dmg = msg.dmg;
           if (!Number.isInteger(id) || id < 0 || id > 1e9) return;
@@ -758,10 +869,7 @@ export default {
         }
 
         if (msg.op === 'mobdie') {
-          const now = Date.now();
-          peer.mobT = (peer.mobT || []).filter((t) => now - t < 1000);
-          peer.mobT.push(now);
-          if (peer.mobT.length > 20) return;
+          if (!bumpAct(peer, 15)) return;
           if (room.hostId !== ws.id) return; // only the host declares deaths
           if (!Number.isInteger(msg.id) || msg.id < 0 || msg.id > 1e9) return;
           broadcast(room, ws.id, { op: 'mobdie', id: msg.id, killer: cleanName(msg.killer, '') });

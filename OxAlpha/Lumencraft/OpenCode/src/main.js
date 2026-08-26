@@ -18,6 +18,7 @@ import { Interaction, raycastVoxel } from './interaction.js';
 import { EntityManager, MOB_TYPES, Mob } from './entities.js';
 import { Net, resolveWsUrl } from './net.js';
 import { MobNet } from './mobnet.js';
+import { DropNet } from './dropnet.js';
 import { SignManager } from './signs.js';
 import { Particles } from './particles.js';
 import { AudioSys } from './audio.js';
@@ -160,13 +161,22 @@ function startGame(opts) {
     g.net.onToast = (m) => ui.toast(m);
     if (g.net.spawnNear) g._smpSpawnNear = g.net.spawnNear;
 
-    // shared mobs: host-authoritative co-op sync
+    // shared mobs + shared loot: host-authoritative co-op sync
     const mobNet = new MobNet(g);
     g.mobNet = mobNet;
-    g.net.onHost = (id) => { id == null ? mobNet.handleDisconnect() : mobNet.onHostChanged(id); };
+    const dropNet = new DropNet(g);
+    g.dropNet = dropNet;
+    g.net.onHost = (id) => {
+      if (id == null) { mobNet.handleDisconnect(); dropNet.handleDisconnect(); }
+      else { mobNet.onHostChanged(id); dropNet.onHostChanged(id); }
+    };
     g.net.onMobs = (ms) => mobNet.onMobs(ms);
     g.net.onMobHit = (m) => mobNet.onMobHit(m);
     g.net.onMobDie = (m) => mobNet.onMobDie(m);
+    g.net.onDrops = (ds) => dropNet.onDrops(ds);
+    g.net.onDrop = (m) => dropNet.onInject(m);
+    g.net.onTake = (m) => dropNet.onTake(m);
+    g.net.onTaken = (m) => dropNet.onTaken(m);
 
     const signManager = new SignManager(graphics.scene);
     g.signManager = signManager;
@@ -214,12 +224,18 @@ function startGame(opts) {
   world.onChunkReady = (chunk) => { /* meshing happens via dirty queue */ };
 
   // ---------- drops / pickups ----------
-  world.onDrops = (x, y, z, id, count) => entities.spawnDrop(x, y, z, id, count);
+  // shared loot funnel: mirrors don't simulate drops — they inject into the
+  // host's pool and render remotely until picked up (host/solo = local sim)
+  const spawnOrShare = (x, y, z, id, count, vel) => {
+    if (g.dropNet && g.dropNet.mirroring) return g.dropNet.injectLocal(x, y, z, id, count, vel);
+    return entities.spawnDrop(x, y, z, id, count);
+  };
+  world.onDrops = (x, y, z, id, count) => spawnOrShare(x, y, z, id, count);
   g.giveItem = (id, count, dur) => {
     const left = ui.inv.give(id, count, dur);
     return left;
   };
-  g.spawnDrop = (x, y, z, id, count) => entities.spawnDrop(x, y, z, id, count);
+  g.spawnDrop = (x, y, z, id, count, vel) => spawnOrShare(x, y, z, id, count, vel);
 
   // combat helpers expected by interaction/entities
   g.pickMob = (eye, dir, maxDist) =>
@@ -255,6 +271,39 @@ function startGame(opts) {
   g.releasePointer = () => input.releaseLock();
   g.setHighlight = setHighlight;
 
+  // toss one item of the held stack (Q / QA hook); shared in multiplayer
+  g.throwHeld = () => {
+    const held = ui.hotbarSelected();
+    if (!held) return false;
+    const f = player.forwardVec();
+    const d = spawnOrShare(player.pos.x + f.x, player.eyeY - 0.3, player.pos.z + f.z, held.id, 1,
+      { vx: f.x * 5, vy: 2, vz: f.z * 5 });
+    if (d && d.age !== undefined) d.age = -0.8;   // don't re-vacuum your own toss
+    held.count--;
+    if (held.count <= 0) ui.replaceHotbarSlot(null);
+    ui.refreshHotbar();
+    audio.swing();
+    return true;
+  };
+
+  // death scatter: spill the inventory as shared loot at the corpse (MP only)
+  g.spillInventory = () => {
+    if (!g.net || !g.net.connected) return false;
+    let i = 0, spilled = 0;
+    for (const s of ui.inv.slots) {
+      if (!s) continue;
+      const ang = (i++) * 2.399963;   // golden-angle scatter
+      const r = 0.4 + Math.random() * 1.1;
+      spawnOrShare(player.pos.x + Math.cos(ang) * r, player.pos.y + 0.6,
+        player.pos.z + Math.sin(ang) * r, s.id, s.count);
+      spilled += s.count;
+    }
+    ui.inv.slots.fill(null);
+    ui.inv.selected = 0;
+    ui.refreshHotbar();
+    return spilled > 0;
+  };
+
   // ---------- audio hooks ----------
   player.onFootstep = (id, sprint) => audio.step(id, sprint);
   player.onDamage = (amount, cause) => {
@@ -262,6 +311,7 @@ function startGame(opts) {
     g.damageFlash = Math.min(1, g.damageFlash + 0.55);
   };
   player.onDeath = (cause) => {
+    g.spillInventory();   // shared loot: teammates can recover your gear
     if (g.net) g.net.sendDied(cause);
     $('death-msg').textContent = ({
       fall: 'You fell from a great height.',
@@ -447,17 +497,9 @@ function startGame(opts) {
         player.flying = !player.flying;
         ui.toast(player.flying ? 'Fly mode ON (Space up · C down)' : 'Fly mode OFF');
         break;
-      case 'KeyQ': {
-        const held = ui.hotbarSelected();
-        if (held) {
-          const f = player.forwardVec();
-          const d = entities.spawnDrop(player.pos.x + f.x, player.eyeY - 0.3, player.pos.z + f.z, held.id, 1);
-          if (d) { d.vel.x = f.x * 5; d.vel.z = f.z * 5; d.vel.y = 2; d.age = -0.8; }
-          held.count--;
-          if (held.count <= 0) ui.replaceHotbarSlot(null);
-        }
+      case 'KeyQ':
+        g.throwHeld();
         break;
-      }
     }
   };
 
@@ -751,6 +793,25 @@ function startGame(opts) {
       you: g.net ? g.net.you : null,
       peers: g.net && g.net.remotes ? g.net.remotes.count() : 0,
     }),
+    dropnet: () => ({
+      host: g.dropNet ? g.dropNet.isHost : null,
+      mirroring: g.dropNet ? g.dropNet.mirroring : null,
+      remoteDrops: g.dropNet ? g.dropNet.remoteCount() : 0,
+      remoteDids: g.dropNet ? [...g.dropNet.pickList().map((r) => r.did)] : [],
+      pendingTakes: g.dropNet ? g.dropNet.pendingTakes() : [],
+      localDrops: entities.drops.length,
+    }),
+    throwHeld: () => g.throwHeld(),
+    spillNow: () => g.spillInventory(),
+    dropsDetail: () => entities.drops.map(d => ({
+      did: d.did, id: typeof d.id === 'string' ? d.id : Number(d.id),
+      count: d.count, pos: d.pos.toArray(),
+    })),
+    spawnDropAt: (id, n = 1, dx = 0, dz = 0) => {
+      const r = spawnOrShare(player.pos.x + dx, player.pos.y + 0.5, player.pos.z + dz, id, n);
+      if (!r) return null;
+      return typeof r === 'object' && r.did ? r.did : 'local';
+    },
     hitRemoteMob: (n = 1, wantEid = null) => {
       // QA helper: hit a mirrored mob n times with 3 dmg (default: nearest)
       if (!g.mobNet || !g.mobNet.mirroring) return 'not mirroring';
@@ -1248,6 +1309,7 @@ function frame(now) {
     g.interaction.update(dt);
     g.entities.update(dt);
     if (g.mobNet) g.mobNet.update(dt);
+    if (g.dropNet) g.dropNet.update(dt);
     g.playTime += dt;
   }
 

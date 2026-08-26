@@ -37,28 +37,34 @@ function iconTexture(id) {
   return iconTexCache.get(id);
 }
 
+/** build the visual for a ground item: block-textured cube or icon sprite */
+export function createDropMesh(game, id) {
+  const isBlock = typeof id === 'number' && BLOCKS[id];
+  let mesh;
+  if (isBlock) {
+    const mat = new THREE.MeshBasicMaterial({ map: game.atlasTexture });
+    mesh = new THREE.Mesh(blockDropGeometry(BLOCKS[id]), mat);
+  } else {
+    const mat = new THREE.MeshBasicMaterial({ map: iconTexture(id), transparent: true, alphaTest: 0.12, side: THREE.DoubleSide });
+    mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), mat);
+  }
+  mesh.frustumCulled = true;
+  return mesh;
+}
+
 class Drop {
   constructor(game, x, y, z, id, count) {
     this.game = game;
     this.id = id;
     this.count = count;
+    this.did = null;              // shared-loot id once synced
     this.pos = new THREE.Vector3(x, y, z);
     this.vel = new THREE.Vector3((Math.random() - 0.5) * 2.2, 3.4 + Math.random() * 1.5, (Math.random() - 0.5) * 2.2);
     this.age = 0;
     this.dead = false;
 
-    const isBlock = typeof id === 'number' && BLOCKS[id];
-    let mesh;
-    if (isBlock) {
-      const mat = new THREE.MeshBasicMaterial({ map: game.atlasTexture });
-      mesh = new THREE.Mesh(blockDropGeometry(BLOCKS[id]), mat);
-    } else {
-      const mat = new THREE.MeshBasicMaterial({ map: iconTexture(id), transparent: true, alphaTest: 0.12, side: THREE.DoubleSide });
-      mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.42), mat);
-    }
-    mesh.frustumCulled = true;
-    this.mesh = mesh;
-    game.graphics.scene.add(mesh);
+    this.mesh = createDropMesh(game, id);
+    game.graphics.scene.add(this.mesh);
   }
 
   update(dt) {

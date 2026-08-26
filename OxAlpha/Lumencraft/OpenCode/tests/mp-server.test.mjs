@@ -882,3 +882,263 @@ test('short PINs are rejected with a reason; pinless names stay open', async () 
   assert.equal(d.sent[0].op, 'denied', 'once claimed, PIN required');
   h.stop?.();
 });
+
+// ---- shared item drops: relay, injection, pickup arbitration ----
+
+function lootTriple(handler, room = 'LOOT1') {
+  const a = fakeWs(1), b = fakeWs(2), c = fakeWs(3);
+  handler.message(a, { op: 'join', room, name: 'Alice' });
+  handler.message(b, { op: 'join', room, name: 'Bob' });
+  handler.message(c, { op: 'join', room, name: 'Cara' });
+  return { a, b, c };
+}
+
+const DSNAP = [['p1:1', 'wool', 2, 1.5, 64.2, -3.0], ['p1:2', 4, 1, 0, 65, 0]];
+const INJECT = { op: 'drop', did: 'p2:7', id: 'coal', count: 3, x: 5, y: 64, z: 5, vx: 1, vy: 2 };
+
+test('host drop snapshots relay to peers and observers; no echo; non-host rejected', async () => {
+  const { handler } = await makeHandler();
+  const { a, b } = lootTriple(handler);
+  b.sent.length = 0;
+  handler.message(a, { op: 'drops', ds: DSNAP });
+  const got = b.sent.find((m) => m.op === 'drops');
+  assert.ok(got, 'peer received drop snapshot');
+  assert.deepEqual(got.ds, DSNAP);
+  const obs = roomViewer(handler, 9, 'LOOT1');
+  obs.sent.length = 0;
+  handler.message(a, { op: 'drops', ds: DSNAP });
+  assert.ok(obs.sent.some((m) => m.op === 'drops'), 'observer sees drops');
+  assert.equal(a.sent.filter((m) => m.op === 'drops').length, 0, 'no echo');
+  b.sent.length = 0;
+  handler.message(b, { op: 'drops', ds: DSNAP });
+  assert.equal(b.sent.some((m) => m.op === 'drops'), false, 'non-host cannot publish');
+});
+
+test('invalid drop snapshots are rejected', async () => {
+  const { handler } = await makeHandler();
+  const { a, b } = lootTriple(handler);
+  b.sent.length = 0;
+  handler.message(a, { op: 'drops', ds: [['bad did', 'wool', 1, 0, 64, 0]] });   // malformed did
+  handler.message(a, { op: 'drops', ds: [['p1:9', 'wool', 0, 0, 64, 0]] });      // count < 1
+  handler.message(a, { op: 'drops', ds: [['p1:9', 'wool', 65, 0, 64, 0]] });     // count > 64
+  handler.message(a, { op: 'drops', ds: [['p1:9', 'drop table?!', 1, 0, 64, 0]] }); // bad id
+  handler.message(a, { op: 'drops', ds: new Array(65).fill(DSNAP[0]) });         // over cap
+  handler.message(a, { op: 'drops', ds: [['p1:9', 'wool', 1, 0, 64]] });         // wrong arity
+  assert.equal(b.sent.filter((m) => m.op === 'drops').length, 0, 'nothing invalid relayed');
+});
+
+test('mirror injections are forwarded only to the host with velocity and attacker name', async () => {
+  const { handler } = await makeHandler();
+  const { a, b, c } = lootTriple(handler);
+  a.sent.length = 0;
+  handler.message(b, INJECT);
+  const got = a.sent.find((m) => m.op === 'drop');
+  assert.ok(got, 'host got the injection');
+  assert.equal(got.did, 'p2:7');
+  assert.equal(got.by, 'Bob');
+  assert.equal(c.sent.filter((m) => m.op === 'drop').length, 0, 'peers do not see raw injections');
+  // host's own injection attempt is ignored (it spawns locally)
+  a.sent.length = 0;
+  handler.message(a, INJECT);
+  assert.equal(a.sent.filter((m) => m.op === 'drop').length, 0);
+});
+
+test('invalid injections are rejected', async () => {
+  const { handler } = await makeHandler();
+  const { a, b } = lootTriple(handler);
+  a.sent.length = 0;
+  handler.message(b, { ...INJECT, did: 'nope' });            // bad did shape
+  handler.message(b, { ...INJECT, count: 99 });              // overstack
+  handler.message(b, { ...INJECT, x: 'five' });              // bad coord
+  handler.message(b, { ...INJECT, vx: 999 });                // vel > 15
+  assert.equal(a.sent.filter((m) => m.op === 'drop').length, 0, 'nothing invalid forwarded');
+});
+
+test('take claims route to the host with claimant + position; taken broadcasts to peers only', async () => {
+  const { handler } = await makeHandler();
+  const { a, b, c } = lootTriple(handler);
+  a.sent.length = 0;
+  handler.message(b, { op: 'take', did: 'p1:1', tx: 1.4, ty: 65, tz: -2.6 });
+  const take = a.sent.find((m) => m.op === 'take');
+  assert.ok(take, 'host arbitrating');
+  assert.equal(take.did, 'p1:1');
+  assert.equal(take.by, 'Bob');
+  assert.equal(take.tx, 1.4);
+  assert.equal(c.sent.filter((m) => m.op === 'take').length, 0, 'peers never see claims');
+
+  c.sent.length = 0; b.sent.length = 0;
+  handler.message(a, { op: 'taken', did: 'p1:1', by: 'Bob' });
+  assert.ok(b.sent.find((m) => m.op === 'taken' && m.did === 'p1:1' && m.by === 'Bob'), 'winner confirmed');
+  assert.ok(c.sent.find((m) => m.op === 'taken' && m.did === 'p1:1'), 'losers told too');
+  assert.equal(a.sent.filter((m) => m.op === 'taken').length, 0, 'no echo');
+
+  // non-host taken is rejected; host's own take is ignored
+  b.sent.length = 0;
+  handler.message(b, { op: 'taken', did: 'p1:2', by: 'Bob' });
+  assert.equal(b.sent.filter((m) => m.op === 'taken').length, 0);
+  handler.message(a, { op: 'take', did: 'p1:2', tx: 0, ty: 0, tz: 0 });
+  assert.equal(b.sent.filter((m) => m.op === 'take').length, 0);
+});
+
+test('drop/take flooding is rate-limited per bucket', async () => {
+  const { handler } = await makeHandler();
+  const { a, b } = lootTriple(handler);
+  b.sent.length = 0; a.sent.length = 0;
+  for (let i = 0; i < 20; i++) handler.message(a, { op: 'drops', ds: [] });
+  assert.ok(b.sent.filter((m) => m.op === 'drops').length <= 15, 'snapshot cap');
+  for (let i = 0; i < 30; i++) handler.message(b, { op: 'drop', did: 'p2:' + i, id: 'coal', count: 1, x: 0, y: 64, z: 0 });
+  assert.ok(a.sent.filter((m) => m.op === 'drop').length <= 25, 'injection cap');
+});
+
+test('observers cannot inject or claim drops', async () => {
+  const { handler } = await makeHandler();
+  const { a, b } = lootTriple(handler);
+  const obs = roomViewer(handler, 9, 'LOOT1');
+  a.sent.length = 0;
+  handler.message(obs, INJECT);
+  handler.message(obs, { op: 'take', did: 'p1:1', tx: 0, ty: 0, tz: 0 });
+  assert.equal(a.sent.filter((m) => m.op === 'drop' || m.op === 'take').length, 0, 'read-only observers');
+});
+
+// ---- shared mobs: host election + authoritative relay ----
+// (reconstructed after the dev-copy wipe; canonical home is now THIS repo)
+
+function roomViewer(handler, id, room) {
+  const ws = fakeWs(id);
+  handler.message(ws, { op: 'join', room, name: 'map', map: true });
+  return ws;
+}
+
+function mobTriple(handler, room = 'ROOM1') {
+  const a = fakeWs(1), b = fakeWs(2), c = fakeWs(3);
+  handler.message(a, { op: 'join', room, name: 'Alice' });
+  handler.message(b, { op: 'join', room, name: 'Bob' });
+  handler.message(c, { op: 'join', room, name: 'Cara' });
+  return { a, b, c };
+}
+
+const SNAP = [[5, 'gloom', 10.5, 64.0, -3.25, 12, 1.57]];
+
+test('first joiner becomes the shared-mob host; later joiners see it in welcome', async () => {
+  const { handler } = await makeHandler();
+  const a = fakeWs(1);
+  handler.message(a, { op: 'join', room: 'ROOM1', name: 'Alice' });
+  assert.equal(a.sent[0].host, 1, 'solo joiner hosts');
+
+  const b = fakeWs(2);
+  handler.message(b, { op: 'join', room: 'ROOM1', name: 'Bob' });
+  assert.equal(b.sent[0].host, 1, 'late joiner sees existing host');
+});
+
+test('mob snapshots relay from host to peers and observers, never echo to host', async () => {
+  const { handler } = await makeHandler();
+  const { a, b } = mobTriple(handler);
+  b.sent.length = 0;
+  handler.message(a, { op: 'mobs', ms: SNAP });
+  const got = b.sent.find((m) => m.op === 'mobs');
+  assert.ok(got, 'peer received snapshot');
+  assert.deepEqual(got.ms, SNAP);
+
+  const obs = roomViewer(handler, 9, 'ROOM1');
+  obs.sent.length = 0;
+  handler.message(a, { op: 'mobs', ms: SNAP });
+  assert.ok(obs.sent.some((m) => m.op === 'mobs'), 'observer receives snapshots (future map dots)');
+  assert.equal(a.sent.filter((m) => m.op === 'mobs').length, 0, 'no echo to host');
+});
+
+test('non-host mob snapshots are ignored; invalid payloads rejected', async () => {
+  const { handler } = await makeHandler();
+  const { a, b } = mobTriple(handler);
+  b.sent.length = 0;
+  handler.message(b, { op: 'mobs', ms: SNAP });
+  assert.equal(b.sent.some((m) => m.op === 'mobs'), false);
+  handler.message(a, { op: 'mobs', ms: [[1, 'DoomSlime', 0, 0, 0, 1, 0]] });
+  handler.message(a, { op: 'mobs', ms: SNAP.concat([['x']]) });
+  handler.message(a, { op: 'mobs', ms: new Array(41).fill(SNAP[0]) });
+  assert.equal(b.sent.filter((m) => m.op === 'mobs').length, 0, 'nothing invalid relayed');
+});
+
+test('mobhit routes only to the host and carries the attacker name', async () => {
+  const { handler } = await makeHandler();
+  const { a, b, c } = mobTriple(handler);
+  a.sent.length = 0;
+  handler.message(b, { op: 'mobhit', id: 5, dmg: 4, kx: 0.5, kz: -1 });
+  let hit = a.sent.find((m) => m.op === 'mobhit');
+  assert.ok(hit, 'host got the hit');
+  assert.equal(hit.id, 5);
+  assert.equal(hit.dmg, 4);
+  assert.equal(hit.by, 'Bob');
+  assert.equal(c.sent.filter((m) => m.op === 'mobhit').length, 0, 'peers do not see hits');
+  handler.message(c, { op: 'mobhit', id: 6, dmg: 999, kx: 99 });
+  hit = a.sent.filter((m) => m.op === 'mobhit')[1];
+  assert.equal(hit.dmg, 20, 'dmg clamped');
+  assert.equal(hit.kx, 3, 'knockback clamped');
+});
+
+test("the host's own mobhit is dropped (it hits its mobs locally)", async () => {
+  const { handler } = await makeHandler();
+  const { a, b } = mobTriple(handler);
+  b.sent.length = 0;
+  handler.message(a, { op: 'mobhit', id: 5, dmg: 3, kx: 0, kz: 0 });
+  assert.equal(b.sent.filter((m) => m.op === 'mobhit').length, 0);
+});
+
+test('mobdie broadcasts from the host with a sanitized killer name', async () => {
+  const { handler } = await makeHandler();
+  const { a, b } = mobTriple(handler);
+  b.sent.length = 0;
+  handler.message(a, { op: 'mobdie', id: 5, killer: 'Bob\tScript' });
+  const die = b.sent.find((m) => m.op === 'mobdie');
+  assert.ok(die, 'peer saw death');
+  assert.equal(die.id, 5);
+  assert.equal(die.killer, 'Bob Script', 'sanitized');
+  assert.equal(a.sent.filter((m) => m.op === 'mobdie').length, 0, 'no echo');
+  b.sent.length = 0;
+  handler.message(b, { op: 'mobdie', id: 7, killer: 'Bob' });
+  assert.equal(b.sent.filter((m) => m.op === 'mobdie').length, 0);
+});
+
+test('host migration: oldest remaining player is promoted and can publish', async () => {
+  const { handler } = await makeHandler();
+  const { a, b, c } = mobTriple(handler);
+  handler.close(a);
+  const promoted = b.sent.find((m) => m.op === 'host');
+  assert.ok(promoted, 'host op broadcast');
+  assert.equal(promoted.id, 2, 'Bob is oldest â†’ host');
+  assert.equal(c.sent.find((m) => m.op === 'host')?.id, 2, 'Cara told too');
+  c.sent.length = 0;
+  handler.message(b, { op: 'mobs', ms: SNAP });
+  assert.ok(c.sent.some((m) => m.op === 'mobs'), 'new host publishes');
+  c.sent.length = 0;
+  handler.message(c, { op: 'mobs', ms: SNAP });
+  assert.equal(c.sent.some((m) => m.op === 'mobs'), false);
+});
+
+test('last player leaving clears the host seat without crashing', async () => {
+  const { handler } = await makeHandler();
+  const a = fakeWs(1);
+  handler.message(a, { op: 'join', room: 'SOLO1', name: 'Alice' });
+  handler.close(a);
+  const b = fakeWs(2);
+  handler.message(b, { op: 'join', room: 'SOLO1', name: 'Bob' });
+  assert.equal(b.sent[0].host, 2, 'room reclaimed then re-hosted by next joiner');
+});
+
+test('map observers never host and never publish', async () => {
+  const { handler } = await makeHandler();
+  const a = fakeWs(1);
+  handler.message(a, { op: 'join', room: 'OBS1', name: 'Alice' });
+  const obs = roomViewer(handler, 9, 'OBS1');
+  assert.equal(obs.sent[0].host, 1, 'observer welcome reports the real host');
+  handler.close(a);
+  const nobodyHost = obs.sent.find((m) => m.op === 'host');
+  assert.ok(nobodyHost && nobodyHost.id === null, 'host seat vacated');
+});
+
+test('mob snapshot flooding is rate-limited', async () => {
+  const { handler } = await makeHandler();
+  const { a, b } = mobTriple(handler);
+  b.sent.length = 0;
+  for (let i = 0; i < 20; i++) handler.message(a, { op: 'mobs', ms: [] });
+  assert.ok(b.sent.filter((m) => m.op === 'mobs').length <= 15, 'capped at 15/s');
+});
