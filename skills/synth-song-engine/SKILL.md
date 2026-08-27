@@ -378,10 +378,38 @@ Kit voices referenced: see templates/synth_kit.py (29 verified voices).
 - **Gabber / Speedcore** — 190–250+. DNA: kick_hardstyle(drive 12+) played
   AS the entire rhythm, screech stabs, aggression. Law: kick distortion
   carries everything; mix loud, master loud, no apologies.
-- **Breakcore** — 160–200+. DNA: amen-style breaks chopped and reordered at
-  impossible densities (program 32nd/64th snare/hat clusters), sudden
-  silence, classical-music samples. Law: chaos needs anchors — keep kick+
-  snare skeletons findable inside the storm.
+- **Breakcore** — 160–200 BPM (180 default; 210–240 for the extreme lane).
+  DNA: edited break architecture, not merely fast DnB. Build a recognizable
+  2-bar break skeleton first, then mutate copies with 1/16, 1/32, and rare
+  1/64 chops, reverse/shortened hits, retriggers, ghost snares, and sudden
+  dropouts. Use the kit's `kick`, `snare`, and `hat` voices to synthesize an
+  original break; do not download or embed a copyrighted Amen recording.
+  Keep a few kick/snare landmarks audible inside each dense burst so the chaos
+  has a pulse. Default to straight grid timing for the skeleton, then make the
+  edits intentionally asymmetrical rather than random noise.
+
+  | Element | Spec |
+  |---|---|
+  | Drum density | Start at 8–16 meaningful hits/bar, escalate to 24–40 during a drop; reserve 1/2–1 full beat of silence before major impacts. Vary velocity and use 3–8-hit machine-gun clusters only at phrase ends. |
+  | Low end | Clean `sub_sine` owns <100 Hz; `reese` or driven bass owns 100–500 Hz. Sidechain or manually duck the bass around the kick so the break remains legible. Drop to half-time sub pulses for contrast. |
+  | Musical palette | Minor, Phrygian, or chromatic harmony; rave stabs, hoovers, acid lines, chiptune/game tones, and classical-style arpeggios are all valid. The 2020s atmospheric lane pairs frantic breaks with wistful pads, bright anime/game colors, or sentimental melodies. |
+  | Form | 4–8 bar atmosphere/introduction -> first broken groove -> 4–8 bar density escalations -> half-time or beatless breath -> maximal final mutation -> abrupt cut or short decaying tail. Change the break edit language every 4 or 8 bars; do not loop one fill unchanged for the whole track. |
+  | Mix law | Keep kick/snare transients forward, high-pass the break layer around 100–150 Hz, keep sub mono below 120 Hz, and control clipping after dense clusters. Contrast is the impact: do not make every bar maximally loud. |
+
+  Implementation sketch: schedule the base hits on a 16-step grid, render
+  each hit as its own buffer, and build mutations by slicing/reordering those
+  buffers or scheduling shortened repeats. For a pure-synth fallback, the
+  `snare` + `hat` cluster is the break texture and the kick skeleton is the
+  anchor. Distinguish it from Jungle/DnB: Breakcore foregrounds disruptive
+  edits, extreme density changes, and genre-collision; it is not just a
+  polished 174 BPM breakbeat.
+
+  Research anchors checked 2026-08-26: [Breakcore](https://en.wikipedia.org/wiki/Breakcore),
+  [Demystifying the Internet's Breakcore Revival](https://daily.bandcamp.com/lists/breakcore-revival-list),
+  and [Amen break](https://en.wikipedia.org/wiki/Amen_break). These support
+  the break manipulation, high-tempo, broad sampling, classical/game palette,
+  and atmospheric revival distinctions; the renderer remains original and
+  offline.
 - **Jungle** — 155–170. DNA: timestretched-feeling breaks, ragga/chopped
   vocals, deep sub drops, reggae bass heritage. Distinct from DnB: rougher,
   sample-warm, half-time bass feel stronger.
