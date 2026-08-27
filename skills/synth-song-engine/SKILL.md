@@ -152,6 +152,37 @@ section.
 - Loudness targets differ: lofi sits quiet (~-16 LUFS vibe), club genres
   louder — normalize peak 0.89 always, adjust RMS via mix gains not limiters.
 
+### Hybrid style composition (when the request mixes genres)
+
+Genre fusion is supported and should be intentional, not an average of every
+playbook. Pick one **anchor** (the rhythm or groove that makes the track
+recognizable), one **supporting style** (bass, harmony, or lead language), and
+at most one **texture/color layer**. Share a BPM, key, and bar grid, then give
+each style ownership of different sections or musical roles.
+
+- **Anchor first:** write and audition the anchor loop alone before adding the
+  other style. If the anchor disappears, the fusion has no identity.
+- **Role separation:** assign frequency and arrangement ownership. Example:
+  Breakcore owns edited drums, DnB owns Reese/sub bass, chiptune owns the lead,
+  and ambient owns pads and the breakdown. Do not let four bass voices fight
+  below 120 Hz.
+- **Handoffs:** change one major dimension at a time (density, halftime feel,
+  filter, drum kit, or harmonic palette). Use 4–8 bar handoff zones, a dropout,
+  or a riser; do not hard-swap every layer on the same downbeat unless the
+  whiplash is the requested aesthetic.
+- **Contrast is structure:** reserve one section where the supporting style
+  leads while the anchor thins out, then return with a new mutation. A hybrid
+  should feel like a conversation, not five presets playing simultaneously.
+- **Deliverable note:** state the anchor/support/texture trio in the render
+  log and verify each section has a measurable role (audible event density,
+  bass register, or instrument presence) before delivery.
+
+Useful tested combinations: **Breakcore + DnB + Chiptune** (edited breaks,
+Reese/sub pressure, pulse-wave hook), **Jungle + Ambient/Shoegaze** (rough
+breaks against wide pads), **Hardstyle + Classical** (distorted kick against
+orchestral tension), and **House + Disco/Nu-Disco** (four-on-floor with octave
+bass and filtered disco movement). Keep the anchor explicit in every case.
+
 ### Lo-fi hip hop
 
 | Param | Spec |
