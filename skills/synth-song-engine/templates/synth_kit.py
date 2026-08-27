@@ -264,7 +264,9 @@ def screech(note, dur_beats, bpm=150.0, drive=5.0, glide_from=None):
 def cowbell(tune_note=None, drive=3.0, decay=0.28):
     """TR-808 cowbell (two detuned squares through bandpass) - phonk's lead
     instrument when pitched across a scale."""
-    base = midi_f(tune_note) if tune_note is not None else 1.0
+    # Tune relative to the reference cowbell, not to raw Hz. Passing an absolute
+    # MIDI frequency into the oscillator ratios would alias almost everything.
+    base = midi_f(tune_note) / midi_f(69) if tune_note is not None else 1.0
     n = int((decay + 0.1) * SR)
     t = np.arange(n) / SR
     x = np.sign(np.sin(2 * np.pi * 540.0 * base * t)) + \
@@ -495,7 +497,8 @@ if __name__ == "__main__":
         "pluck": pluck_bass(45, 0.5),
         "hs_kick": kick_hardstyle(33), "rev_bass": reverse_bass(33),
         "supersaw": supersaw(69, 2.0), "screech": screech(69, 1.0),
-        "cowbell": cowbell(), "wobble": wobble_bass(33, 2.0, 140.0, 0.5),
+        "cowbell": cowbell(), "cowbell_tuned": cowbell(67),
+        "wobble": wobble_bass(33, 2.0, 140.0, 0.5),
         "log_drum": log_drum(45), "pulse": pulse(76, 0.5),
         "rumble": rumble(33, 4.0),
         "slap_pop": slap_bass(45, mode="pop"), "slap_thump": slap_bass(33, mode="thump"),
