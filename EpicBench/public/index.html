@@ -24,20 +24,30 @@
     <i class="hud-corner tl"></i><i class="hud-corner tr"></i>
     <i class="hud-corner bl"></i><i class="hud-corner br"></i>
   </div>
+  <div class="sys-sweep" aria-hidden="true"></div>
+  <div class="warp-flash" aria-hidden="true"></div>
+  <canvas id="trail" aria-hidden="true"></canvas>
+
+  <div class="boot" id="boot">
+    <pre class="boot-text" id="boot-text"></pre>
+  </div>
 
   <header class="hero">
+    <div class="top-actions">
+      <div class="theme-dots" id="themeDots"></div>
+    </div>
     <div class="eyebrow" id="eyebrow">MODEL TEST HEADQUARTERS</div>
     <h1 class="mega-title" id="megaTitle">EPIC BENCH</h1>
     <p class="console-subtitle" id="consoleSubtitle">Every model. Every harness. Every prompt. One console.</p>
     <div class="stats" id="stats">
-      <div class="stat"><b id="st-ex">—</b><span>EXHIBITS</span></div>
-      <div class="stat"><b id="st-prompts">—</b><span>PROMPTS</span></div>
-      <div class="stat"><b id="st-pass">—</b><span>PASSES</span></div>
-      <div class="stat"><b id="st-models">—</b><span>MODELS</span></div>
+      <div class="stat"><b class="odo" id="st-ex"></b><span>EXHIBITS</span></div>
+      <div class="stat"><b class="odo" id="st-prompts"></b><span>PROMPTS</span></div>
+      <div class="stat"><b class="odo" id="st-pass"></b><span>PASSES</span></div>
+      <div class="stat"><b class="odo" id="st-models"></b><span>MODELS</span></div>
     </div>
   </header>
 
-  <main class="portals">
+  <main class="portals reveal-group">
     <a class="portal p-cyan" href="/Tracker/">
       <div class="p-glyph" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
@@ -45,6 +55,7 @@
           <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>
         </svg>
         <i class="p-orbit"></i>
+        <i class="p-electron"></i>
       </div>
       <div class="p-body">
         <h2>TRACKER</h2>
@@ -60,6 +71,7 @@
           <path d="M4 18l-1 2.5M20 18l1 2.5"/>
         </svg>
         <i class="p-orbit"></i>
+        <i class="p-electron"></i>
       </div>
       <div class="p-body">
         <h2>ARCADE</h2>
@@ -70,7 +82,7 @@
   </main>
 
   <footer class="foot">
-    <span class="led green"></span> ALL SYSTEMS NOMINAL &nbsp;·&nbsp; <span id="foot-note">ESTABLISHING UPLINK…</span>
+    <span class="led green" id="uplink-led"></span> ALL SYSTEMS NOMINAL &nbsp;·&nbsp; <span id="foot-note">ESTABLISHING UPLINK…</span>
     <div class="made-with">
       <span class="mw-label">MADE WITH</span>
       <a class="mw-chip" href="https://developers.openai.com/codex/" target="_blank" rel="noopener noreferrer" title="Codex">CODEX</a>
@@ -79,6 +91,18 @@
       <a class="mw-chip t3" href="https://t3.codes" target="_blank" rel="noopener noreferrer" title="T3 Code">T3 CODE</a>
     </div>
   </footer>
+
+  <div id="paletteOverlay" class="palette-overlay" hidden>
+    <div class="palette-panel" role="dialog" aria-label="Quick search">
+      <div class="palette-head">
+        <span class="palette-caret">&gt;</span>
+        <input id="paletteInput" type="text" placeholder="Search games and prompts…" autocomplete="off" spellcheck="false" />
+        <kbd>ESC</kbd>
+      </div>
+      <ul class="palette-results" id="paletteResults"></ul>
+      <div class="palette-foot"><span>&uarr;&darr; NAVIGATE</span><span>&crarr; OPEN</span></div>
+    </div>
+  </div>
 
   <script src="/site.js"></script>
 </body>

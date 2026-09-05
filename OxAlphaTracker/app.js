@@ -290,7 +290,6 @@ function buildModelSection(mk) {
     const grp = document.createElement('div');
     grp.className = 'harness-group' + (gcol ? ' collapsed' : '');
     grp.dataset.grp = key;
-
     const sub = document.createElement('div');
     sub.className = 'harness-sub';
     const dot = document.createElement('span');
@@ -335,8 +334,10 @@ function buildModelSection(mk) {
     gbody.className = 'harness-group-body';
     const ginner = document.createElement('div');
     ginner.className = 'harness-group-inner';
-    prompts.forEach((p) => {
-      ginner.appendChild(buildPromptCard(p, key, mk));
+    prompts.forEach((p, ci) => {
+      const card = buildPromptCard(p, key, mk);
+      card.style.animationDelay = `${ci * 14}ms`;   // cascade entry (item 6)
+      ginner.appendChild(card);
     });
     gbody.appendChild(ginner);
 
@@ -382,13 +383,20 @@ function buildOrbitSystem(mk) {
   `;
   const field = sys.querySelector('.moon-field');
   const moons = [];
-  for (let i = 0; i < MOON_COUNT; i++) {
+  const HZ_ABBR = { pi: 'PI', opencode: 'OC', codex: 'CX', claude: 'CL', hermes: 'HM' };
+  HARNESS_KEYS.forEach((hk, i) => {
     const m = document.createElement('span');
-    m.className = 'moon';
-    m.style.setProperty('--ma', `${(360 / MOON_COUNT) * i + 12}deg`);
+    m.className = 'moon moon-hz';
+    m.style.setProperty('--ma', `${(360 / HARNESS_KEYS.length) * i + 12}deg`);
+    m.dataset.hmoon = comboKey(mk, hk);
+    m.title = HARNESS_LABELS[hk];
+    const tag = document.createElement('i');
+    tag.className = 'moon-tag';
+    tag.textContent = HZ_ABBR[hk] || '?';
+    m.appendChild(tag);
     field.appendChild(m);
     moons.push(m);
-  }
+  });
   sys._moons = moons;
   sys._arc = sys.querySelector('.arc-fill');
   return sys;
@@ -444,6 +452,7 @@ function buildPromptCard(p, key, mk) {
     updateSectionCount(mk);
     updateOverall();
     if (val === 'done') celebrate(checkbox, mk);
+    else dimRipple(card);
   });
 
   const title = document.createElement('span');
@@ -466,6 +475,7 @@ function buildPromptCard(p, key, mk) {
   statusSel.dataset.status = statusSel.value;
   statusSel.addEventListener('click', (ev) => ev.stopPropagation());
   statusSel.addEventListener('change', () => {
+    const prev = statusSel.dataset.status;
     setStatus(p.id, key, statusSel.value);
     statusSel.dataset.status = statusSel.value;
     checkbox.checked = statusSel.value === 'done';
@@ -473,6 +483,7 @@ function buildPromptCard(p, key, mk) {
     updateSectionCount(mk);
     updateOverall();
     if (statusSel.value === 'done') celebrate(statusSel, mk);
+    else if (prev === 'done') dimRipple(card);
   });
   card._sel = statusSel;
 
@@ -487,6 +498,8 @@ function buildPromptCard(p, key, mk) {
       fallbackCopy(p.text);
     }
     copyBtn.classList.add('copied');
+    card.classList.add('copy-sweep');   // green sweep across the row (item 9)
+    setTimeout(() => card.classList.remove('copy-sweep'), 750);
     const label = copyBtn.querySelector('span');
     if (label) {
       label.textContent = 'Copied \u2713';
@@ -529,7 +542,30 @@ function buildPromptCard(p, key, mk) {
   body.appendChild(pre);
   body.appendChild(noteArea);
 
-  row.addEventListener('click', () => body.classList.toggle('open'));
+  row.addEventListener('click', () => {
+    const opening = !body.classList.contains('open');
+    body.classList.toggle('open');
+    if (opening && localStorage.getItem('oxTypePrompt') !== '0' && !REDUCED_MOTION && !body.dataset.typed) {
+      body.dataset.typed = '1';   // typewriter first-open (item 23)
+      const full = p.text;
+      const head = full.slice(0, Math.min(220, full.length));
+      let i = 0;
+      pre.textContent = '';
+      const caret = document.createElement('span');
+      caret.className = 'type-caret';
+      caret.textContent = '\u258C';
+      pre.after(caret);
+      const timer = setInterval(() => {
+        i += 14;
+        pre.textContent = head.slice(0, i);
+        if (i >= head.length) {
+          clearInterval(timer);
+          pre.textContent = full;
+          caret.remove();
+        }
+      }, 16);
+    }
+  });
 
   if (FINE_POINTER && !REDUCED_MOTION) attachTilt(row);
 
@@ -568,6 +604,20 @@ function celebrate(sourceEl, hk) {
   spawnBurst(r.left + r.width / 2, r.top + r.height / 2);
   pulseToPlanet(r.left + r.width / 2, r.top + r.height / 2, section);
   radarBlip();
+  const sys = section.querySelector('.orbit-system');
+  if (sys && !REDUCED_MOTION) {
+    sys.classList.add('arc-flash');
+    setTimeout(() => sys.classList.remove('arc-flash'), 700);
+  }
+}
+
+/* dim ripple when a status drops out of done (item 7) */
+function dimRipple(card) {
+  if (REDUCED_MOTION || !card) return;
+  card.classList.remove('dim-ripple');
+  void card.offsetWidth;
+  card.classList.add('dim-ripple');
+  setTimeout(() => card.classList.remove('dim-ripple'), 700);
 }
 
 function spawnBurst(x, y) {
@@ -650,16 +700,28 @@ function updateSectionCount(mk) {
     gEl.textContent = `${gd}/${prompts.length} DONE`;
     const barEl = section.querySelector(`[data-hbar="${comboKey(mk, hk)}"]`);
     if (barEl) barEl.style.width = `${prompts.length ? (gd / prompts.length) * 100 : 0}%`;
+    const wasComplete = gEl.dataset.complete === '1';
+    const nowComplete = !!prompts.length && gd === prompts.length;
+    if (nowComplete && !wasComplete && Date.now() - bootedAt > 4000) { gEl.dataset.complete = '1'; confettiAlong(gEl.closest('.harness-sub') || gEl); }
+    else if (!nowComplete) gEl.dataset.complete = '0';
   });
   if (labelEl) labelEl.textContent = `${total} TASKS \u00B7 ${done} DONE`;
   if (sys) {
     const pct = total ? done / total : 0;
     sys._arc.style.strokeDashoffset = (ARC_CIRC * (1 - pct)).toFixed(2);
-    const lit = total && done === total ? MOON_COUNT : Math.floor(pct * MOON_COUNT);
-    sys._moons.forEach((m, i) => m.classList.toggle('lit', i < lit));
+    // constellation: one moon per harness (item 24)
+    HARNESS_KEYS.forEach((hk, i) => {
+      const moon = sys._moons[i];
+      if (!moon) return;
+      const hdone = prompts.filter((p) => statusFor(p.id, comboKey(mk, hk)) === 'done').length;
+      const hpct = prompts.length ? hdone / prompts.length : 0;
+      moon.classList.toggle('lit', hpct >= 0.6);
+      moon.classList.toggle('gold', hpct >= 1);
+    });
     sys.classList.toggle('complete', !!total && done === total);
   }
   section.classList.toggle('complete', !!total && done === total);
+  rankCeremony(mk, total, done);
 }
 
 function currentRank(pct) {
@@ -668,6 +730,60 @@ function currentRank(pct) {
   if (pct >= 50) return 'SPECIALIST';
   if (pct >= 25) return 'PILOT';
   return 'CADET';
+}
+
+/* rank-up ceremony (item 21) — fires when a model crosses a tier */
+const RANKS_KEY = 'oxAlphaRanks';
+let modelRanks = (() => {
+  try { return JSON.parse(localStorage.getItem(RANKS_KEY)) || {}; } catch { return {}; }
+})();
+function rankCeremony(mk, total, done) {
+  const pct = total ? Math.round((done / total) * 100) : 0;
+  const tier = pct >= 100 ? 4 : pct >= 75 ? 3 : pct >= 50 ? 2 : pct >= 25 ? 1 : 0;
+  const prev = modelRanks[mk];
+  if (prev == null) { modelRanks[mk] = tier; localStorage.setItem(RANKS_KEY, JSON.stringify(modelRanks)); return; }
+  if (tier > prev) {
+    modelRanks[mk] = tier;
+    localStorage.setItem(RANKS_KEY, JSON.stringify(modelRanks));
+    if (Date.now() - bootedAt > 4000) showRankUp(MODEL_LABELS[mk], currentRank(pct), pct);
+  }
+}
+function showRankUp(modelName, rank, pct) {
+  toast(`${modelName} RANK UP \u2192 ${rank} (${pct}%)`, 'success');
+  let banner = document.querySelector('.rank-up-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.className = 'rank-up-banner';
+    document.body.appendChild(banner);
+  }
+  banner.innerHTML = `<span class="ru-flash"></span><span class="ru-text">RANK UP \u2192 ${rank}</span><span class="ru-model">${modelName}</span>`;
+  banner.classList.remove('go');
+  void banner.offsetWidth;
+  banner.classList.add('go');
+  Starfield.warp(1200);
+}
+
+/* harness completion confetti (item 8) */
+function confettiAlong(el) {
+  if (REDUCED_MOTION || !el) return;
+  const r = el.getBoundingClientRect();
+  for (let i = 0; i < 16; i++) {
+    const s = document.createElement('span');
+    s.className = 'confetti-bit';
+    s.style.left = (r.left + Math.random() * r.width) + 'px';
+    s.style.top = (r.top + r.height / 2) + 'px';
+    s.style.background = ['#fde68a', '#4ade80', '#67e8f9', '#c084fc'][i % 4];
+    document.body.appendChild(s);
+    const dx = (Math.random() - 0.5) * 120;
+    const dy = -(30 + Math.random() * 60);
+    s.animate(
+      [
+        { transform: 'translate(-50%,-50%)', opacity: 1 },
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy + 60}px)) rotate(${(Math.random() * 180 - 90)}deg)`, opacity: 0 },
+      ],
+      { duration: 700 + Math.random() * 500, easing: 'cubic-bezier(.2,.7,.3,1)' }
+    ).onfinish = () => s.remove();
+  }
 }
 
 function updateOverall() {
@@ -1424,6 +1540,56 @@ const CmdK = (() => {
   return { open, close };
 })();
 
+/* ---------- live bench ticker (item 22) ---------- */
+(function benchTicker() {
+  const host = document.getElementById('benchTicker');
+  const track = document.getElementById('btTrack');
+  if (!host || !track) return;
+  const STATUS_CLS = { pass: 'ok', fail: 'bad', error: 'err', running: 'run', skipped: 'skip' };
+  let seen = null;
+  async function poll() {
+    try {
+      const res = await fetch('api/status', { cache: 'no-store' });
+      if (!res.ok) return;
+      const d = await res.json();
+      const runs = (d.runs || []).slice(0, 14);
+      if (!runs.length) { host.hidden = true; return; }
+      const sig = runs.map((r) => `${r.run}|${r.promptId}|${r.status}`).join(';');
+      if (sig === seen) return;
+      seen = sig;
+      host.hidden = false;
+      track.innerHTML = '';
+      const build = () => {
+        const seq = document.createElement('span');
+        seq.className = 'bt-seq';
+        runs.forEach((r) => {
+          const pill = document.createElement('span');
+          pill.className = 'bt-pill bt-' + (STATUS_CLS[r.status] || 'skip');
+          const mdl = document.createElement('b');
+          mdl.textContent = String(r.model || 'run').slice(0, 22);
+          const mission = document.createElement('span');
+          mission.textContent = (r.promptId != null ? '#' + String(r.promptId).padStart(2, '0') : '') + ' ' + String(r.status).toUpperCase();
+          pill.append(mdl, mission);
+          seq.appendChild(pill);
+        });
+        return seq;
+      };
+      track.append(build(), build());   // duplicated for a seamless loop
+    } catch { host.hidden = true; }
+  }
+  poll();
+  setInterval(poll, 15000);
+})();
+
+/* ---------- scroll reveals (item 31) ---------- */
+(function sectionReveals() {
+  if (REDUCED_MOTION || !('IntersectionObserver' in window)) return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => { if (en.isIntersecting) { en.target.classList.add('revealed'); io.unobserve(en.target); } });
+  }, { threshold: 0.06 });
+  document.querySelectorAll('.harness-section').forEach((s) => io.observe(s));
+})();
+
 /* ---------- help overlay (?) ---------- */
 const HelpOverlay = (() => {
   let overlay = null;
@@ -1446,10 +1612,22 @@ const HelpOverlay = (() => {
           <dt>Export / Import (top bar)</dt><dd>Back up or restore progress</dd>
         </dl>
         <p class="help-foot">Progress lives in this browser &middot; export before switching machines</p>
+        <button class="help-toggle" id="typeToggle" type="button">TYPEWRITER EFFECT: <b>ON</b></button>
       </div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     overlay.querySelector('.help-close').addEventListener('click', close);
+    const tt = overlay.querySelector('#typeToggle');
+    const syncT = () => {
+      const on = localStorage.getItem('oxTypePrompt') !== '0';
+      tt.innerHTML = `TYPEWRITER EFFECT: <b>${on ? 'ON' : 'OFF'}</b>`;
+    };
+    tt.addEventListener('click', () => {
+      const on = localStorage.getItem('oxTypePrompt') !== '0';
+      localStorage.setItem('oxTypePrompt', on ? '0' : '1');
+      syncT();
+    });
+    syncT();
   }
   function open() { if (!overlay) build(); overlay.hidden = false; requestAnimationFrame(() => overlay.classList.add('open')); }
   function close() { if (!overlay) return; overlay.classList.remove('open'); setTimeout(() => { overlay.hidden = true; }, 180); }
