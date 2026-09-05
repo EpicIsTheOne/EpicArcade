@@ -49,7 +49,7 @@ async function scanGames(root) {
           file = nested;
           st = await fsp.stat(file);
         }
-        const meta = await readJson(path.join(dir, "arcade.json"));
+        const meta = await readJson(path.join(path.dirname(file), "arcade.json"));
         const declared = meta.multiplayer && typeof meta.multiplayer.endpoint === "string"
           ? meta.multiplayer.endpoint
           : null;
