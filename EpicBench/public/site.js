@@ -299,8 +299,10 @@
       col.appendChild(reel);
       reel.style.transitionDelay = (i * 60) + "ms";
       el.appendChild(col);
+      // shift by ROWS in em, not % — translateY(%) is relative to the reel's
+      // own (11-row) height, which overshoots the 1.25em viewport entirely
       requestAnimationFrame(() => requestAnimationFrame(() => {
-        reel.style.transform = `translateY(-${(nums.length - 1) * 100}%)`;
+        reel.style.transform = `translateY(calc(${-1 * (nums.length - 1)} * 1.25em))`;
       }));
     });
     setTimeout(() => { el.classList.remove("rolling"); }, 1400);
