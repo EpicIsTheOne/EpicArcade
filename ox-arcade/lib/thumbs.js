@@ -99,7 +99,7 @@ async function captureThumb(archiveRoot, root, id, opts = {}) {
   try { await fsp.rm(failedMarker, { force: true }); } catch {}
 
   const { scanBuilds } = require("./scan");
-  const builds = await scanBuilds(root);
+  const builds = opts.builds || await scanBuilds(root);
   const b = builds.find((x) => x.id === id);
   if (!b) return { ok: false, error: "build not found" };
   if (!b.entry) return { ok: false, error: "build has no entry point" };
@@ -122,12 +122,16 @@ async function captureThumb(archiveRoot, root, id, opts = {}) {
   await fsp.mkdir(profBase, { recursive: true });
   const outPng = path.join(thumbsDir, `${id}.png`);
   let lastErr = "capture produced no usable png";
+  let errTail = "none";
+  const usedProfiles = [];
 
   try {
     for (const target of targets) {
       const profileDir = path.join(profBase, `${id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`);
+      usedProfiles.push(profileDir);
       try { await fsp.rm(outPng, { force: true }); } catch {} // no stale file may pass the check
-      const { code } = await captureOnce(browser, target, outPng, b.thumbWaitMs || 9000, profileDir);
+      const { code, errTail: tail } = await captureOnce(browser, target, outPng, b.thumbWaitMs || 9000, profileDir);
+      errTail = tail || "none";
       await waitForSettled(outPng); // Edge writes the PNG after its launcher exits
       if (await looksLikePng(outPng)) {
         const meta = {
@@ -142,11 +146,60 @@ async function captureThumb(archiveRoot, root, id, opts = {}) {
       lastErr = `exit=${code} err=${errTail ? "…" : "none"}`;
     }
   } finally {
-    try { await fsp.rm(profBase, { recursive: true, force: true }); } catch {}
+    // parallel-safe: only clean up THIS capture's profiles, never the shared root
+    for (const p of usedProfiles) {
+      try { await fsp.rm(p, { recursive: true, force: true }); } catch {}
+    }
   }
   try { await fsp.rm(outPng, { force: true }); } catch {}
   await fsp.writeFile(failedMarker, lastErr);
   return { ok: false, error: lastErr };
 }
 
-module.exports = { captureThumb, findBrowser, resolveBuildDir, captureOnce, waitForSettled, thumbsDirFor };
+module.exports = { captureThumb, findBrowser, resolveBuildDir, captureOnce, waitForSettled, thumbsDirFor, startThumbSweep };
+
+// Background thumbnail sweeper: after each scan, capture a few missing
+// thumbnails per hour (never touches builds with a .failed marker — those
+// failed headless capture before and would just burn browser launches).
+function startThumbSweep(archiveRoot, getBuilds, opts = {}) {
+  const PER_RUN = opts.perRun || 3;
+  const INTERVAL = opts.intervalMs || 30 * 60 * 1000;
+  let running = false;
+  async function sweep() {
+    if (running) return;
+    running = true;
+    try {
+      const builds = (getBuilds() || []).filter((b) => b.status === "playable" && b.entry);
+      const thumbsDir = thumbsDirFor(archiveRoot);
+      const missing = [];
+      for (const b of builds) {
+        try {
+          await fsp.access(path.join(thumbsDir, `${b.id}.png`));
+          continue; // has thumb
+        } catch { /* missing */ }
+        try {
+          await fsp.access(path.join(thumbsDir, `${b.id}.failed`));
+          continue; // known-unrollable, don't retry
+        } catch { /* retryable */ }
+        missing.push(b);
+        if (missing.length >= PER_RUN) break;
+      }
+      if (!missing.length) return;
+      const browser = findBrowser();
+      if (!browser) return;
+      const root = opts.root;
+      for (const b of missing) {
+        const res = await captureThumb(archiveRoot, root, b.id, { builds }).catch(() => ({ ok: false }));
+        console.log(`[thumb-sweep] ${b.id}: ${res.ok ? "ok" : "failed"}`);
+      }
+    } catch (e) {
+      console.log(`[thumb-sweep] error: ${e && e.message || e}`);
+    } finally {
+      running = false;
+    }
+  }
+  const timer = setInterval(sweep, INTERVAL);
+  if (timer.unref) timer.unref();
+  setTimeout(sweep, 20_000).unref?.();
+  return sweep;
+}

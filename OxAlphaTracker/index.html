@@ -50,6 +50,13 @@
         <button class="icon-btn" id="alertsBtn" title="Alerts">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg>
         </button>
+        <button class="icon-btn" id="exportBtn" title="Export progress (JSON)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+        </button>
+        <button class="icon-btn" id="importBtn" title="Import progress (JSON)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3M7 8l5-5 5 5M4 21h16"/></svg>
+        </button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
         <button class="icon-btn" id="settingsBtn" title="Cycle accent theme">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33h.09a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51h.09a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.09a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
         </button>
@@ -60,17 +67,6 @@
     <h1 class="mega-title" id="megaTitle">EPIC BENCH</h1>
     <p class="console-subtitle" id="consoleSubtitle">Harness Test Console</p>
 
-    <div class="overall-block">
-      <div class="progress-meta">
-        <span>OVERALL PROGRESS</span>
-        <span id="overallStats"></span>
-      </div>
-      <div class="overall-bar">
-        <div class="overall-fill" id="overallFill"></div>
-        <span class="progress-percent" id="percentLabel">0%</span>
-      </div>
-    </div>
-
     <div class="filter-bar" id="filterBar">
       <div class="filter-group" data-group="difficulty" id="diffGroup"></div>
       <span class="filter-sep"></span>
@@ -80,16 +76,6 @@
       <button class="filter-chip ghost" id="clearFilters">RESET</button>
     </div>
   </header>
-
-  <section id="benchFeed" class="bench-feed" hidden aria-label="Live benchmark feed">
-    <div class="bf-head" id="bfHead">
-      <span class="bf-led"></span>
-      <span class="bf-title">LIVE BENCHMARK FEED</span>
-      <span class="bf-summary" id="bfSummary"></span>
-      <button class="bf-toggle" id="bfToggle" type="button">HIDE</button>
-    </div>
-    <ul class="bf-rows open" id="bfRows"></ul>
-  </section>
 
   <main id="app" class="container"></main>
 
@@ -111,7 +97,7 @@
     <div class="cmdk-panel" role="dialog" aria-label="Mission search">
       <div class="cmdk-head">
         <span class="cmdk-caret">&gt;</span>
-        <input id="cmdkInput" type="text" placeholder="Search missions — title, difficulty, harness…" autocomplete="off" spellcheck="false" />
+        <input id="cmdkInput" type="text" placeholder="Search missions — title, difficulty, model…" autocomplete="off" spellcheck="false" />
         <kbd>ESC</kbd>
       </div>
       <ul class="cmdk-results" id="cmdkResults"></ul>
@@ -120,7 +106,6 @@
   </div>
 
   <script src="prompts-data.js"></script>
-  <script src="live-runs.js"></script>
   <script src="app.js"></script>
 
 <style>

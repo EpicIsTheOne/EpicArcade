@@ -1,4 +1,7 @@
-﻿const HARNESS_KEYS = ['pi', 'opencode', 'codex', 'claude'];
+﻿const MODEL_KEYS = ['ox-alpha', 'astra', 'omen-alpha'];
+const MODEL_LABELS = { 'ox-alpha': 'Ox Alpha', astra: 'Astra', 'omen-alpha': 'Omen Alpha' };
+const MODEL_COLORS = { 'ox-alpha': '#22d3ee', astra: '#a78bfa', 'omen-alpha': '#f472b6' };
+const HARNESS_KEYS = ['pi', 'opencode', 'codex', 'claude', 'hermes'];
 const HARNESS_LABELS = {
   hermes: 'Hermes',
   pi: 'Pi',
@@ -6,13 +9,14 @@ const HARNESS_LABELS = {
   codex: 'Codex CLI',
   claude: 'Claude Code',
 };
-const PLANET_COLORS = {
+const HARNESS_COLORS = {
   hermes: '#f59e0b',
   pi: '#ec4899',
   opencode: '#22d3ee',
   codex: '#a3e635',
   claude: '#c084fc',
 };
+const comboKey = (mk, hk) => `${mk}|${hk}`;
 const MOON_COUNT = 8;
 const ARC_CIRC = 2 * Math.PI * 33;
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -36,7 +40,18 @@ let lastTotalDone = -1;
 
 function loadState() {
   try {
-    return JSON.parse(localStorage.getItem(stateKey)) || {};
+    const s = JSON.parse(localStorage.getItem(stateKey)) || {};
+    // migration: old flat harness statuses belonged to the ox-alpha baseline
+    for (const pid of Object.keys(s)) {
+      if (!s[pid] || typeof s[pid] !== 'object') continue;
+      for (const hk of ['hermes', 'pi', 'opencode', 'codex', 'claude']) {
+        if (s[pid][hk] != null && s[pid][comboKey('ox-alpha', hk)] == null) {
+          s[pid][comboKey('ox-alpha', hk)] = s[pid][hk];
+        }
+        delete s[pid][hk];
+      }
+    }
+    return s;
   } catch {
     return {};
   }
@@ -60,7 +75,61 @@ async function init() {
     bootUI();
   } catch (err) {
     showLoadError(err);
+    return;
   }
+  seedFromApi();
+}
+
+// pull confirmed bench results from the API and mark matching combos done —
+// local user statuses always win over seeded results.
+// model field may be a harness alias (legacy ox-alpha runs: piagent, opencode…)
+// or an actual model id (astra, omen-alpha, …) with harness in r.harness.
+const HARNESS_ALIAS = {
+  piagent: 'pi', pi: 'pi', opencode: 'opencode', 'openrouter/stealth/ox-alpha': 'opencode',
+  codex: 'codex', claudeagent: 'claude', claude: 'claude', hermes: 'hermes',
+};
+const modelKeyOf = (m) =>
+  m ? String(m).toLowerCase().replace(/^(openrouter[-_/])?(stealth[-_/])?/i, '') : '';
+async function seedFromApi() {
+  try {
+    const res = await fetch('api/status', { cache: 'no-store' });
+    if (!res.ok) return;
+    const d = await res.json();
+    let changed = false;
+    (d.runs || []).forEach((r) => {
+      const mdl = String(r.model || '').toLowerCase();
+      let mk, hk;
+      if (HARNESS_ALIAS[mdl]) {
+        mk = 'ox-alpha';
+        hk = HARNESS_ALIAS[mdl];
+      } else {
+        mk = modelKeyOf(r.model);
+        const hz = String(r.harness || '').toLowerCase();
+        hk = HARNESS_ALIAS[hz] || (HARNESS_LABELS[hz] ? hz : null);
+      }
+      if (!hk || !MODEL_KEYS.includes(mk)) return;
+      if (r.promptId == null || r.status !== 'pass') return;
+      if (r.promptId < 1 || r.promptId > prompts.length) return;
+      const key = comboKey(mk, hk);
+      if (state[r.promptId] && state[r.promptId][key] != null) return;
+      if (!state[r.promptId]) state[r.promptId] = {};
+      state[r.promptId][key] = 'done';
+      changed = true;
+    });
+    if (!changed) return;
+    saveState();
+    document.querySelectorAll('.prompt-card').forEach((card) => {
+      const p = card.__prompt, key = card.__hk;
+      const st = statusFor(p.id, key);
+      applyStatusClass(card, p.id, key);
+      if (card._sel) { card._sel.value = st; card._sel.dataset.status = st; }
+      const cb = card.querySelector('.checkwrap input');
+      if (cb) cb.checked = st === 'done';
+    });
+    MODEL_KEYS.forEach(updateSectionCount);
+    updateOverall();
+    toast('SEEDED CONFIRMED BENCH RESULTS', 'success');
+  } catch { /* offline / static host — statuses stay local */ }
 }
 
 async function loadPrompts() {
@@ -175,33 +244,33 @@ function bootUI() {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = '';
-  HARNESS_KEYS.forEach((hk) => {
-    const section = buildHarnessSection(hk);
-    SECTIONS[hk] = section;
+  MODEL_KEYS.forEach((mk) => {
+    const section = buildModelSection(mk);
+    SECTIONS[mk] = section;
     app.appendChild(section);
   });
   updateOverall();
 }
 
-function buildHarnessSection(hk) {
+function buildModelSection(mk) {
   const section = document.createElement('section');
   section.className = 'harness-section';
-  section.dataset.hk = hk;
-  section.style.setProperty('--ac', PLANET_COLORS[hk]);
-  const collapsed = localStorage.getItem('collapsed_' + hk) !== '0';
+  section.dataset.hk = mk;
+  section.style.setProperty('--ac', MODEL_COLORS[mk]);
+  const collapsed = localStorage.getItem('collapsed_' + mk) !== '0';
   if (collapsed) section.classList.add('collapsed');
 
   const header = document.createElement('div');
   header.className = 'harness-header';
 
-  const sys = buildOrbitSystem(hk);
+  const sys = buildOrbitSystem(mk);
   const title = document.createElement('div');
   title.className = 'harness-title';
   const h2 = document.createElement('h2');
-  h2.textContent = `${HARNESS_LABELS[hk]} - Harness`;
+  h2.textContent = MODEL_LABELS[mk];
   const countLabel = document.createElement('span');
   countLabel.className = 'task-count-label';
-  countLabel.dataset.count = hk;
+  countLabel.dataset.count = mk;
   title.append(h2, countLabel);
 
   const arrow = document.createElement('span');
@@ -215,8 +284,69 @@ function buildHarnessSection(hk) {
   body.className = 'harness-body' + (collapsed ? '' : ' open');
   const inner = document.createElement('div');
   inner.className = 'harness-body-inner';
-  prompts.forEach((p) => {
-    inner.appendChild(buildPromptCard(p, hk));
+  HARNESS_KEYS.forEach((hk) => {
+    const key = comboKey(mk, hk);
+    const gcol = localStorage.getItem('hcollapsed_' + key) !== '0';
+    const grp = document.createElement('div');
+    grp.className = 'harness-group' + (gcol ? ' collapsed' : '');
+    grp.dataset.grp = key;
+
+    const sub = document.createElement('div');
+    sub.className = 'harness-sub';
+    const dot = document.createElement('span');
+    dot.className = 'harness-sub-dot';
+    dot.style.background = HARNESS_COLORS[hk];
+    const lab = document.createElement('span');
+    lab.textContent = HARNESS_LABELS[hk].toUpperCase() + ' \u00B7 HARNESS';
+    const bar = document.createElement('span');
+    bar.className = 'harness-sub-bar';
+    const fill = document.createElement('i');
+    fill.dataset.hbar = key;
+    bar.appendChild(fill);
+    const gcount = document.createElement('span');
+    gcount.className = 'harness-sub-count';
+    gcount.dataset.gcount = key;
+    const reset = document.createElement('button');
+    reset.className = 'harness-sub-reset';
+    reset.title = `Reset all ${HARNESS_LABELS[hk]} statuses for ${MODEL_LABELS[mk]}`;
+    reset.textContent = '\u27F2';
+    reset.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      if (!confirm(`Reset every ${HARNESS_LABELS[hk]} status for ${MODEL_LABELS[mk]}?`)) return;
+      prompts.forEach((p) => setStatus(p.id, key, 'notstarted'));
+      prompts.forEach((p) => {
+        const card = document.querySelector(`.prompt-card[data-card="${p.id}|${key}"]`);
+        if (!card) return;
+        applyStatusClass(card, p.id, key);
+        if (card._sel) { card._sel.value = 'notstarted'; card._sel.dataset.status = 'notstarted'; }
+        const cb = card.querySelector('.checkwrap input');
+        if (cb) cb.checked = false;
+      });
+      updateSectionCount(mk);
+      updateOverall();
+      toast(`${MODEL_LABELS[mk]} \u00B7 ${HARNESS_LABELS[hk]} RESET`);
+    });
+    const garrow = document.createElement('span');
+    garrow.className = 'collapse-arrow';
+    garrow.textContent = '\u25BC';
+    sub.append(dot, lab, bar, gcount, reset, garrow);
+
+    const gbody = document.createElement('div');
+    gbody.className = 'harness-group-body';
+    const ginner = document.createElement('div');
+    ginner.className = 'harness-group-inner';
+    prompts.forEach((p) => {
+      ginner.appendChild(buildPromptCard(p, key, mk));
+    });
+    gbody.appendChild(ginner);
+
+    sub.addEventListener('click', () => {
+      grp.classList.toggle('collapsed');
+      localStorage.setItem('hcollapsed_' + key, grp.classList.contains('collapsed') ? '1' : '0');
+    });
+
+    grp.append(sub, gbody);
+    inner.appendChild(grp);
   });
   body.appendChild(inner);
   section.appendChild(body);
@@ -225,7 +355,7 @@ function buildHarnessSection(hk) {
     const opening = section.classList.contains('collapsed');
     section.classList.toggle('collapsed');
     body.classList.toggle('open');
-    localStorage.setItem('collapsed_' + hk, section.classList.contains('collapsed') ? '1' : '0');
+    localStorage.setItem('collapsed_' + mk, section.classList.contains('collapsed') ? '1' : '0');
     if (opening && !REDUCED_MOTION) {
       section.classList.remove('booting');
       void section.offsetWidth;
@@ -233,11 +363,11 @@ function buildHarnessSection(hk) {
     }
   });
 
-  updateSectionCount(hk);
+  updateSectionCount(mk);
   return section;
 }
 
-function buildOrbitSystem(hk) {
+function buildOrbitSystem(mk) {
   const sys = document.createElement('div');
   sys.className = 'orbit-system';
   sys.innerHTML = `
@@ -248,7 +378,7 @@ function buildOrbitSystem(hk) {
         stroke-dashoffset="${ARC_CIRC.toFixed(2)}" transform="rotate(-90 36 36)"></circle>
     </svg>
     <div class="moon-field"></div>
-    <div class="planet-icon" style="background: radial-gradient(circle at 32% 32%, #ffffff, ${PLANET_COLORS[hk]} 42%, #000000 100%); color:${PLANET_COLORS[hk]}"></div>
+    <div class="planet-icon" style="background: radial-gradient(circle at 32% 32%, #ffffff, ${MODEL_COLORS[mk]} 42%, #000000 100%); color:${MODEL_COLORS[mk]}"></div>
   `;
   const field = sys.querySelector('.moon-field');
   const moons = [];
@@ -269,13 +399,26 @@ function applyStatusClass(card, promptId, hk) {
   card.classList.add('status-' + statusFor(promptId, hk));
 }
 
-function buildPromptCard(p, hk) {
+const NOTES_KEY = 'oxAlphaNotesV1';
+let notes = (() => {
+  try { return JSON.parse(localStorage.getItem(NOTES_KEY)) || {}; } catch { return {}; }
+})();
+let noteSaveT = null;
+function saveNote(promptId, text) {
+  if (text) notes[promptId] = text;
+  else delete notes[promptId];
+  clearTimeout(noteSaveT);
+  noteSaveT = setTimeout(() => localStorage.setItem(NOTES_KEY, JSON.stringify(notes)), 300);
+}
+
+function buildPromptCard(p, key, mk) {
   const card = document.createElement('article');
   card.className = 'prompt-card';
-  card.dataset.card = `${p.id}|${hk}`;
+  card.dataset.card = `${p.id}|${key}`;
   card.__prompt = p;
-  card.__hk = hk;
-  applyStatusClass(card, p.id, hk);
+  card.__hk = key;
+  card.__mk = mk;
+  applyStatusClass(card, p.id, key);
 
   const row = document.createElement('div');
   row.className = 'card-row';
@@ -284,7 +427,7 @@ function buildPromptCard(p, hk) {
   wrap.className = 'checkwrap';
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
-  checkbox.checked = statusFor(p.id, hk) === 'done';
+  checkbox.checked = statusFor(p.id, key) === 'done';
   checkbox.setAttribute('aria-label', `Mark ${p.title} done`);
   const checkSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   checkSvg.setAttribute('viewBox', '0 0 24 24');
@@ -295,12 +438,12 @@ function buildPromptCard(p, hk) {
   wrap.addEventListener('click', (ev) => ev.stopPropagation());
   checkbox.addEventListener('change', () => {
     const val = checkbox.checked ? 'done' : 'notstarted';
-    setStatus(p.id, hk, val);
+    setStatus(p.id, key, val);
     syncSelect(card, val);
-    applyStatusClass(card, p.id, hk);
-    updateSectionCount(hk);
+    applyStatusClass(card, p.id, key);
+    updateSectionCount(mk);
     updateOverall();
-    if (val === 'done') celebrate(checkbox, hk);
+    if (val === 'done') celebrate(checkbox, mk);
   });
 
   const title = document.createElement('span');
@@ -319,22 +462,22 @@ function buildPromptCard(p, hk) {
     o.textContent = label;
     statusSel.appendChild(o);
   });
-  statusSel.value = statusFor(p.id, hk);
+  statusSel.value = statusFor(p.id, key);
   statusSel.dataset.status = statusSel.value;
   statusSel.addEventListener('click', (ev) => ev.stopPropagation());
   statusSel.addEventListener('change', () => {
-    setStatus(p.id, hk, statusSel.value);
+    setStatus(p.id, key, statusSel.value);
     statusSel.dataset.status = statusSel.value;
     checkbox.checked = statusSel.value === 'done';
-    applyStatusClass(card, p.id, hk);
-    updateSectionCount(hk);
+    applyStatusClass(card, p.id, key);
+    updateSectionCount(mk);
     updateOverall();
-    if (statusSel.value === 'done') celebrate(statusSel, hk);
+    if (statusSel.value === 'done') celebrate(statusSel, mk);
   });
   card._sel = statusSel;
 
   const copyBtn = document.createElement('button');
-  copyBtn.className = 'copy-btn';
+  copyBtn.className = 'copy-btn' + (notes[p.id] ? ' has-note' : '');
   copyBtn.innerHTML = `${COPY_ICON}<span>Copy prompt</span>`;
   copyBtn.addEventListener('click', async (ev) => {
     ev.stopPropagation();
@@ -352,7 +495,31 @@ function buildPromptCard(p, hk) {
     setTimeout(() => copyBtn.classList.remove('copied'), 1600);
   });
 
-  row.append(wrap, title, diff, statusSel, copyBtn);
+  const noteBtn = document.createElement('button');
+  noteBtn.className = 'note-btn' + (notes[p.id] ? ' has-note' : '');
+  noteBtn.title = notes[p.id] ? 'Edit note' : 'Add a note';
+  noteBtn.textContent = '\u270E';
+  noteBtn.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    body.classList.toggle('open');
+    noteArea.classList.toggle('open');
+    if (noteArea.classList.contains('open')) noteText.focus();
+  });
+
+  const noteArea = document.createElement('div');
+  noteArea.className = 'note-area' + (notes[p.id] ? ' open' : '');
+  const noteText = document.createElement('textarea');
+  noteText.placeholder = 'Private note for this prompt (stored locally)…';
+  noteText.value = notes[p.id] || '';
+  noteText.addEventListener('click', (ev) => ev.stopPropagation());
+  noteText.addEventListener('input', () => {
+    saveNote(p.id, noteText.value.trim());
+    noteBtn.classList.toggle('has-note', !!noteText.value.trim());
+    noteBtn.title = noteText.value.trim() ? 'Edit note' : 'Add a note';
+  });
+  noteArea.appendChild(noteText);
+
+  row.append(wrap, title, diff, statusSel, copyBtn, noteBtn);
 
   const body = document.createElement('div');
   body.className = 'prompt-body';
@@ -360,6 +527,7 @@ function buildPromptCard(p, hk) {
   pre.className = 'prompt-text';
   pre.textContent = p.text;
   body.appendChild(pre);
+  body.appendChild(noteArea);
 
   row.addEventListener('click', () => body.classList.toggle('open'));
 
@@ -465,13 +633,24 @@ function radarBlip() {
   setTimeout(() => b.remove(), 1500);
 }
 
-function updateSectionCount(hk) {
-  const section = SECTIONS[hk];
+function updateSectionCount(mk) {
+  const section = SECTIONS[mk];
   if (!section) return;
-  const labelEl = section.querySelector(`[data-count="${hk}"]`);
+  const labelEl = section.querySelector(`[data-count="${mk}"]`);
   const sys = section.querySelector('.orbit-system');
-  const done = prompts.filter((p) => statusFor(p.id, hk) === 'done').length;
-  const total = prompts.length;
+  const total = HARNESS_KEYS.length * prompts.length;
+  const done = prompts.reduce(
+    (n, p) => n + HARNESS_KEYS.filter((hk) => statusFor(p.id, comboKey(mk, hk)) === 'done').length,
+    0
+  );
+  HARNESS_KEYS.forEach((hk) => {
+    const gEl = section.querySelector(`[data-gcount="${comboKey(mk, hk)}"]`);
+    if (!gEl) return;
+    const gd = prompts.filter((p) => statusFor(p.id, comboKey(mk, hk)) === 'done').length;
+    gEl.textContent = `${gd}/${prompts.length} DONE`;
+    const barEl = section.querySelector(`[data-hbar="${comboKey(mk, hk)}"]`);
+    if (barEl) barEl.style.width = `${prompts.length ? (gd / prompts.length) * 100 : 0}%`;
+  });
   if (labelEl) labelEl.textContent = `${total} TASKS \u00B7 ${done} DONE`;
   if (sys) {
     const pct = total ? done / total : 0;
@@ -493,15 +672,19 @@ function currentRank(pct) {
 
 function updateOverall() {
   let totalDone = 0;
-  HARNESS_KEYS.forEach((hk) => {
-    totalDone += prompts.filter((p) => statusFor(p.id, hk) === 'done').length;
-    updateSectionCount(hk);
+  MODEL_KEYS.forEach((mk) => {
+    totalDone += prompts.reduce(
+      (n, p) => n + HARNESS_KEYS.filter((hk) => statusFor(p.id, comboKey(mk, hk)) === 'done').length,
+      0
+    );
+    updateSectionCount(mk);
   });
-  const total = HARNESS_KEYS.length * prompts.length;
+  const total = MODEL_KEYS.length * HARNESS_KEYS.length * prompts.length;
   const percent = total ? Math.round((totalDone / total) * 100) : 0;
-  document.getElementById('overallStats').textContent =
-    `${totalDone} / ${total} TASKS COMPLETED`;
-  document.getElementById('overallFill').style.width = `${percent}%`;
+  const statsEl = document.getElementById('overallStats');
+  if (statsEl) statsEl.textContent = `${totalDone} / ${total} TASKS COMPLETED`;
+  const fillEl = document.getElementById('overallFill');
+  if (fillEl) fillEl.style.width = `${percent}%`;
   const pctEl = document.getElementById('percentLabel');
   if (pctEl) {
     pctEl.textContent = `${percent}%`;
@@ -515,10 +698,11 @@ function updateOverall() {
   const mhPct = document.getElementById('mhPct');
   if (mhFill) mhFill.style.width = `${percent}%`;
   if (mhPct) mhPct.textContent = `${percent}%`;
-  HARNESS_KEYS.forEach((hk) => {
-    const dot = document.querySelector(`.mh-dot[data-hk="${hk}"]`);
+  MODEL_KEYS.forEach((mk) => {
+    const dot = document.querySelector(`.mh-dot[data-hk="${mk}"]`);
     if (!dot) return;
-    const all = !!prompts.length && prompts.every((p) => statusFor(p.id, hk) === 'done');
+    const all = !!prompts.length && prompts.every((p) =>
+      HARNESS_KEYS.every((hk) => statusFor(p.id, comboKey(mk, hk)) === 'done'));
     dot.classList.toggle('complete', all);
   });
 
@@ -939,13 +1123,13 @@ function applyFilters() {
 function buildMiniHudDots() {
   const host = document.getElementById('mhDots');
   if (!host) return;
-  HARNESS_KEYS.forEach((hk) => {
+  MODEL_KEYS.forEach((mk) => {
     const d = document.createElement('button');
     d.className = 'mh-dot';
-    d.dataset.hk = hk;
-    d.style.color = PLANET_COLORS[hk];
-    d.title = `Jump to ${HARNESS_LABELS[hk]}`;
-    d.addEventListener('click', () => scrollToSection(hk));
+    d.dataset.hk = mk;
+    d.style.color = MODEL_COLORS[mk];
+    d.title = `Jump to ${MODEL_LABELS[mk]}`;
+    d.addEventListener('click', () => scrollToSection(mk));
     host.appendChild(d);
   });
 }
@@ -973,6 +1157,9 @@ window.addEventListener(
 function wireTopButtons() {
   document.getElementById('telemetryBtn').addEventListener('click', () => CmdK.open());
   document.getElementById('settingsBtn').addEventListener('click', cycleTheme);
+  document.getElementById('exportBtn').addEventListener('click', exportProgress);
+  document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', importProgress);
   document.getElementById('alertsBtn').addEventListener('click', () => {
     const msgs = [
       'ALL HARNESS CHANNELS NOMINAL',
@@ -985,16 +1172,73 @@ function wireTopButtons() {
   });
 }
 
+/* ---------- progress export / import ---------- */
+function exportProgress() {
+  try {
+    const payload = { app: 'epicbench-tracker', exportedAt: new Date().toISOString(), state };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `epicbench-progress-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('PROGRESS EXPORTED', 'success');
+  } catch (e) {
+    toast('EXPORT FAILED: ' + (e && e.message || e));
+  }
+}
+function importProgress(ev) {
+  const file = ev.target.files && ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const incoming = parsed && parsed.state ? parsed.state : parsed;
+      if (typeof incoming !== 'object' || Array.isArray(incoming)) throw new Error('unexpected shape');
+      let merged = 0;
+      for (const pid of Object.keys(incoming)) {
+        if (!state[pid]) state[pid] = {};
+        for (const key of Object.keys(incoming[pid])) {
+          if (['notstarted', 'progress', 'done'].includes(incoming[pid][key])) {
+            state[pid][key] = incoming[pid][key];
+            merged++;
+          }
+        }
+      }
+      saveState();
+      document.querySelectorAll('.prompt-card').forEach((card) => {
+        const p = card.__prompt, key = card.__hk;
+        const st = statusFor(p.id, key);
+        applyStatusClass(card, p.id, key);
+        if (card._sel) { card._sel.value = st; card._sel.dataset.status = st; }
+        const cb = card.querySelector('.checkwrap input');
+        if (cb) cb.checked = st === 'done';
+      });
+      MODEL_KEYS.forEach(updateSectionCount);
+      updateOverall();
+      toast(`IMPORTED ${merged} STATUSES`, 'success');
+    } catch (e) {
+      toast('IMPORT FAILED: ' + (e && e.message || e));
+    }
+  };
+  reader.readAsText(file);
+}
+
 function initCmdkEntries() {
   CMDK_ENTRIES = [];
-  HARNESS_KEYS.forEach((hk) => {
-    prompts.forEach((p) => {
-      CMDK_ENTRIES.push({
-        p,
-        hk,
-        label: `${String(p.id).padStart(2, '0')} \u00B7 ${p.title}`,
-        hay: `${p.id} ${p.title} ${p.difficulty} ${HARNESS_LABELS[hk]} ${hk}`.toLowerCase(),
-        color: PLANET_COLORS[hk],
+  MODEL_KEYS.forEach((mk) => {
+    HARNESS_KEYS.forEach((hk) => {
+      prompts.forEach((p) => {
+        CMDK_ENTRIES.push({
+          p,
+          mk,
+          hk,
+          label: `${String(p.id).padStart(2, '0')} \u00B7 ${p.title}`,
+          hay: `${p.id} ${p.title} ${p.difficulty} ${MODEL_LABELS[mk]} ${mk} ${HARNESS_LABELS[hk]} ${hk}`.toLowerCase(),
+          color: MODEL_COLORS[mk],
+        });
       });
     });
   });
@@ -1077,7 +1321,7 @@ const CmdK = (() => {
       lab.textContent = entry.label;
       const meta = document.createElement('span');
       meta.className = 'cmdk-meta';
-      meta.textContent = `${entry.p.difficulty} \u00B7 ${HARNESS_LABELS[entry.hk].toUpperCase()}`;
+      meta.textContent = `${MODEL_LABELS[entry.mk]} \u00B7 ${HARNESS_LABELS[entry.hk].toUpperCase()}`;
       const cp = document.createElement('button');
       cp.className = 'cmdk-copy';
       cp.title = 'Copy prompt text';
@@ -1117,11 +1361,16 @@ const CmdK = (() => {
 
   function jumpTo(entry) {
     close();
-    const targetCard = document.querySelector(`.prompt-card[data-card="${entry.p.id}|${entry.hk}"]`);
+    const key = comboKey(entry.mk, entry.hk);
+    const targetCard = document.querySelector(`.prompt-card[data-card="${entry.p.id}|${key}"]`);
     if (!targetCard) return;
-    const sec = SECTIONS[entry.hk];
+    const sec = SECTIONS[entry.mk];
     if (sec && sec.classList.contains('collapsed')) {
       sec.querySelector('.harness-header').click();
+    }
+    const grp = sec && sec.querySelector(`[data-grp="${key}"]`);
+    if (grp && grp.classList.contains('collapsed')) {
+      grp.querySelector('.harness-sub').click();
     }
     const bodyEl = targetCard.querySelector('.prompt-body');
     if (bodyEl && !bodyEl.classList.contains('open')) bodyEl.classList.add('open');
@@ -1173,6 +1422,65 @@ const CmdK = (() => {
   });
 
   return { open, close };
+})();
+
+/* ---------- help overlay (?) ---------- */
+const HelpOverlay = (() => {
+  let overlay = null;
+  function build() {
+    overlay = document.createElement('div');
+    overlay.className = 'help-overlay';
+    overlay.hidden = true;
+    overlay.innerHTML = `
+      <div class="help-panel" role="dialog" aria-label="Shortcuts">
+        <span class="help-close">\u2715</span>
+        <h3>MISSION SHORTCUTS</h3>
+        <dl>
+          <dt>/</dt><dd>Focus mission search</dd>
+          <dt>Ctrl / Cmd + K</dt><dd>Open command palette</dd>
+          <dt>?</dt><dd>Toggle this panel</dd>
+          <dt>Esc</dt><dd>Close panels / clear search</dd>
+          <dt>Click a card row</dt><dd>Expand prompt text</dd>
+          <dt>&#9998; on a card</dt><dd>Private local note</dd>
+          <dt>&#x27F2; on a harness row</dt><dd>Reset that harness's statuses</dd>
+          <dt>Export / Import (top bar)</dt><dd>Back up or restore progress</dd>
+        </dl>
+        <p class="help-foot">Progress lives in this browser &middot; export before switching machines</p>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    overlay.querySelector('.help-close').addEventListener('click', close);
+  }
+  function open() { if (!overlay) build(); overlay.hidden = false; requestAnimationFrame(() => overlay.classList.add('open')); }
+  function close() { if (!overlay) return; overlay.classList.remove('open'); setTimeout(() => { overlay.hidden = true; }, 180); }
+  function toggle() { (overlay && !overlay.hidden) ? close() : open(); }
+  return { toggle };
+})();
+
+window.addEventListener('keydown', (e) => {
+  const typing = (e.target.matches && e.target.matches('input, textarea, select')) || e.target.isContentEditable;
+  if (e.key === '?' && !typing) { e.preventDefault(); HelpOverlay.toggle(); }
+});
+
+/* ---------- help overlay styles (injected once) ---------- */
+(function injectHelpStyles() {
+  const css = `
+.help-overlay{position:fixed;inset:0;z-index:130;background:rgba(2,6,12,.7);backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s ease}
+.help-overlay.open{opacity:1}
+.help-panel{width:min(460px,92vw);background:#070d16;border:1px solid rgba(34,211,238,.35);border-radius:12px;
+  padding:20px 22px;color:#cfe3f2;font-family:Rajdhani,'Segoe UI',sans-serif;position:relative;
+  box-shadow:0 0 40px rgba(34,211,238,.14)}
+.help-panel h3{font-family:Orbitron,sans-serif;font-size:13px;letter-spacing:.24em;color:#22d3ee;margin:0 0 14px}
+.help-panel dl{display:grid;grid-template-columns:130px 1fr;gap:8px 14px;margin:0;font-size:13.5px}
+.help-panel dt{font-family:Orbitron,sans-serif;font-size:11px;letter-spacing:.1em;color:#7dd3fc;align-self:center}
+.help-panel dd{margin:0;color:#9fb6c9}
+.help-close{position:absolute;top:10px;right:14px;cursor:pointer;color:#7f97ab}
+.help-close:hover{color:#22d3ee}
+.help-foot{margin:14px 0 0;font-size:11px;color:#64809a}`;
+  const style = document.createElement('style');
+  style.textContent = css;
+  document.head.appendChild(style);
 })();
 
 function toast(msg, type = '') {

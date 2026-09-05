@@ -15,9 +15,13 @@ const fsp = require("node:fs/promises");
 const path = require("path");
 const { spawn } = require("node:child_process");
 
-const { scanBuilds, HARNESS_META } = require("./lib/scan");
-const { captureThumb, resolveBuildDir, thumbsDirFor, startThumbSweep } = require("./lib/thumbs");
-const arcade = require("./lib/arcade");
+const OX = process.env.OX_DIR ||
+  [path.join(__dirname, "..", "ox-arcade"), path.resolve(__dirname, "..", "..", "ox-arcade")]
+    .find((c) => { try { require.resolve(path.join(c, "lib", "scan.js")); return true; } catch { return false; } });
+if (!OX) throw new Error("ox-arcade lib not found (set OX_DIR or place ox-arcade next to EpicBench)");
+const { scanBuilds, HARNESS_META } = require(path.join(OX, "lib", "scan.js"));
+const { captureThumb, resolveBuildDir, thumbsDirFor, startThumbSweep } = require(path.join(OX, "lib", "thumbs.js"));
+const arcade = require(path.join(OX, "lib", "arcade.js"));
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -76,6 +80,29 @@ async function serveFrom(baseDir, relParts, res) {
   fs.createReadStream(abs).pipe(res);
 }
 let req_wants_head = false;
+
+// Proxy /Tracker/api/* to the python tracker API (reads + writes alike).
+function proxyTrackerApi(req, res, restWithApi, upstream, res_util) {
+  const target = new URL(upstream);
+  const rel = restWithApi.replace(/^\/api/, "/api");
+  const preq = http.request(
+    {
+      host: target.hostname,
+      port: target.port || 80,
+      method: req.method,
+      path: rel + (req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""),
+      headers: { ...req.headers, host: `${target.hostname}:${target.port || 80}` },
+    },
+    (pres) => {
+      res.writeHead(pres.statusCode || 502, pres.headers);
+      pres.pipe(res);
+    }
+  );
+  preq.on("error", () => {
+    try { res_util(res, 502, { error: "tracker api offline (" + upstream + ")" }); } catch {}
+  });
+  req.pipe(preq);
+}
 
 // Scan cache: /api/builds answers instantly whenever any scan has completed
 // before — a due refresh runs in the background (stale-while-revalidate) and
@@ -156,6 +183,32 @@ async function handleApi(req, res, url, ctx) {
     return sendJson(res, 200, { ok: true, meta: result.meta });
   }
 
+  // health: arcade scan state + tracker upstream reachability
+  if (url.pathname === "/api/health" && req.method === "GET") {
+    const builds = ctx.buildsCache.peek();
+    let tracker = { ok: false };
+    try {
+      const upstream = new URL(ctx.trackerUpstream);
+      const probe = await new Promise((resolve) => {
+        const preq = http.request({ host: upstream.hostname, port: upstream.port || 80, path: "/api/meta", method: "GET", timeout: 4000 }, (pres) => { pres.resume(); resolve(pres.statusCode); });
+        preq.on("error", () => resolve(0));
+        preq.on("timeout", () => { preq.destroy(); resolve(0); });
+        preq.end();
+      });
+      tracker = { ok: probe >= 200 && probe < 500, status: probe || null, upstream: ctx.trackerUpstream };
+    } catch (e) { tracker = { ok: false, error: String(e && e.message || e) }; }
+    let thumbs = null;
+    try {
+      thumbs = (await fsp.readdir(path.join(ctx.archiveRoot, ".archive", "thumbs"))).filter((f) => f.endsWith(".png")).length;
+    } catch { thumbs = 0; }
+    return sendJson(res, 200, {
+      ok: !!builds && tracker.ok,
+      arcade: { builds: builds ? builds.length : 0, cacheAgeMs: ctx.buildsCache.peek() ? Date.now() - (ctx.buildsCache.last || 0) : null, thumbs },
+      tracker,
+      uptimeSec: Math.round(process.uptime()),
+    });
+  }
+
   if ((m = url.pathname.match(/^\/api\/reveal\/([\w-]+)$/))) {
     if (req.method !== "POST") return sendJson(res, 405, { error: "method" });
     const dir = await resolveBuildDir(ctx.root, m[1]);
@@ -179,13 +232,19 @@ async function handleApi(req, res, url, ctx) {
 }
 
 function start(opts = {}) {
-  // games root defaults to the parent of goal-archive/
+  // games root defaults to the great-grandparent (local layout); deployments
+  // set ARCHIVE_ROOT explicitly (e.g. the repo checkout on kvm2).
   const root = opts.root || process.env.ARCHIVE_ROOT ||
-    path.resolve(__dirname, "..");
-  const archiveRoot = opts.archiveRoot || __dirname;
-  // Subpath deployment prefix ("" locally, "/OxArcade" behind traefik).
-  const basePath = (opts.basePath != null ? opts.basePath : (process.env.ARCHIVE_BASE_PATH || ""))
+    path.resolve(__dirname, "..", "..");
+  // thumbs + arcade repo live with the ox-arcade checkout (env wins)
+  const archiveRoot = opts.archiveRoot || process.env.ARCHIVE_ARCHIVE_ROOT || OX;
+  // The arcade app mounts under /Arcade; tracker under /Tracker; landing at /.
+  const basePath = (opts.basePath != null ? opts.basePath : (process.env.ARCHIVE_BASE_PATH || "/Arcade"))
     .replace(/\/+$/, "");
+  const trackerDir = opts.trackerDir || process.env.TRACKER_DIR ||
+    path.resolve(__dirname, "..", "OxAlphaTracker");
+  const trackerUpstream = opts.trackerUpstream || process.env.TRACKER_API_UPSTREAM ||
+    `http://127.0.0.1:${process.env.TRACKER_API_PORT || 8932}`;
   const state = { server: null, port: null, close: null };
 
   // --- EpicArcade sync state (off unless opts.sync / ARCHIVE_SYNC=1) ---
@@ -202,18 +261,14 @@ function start(opts = {}) {
     cacheFile: cacheFileFor(archiveRoot, root),
   });
 
-  // background thumbnail sweep — fills in a few missing thumbs per hour
-  // (skips builds with a .failed marker; headless-unrenderable games)
-  if (!process.env.ARCHIVE_NO_THUMB_SWEEP) {
-    startThumbSweep(archiveRoot, () => buildsCache.peek(), { root });
-  }
-
   const server = http.createServer(async (req, res) => {
     let url = new URL(req.url, "http://x");
-    // Reverse-proxy subpath support: strip BASE_PATH ("/OxArcade") so the
+    // Reverse-proxy subpath support: strip BASE_PATH ("/Arcade") so the
     // app always sees root-relative paths internally.
+    let strippedArcade = false;
     if (basePath && (url.pathname === basePath || url.pathname.startsWith(basePath + "/"))) {
       url = new URL(url.pathname.slice(basePath.length) || "/", url.href);
+      strippedArcade = true;
     }
     req_wants_head = req.method === "HEAD";
     try {
@@ -224,12 +279,24 @@ function start(opts = {}) {
         res.end(body);
         return;
       }
+
+      // ---- Tracker mount: static files + API proxy ----
+      if (url.pathname === "/Tracker" || url.pathname.startsWith("/Tracker/")) {
+        const rest = url.pathname.slice("/Tracker".length) || "/";
+        if (rest === "/api" || rest.startsWith("/api/")) {
+          return proxyTrackerApi(req, res, rest, trackerUpstream, sendJson);
+        }
+        req_wants_head = false;
+        const rel = rest === "/" ? ["index.html"] : rest.slice(1).split("/").filter(Boolean);
+        return await serveFrom(trackerDir, rel.length ? rel : ["index.html"], res);
+      }
       if (url.pathname.startsWith("/api/")) {
         return await handleApi(req, res, url, {
           root, archiveRoot,
           httpBase: state.port ? `http://127.0.0.1:${state.port}` : null,
           buildsCache,
           basePath,
+          trackerUpstream,
           arcadeState: () => arcadeState,
           buildsExtra: () => {
             if (!(arcadeState.enabled && arcadeState.last)) return {};
@@ -269,14 +336,24 @@ function start(opts = {}) {
         );
       }
 
-      // static frontend
-      if (url.pathname === "/" || url.pathname === "/index.html") {
+      // landing page (true root only — the /Arcade strip owns "/")
+      if (!strippedArcade && (url.pathname === "/" || url.pathname === "/index.html")) {
         req_wants_head = false;
         return await serveFrom(path.join(__dirname, "public"), ["index.html"], res);
       }
-      if (url.pathname === "/style.css" || url.pathname === "/app.js") {
+      if (!strippedArcade && (url.pathname === "/site.css" || url.pathname === "/site.js")) {
         req_wants_head = false;
         return await serveFrom(path.join(__dirname, "public"), [url.pathname.slice(1)], res);
+      }
+
+      // arcade static frontend (reached with the /Arcade prefix stripped)
+      if (url.pathname === "/" || url.pathname === "/index.html") {
+        req_wants_head = false;
+        return await serveFrom(path.resolve(__dirname, "..", "..", "ox-arcade", "public"), ["index.html"], res);
+      }
+      if (url.pathname === "/style.css" || url.pathname === "/app.js") {
+        req_wants_head = false;
+        return await serveFrom(path.resolve(__dirname, "..", "..", "ox-arcade", "public"), [url.pathname.slice(1)], res);
       }
       return notFound(res);
     } catch (err) {

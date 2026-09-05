@@ -42,7 +42,7 @@
   }
 
   document.getElementById("ebFbSend").addEventListener("click", async () => {
-    const { ok, d } = await post("/api/feedback", {
+    const { ok, d } = await post("api/feedback", {
       category: document.getElementById("ebFbCat").value,
       title: document.getElementById("ebFbTitle").value,
       details: document.getElementById("ebFbDetails").value,
@@ -53,7 +53,7 @@
   });
 
   document.getElementById("ebRqSend").addEventListener("click", async () => {
-    const { ok, d } = await post("/api/prompt-request", {
+    const { ok, d } = await post("api/prompt-request", {
       title: document.getElementById("ebRqTitle").value,
       idea: document.getElementById("ebRqIdea").value,
       why: document.getElementById("ebRqWhy").value,

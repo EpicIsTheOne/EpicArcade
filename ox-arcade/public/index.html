@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Ox Arcade</title>
+<title>EpicBench</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="style.css">
-<script src="config.js"></script>
+<link rel="stylesheet" href="/style.css">
+<script src="/config.js"></script>
 </head>
 <body>
 <canvas id="stars" aria-hidden="true"></canvas>
@@ -17,7 +17,7 @@
 <header class="topbar">
   <div class="brand">
     <span class="pulse-dot" aria-hidden="true"></span>
-    <h1>OX&nbsp;ARCADE</h1>
+    <h1>EPIC&nbsp;BENCH</h1>
     <span class="count" id="count"></span>
     <button class="btn small ghost sync-btn" id="sync-btn" hidden title="Pull EpicArcade repo">&#8645; Sync</button>
   </div>
@@ -26,17 +26,25 @@
     <nav class="chips" id="chips">
       <button class="chip active" data-filter="all">All</button>
       <button class="chip" data-filter="game">Games</button>
-      <button class="chip" data-filter="multiplayer" title="Builds with detected or declared netcode">Online</button>
       <button class="chip" data-filter="instrument">Instruments</button>
       <button class="chip" data-filter="incomplete">Incomplete</button>
+      <button class="chip" data-filter="favs">&#9733; Favorites</button>
     </nav>
     <nav class="chips hz-chips" id="hz-chips"></nav>
+    <button class="btn small ghost" id="random-btn" title="Random playable game (R)">&#127922;</button>
     <div class="viewtoggle" id="viewtoggle">
       <button class="active" data-view="grid" title="Grid view">▦</button>
       <button data-view="strip" title="Filmstrip view">▥</button>
     </div>
   </div>
 </header>
+
+<div class="crumb-row" id="crumbRow" hidden>
+  <button class="btn small ghost" id="back-btn">&#8249; Back</button>
+  <span class="crumb mono" id="crumb"></span>
+  <button class="fav-toggle" id="fav-toggle" title="Show favorites only">&#9733;</button>
+  <button class="btn small ghost" id="copy-link" title="Copy link to this page">&#128279; Copy link</button>
+</div>
 
 <section class="hero" id="hero" hidden>
   <div class="hero-bg">
@@ -80,6 +88,7 @@
       <div class="ov-actions">
         <button class="btn ghost" id="ov-folder">Open folder</button>
         <button class="btn ghost" id="ov-regen">Regenerate thumbnail</button>
+        <button class="btn ghost" id="ov-fav">&#9734; Favorite</button>
       </div>
     </aside>
   </div>
@@ -93,7 +102,7 @@
       <div class="live-holder"></div>
       <span class="ribbon"></span>
       <span class="hz-badge" hidden><span class="glyph mono"></span><span class="hz-name"></span></span>
-      <span class="mp-badge" hidden title="">⇄ MP</span>
+      <button class="fav-btn" title="Favorite" aria-label="Toggle favorite">&#9733;</button>
     </div>
     <div class="card-body">
       <h3 class="c-title"></h3>
@@ -103,6 +112,32 @@
   </article>
 </template>
 
-<script src="app.js"></script>
+<template id="model-tpl">
+  <article class="model-card" tabindex="0">
+    <div class="mc-glyph"><span class="mc-glyph-letter mono"></span></div>
+    <div class="mc-body">
+      <h3 class="mc-name"></h3>
+      <p class="mc-desc"></p>
+    </div>
+    <div class="mc-stats">
+      <span class="mc-builds"></span>
+      <span class="mc-hz"></span>
+      <span class="mc-favs"></span>
+    </div>
+  </article>
+</template>
+
+<template id="harness-tpl">
+  <article class="harness-card" tabindex="0">
+    <span class="hc-dot"></span>
+    <div class="hc-body">
+      <h3 class="hc-name"></h3>
+      <p class="hc-desc"></p>
+    </div>
+    <span class="hc-count"></span>
+  </article>
+</template>
+
+<script src="/app.js"></script>
 </body>
 </html>

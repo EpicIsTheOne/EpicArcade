@@ -1,4 +1,4 @@
-/* Ox Arcade — frontend */
+/* EpicBench — frontend */
 "use strict";
 
 const $ = (sel) => document.querySelector(sel);
@@ -13,10 +13,55 @@ const state = {
   builds: [],
   hzMeta: {},
   filter: "all",
-  view: "grid",
+  view: localStorage.getItem("oxView") || "grid",
   query: "",
   overlayId: null,
+  route: { model: null, harness: null },
+  favOnly: localStorage.getItem("oxFavOnly") === "1",
 };
+
+// ---------- favorites ----------
+const FAV_KEY = "oxFavoritesV1";
+const favorites = new Set((() => {
+  try { return JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); } catch { return []; }
+})());
+function saveFavorites() {
+  localStorage.setItem(FAV_KEY, JSON.stringify([...favorites]));
+}
+function isFav(id) { return favorites.has(id); }
+
+// ---------- model grouping ----------
+// Only these models are surfaced in the UI; everything else stays hidden.
+const MODEL_FILTER = new Set(["ox-alpha", "astra", "omen-alpha"]);
+// Normalize raw model ids ("openrouter-stealth-ox-alpha") to a stable key.
+const modelKey = (m) =>
+  m ? String(m).toLowerCase().replace(/^(openrouter[-_])?(stealth[-_])?/i, "") : null;
+const MODEL_ACCENT = { "ox-alpha": "#22d3ee", "astra": "#a78bfa", "omen-alpha": "#f472b6", "gpt-5.6-terra": "#39d0c3" };
+const mkAccent = (mk) => MODEL_ACCENT[mk] || "#8b94a7";
+const mkLabel = (mk) => (mk === "misc" ? "UNTAGGED" : modelTag(mk));
+function modelVisible(mk) { return MODEL_FILTER.has(mk); }
+function buildsOfModel(mk) {
+  return state.builds.filter((b) => (modelKey(b.model) || "misc") === mk);
+}
+function modelKeys() {
+  const counts = new Map();
+  for (const b of state.builds) {
+    const mk = modelKey(b.model) || "misc";
+    if (!modelVisible(mk)) continue;
+    counts.set(mk, (counts.get(mk) || 0) + 1);
+  }
+  return [...counts.keys()].sort((a, b) => (counts.get(b) - counts.get(a)));
+}
+function hzBucketOf(b) { return hzOf(b) || "untagged"; }
+// Playable builds first (newest first), then the non-playable tail.
+function withPlayableLast(list) {
+  return [...list].sort((a, b) => {
+    const ap = a.status === "playable" ? 0 : 1;
+    const bp = b.status === "playable" ? 0 : 1;
+    if (ap !== bp) return ap - bp;
+    return (b.mtime || "").localeCompare(a.mtime || "");
+  });
+}
 
 const fmtBytes = (n) => {
   if (!n) return "—";
@@ -35,8 +80,12 @@ const fmtWhen = (iso) => {
   if (hrs < 24) return `${hrs}h ago`;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
+// Ribbon tag: collapse provider/stealth prefixes to the core model name.
+const modelTag = (m) =>
+  String(m).replace(/^(openrouter[-_])?(stealth[-_])?/i, "").toUpperCase();
 
 async function load() {
+  renderSkeletons();
   const res = await fetch(withBase("/api/builds"));
   const body = await res.json();
   state.hzMeta = body.harnessMeta || {};
@@ -63,7 +112,6 @@ async function load() {
       tags: g.deployed ? ["remote", "game"] : ["remote", "undeployed"],
       shots: [],
       harness: g.harness,
-      multiplayer: g.multiplayer || null,
     }));
 
   state.builds = [...body.builds, ...remotes];
@@ -73,7 +121,41 @@ async function load() {
   if (syncBtn) syncBtn.hidden = !state.arcadeEnabled;
   renderHzChips();
   renderHero();
+  // shareable search: ?q= wins over the hash route on boot
+  const qParam = new URLSearchParams(location.search).get("q");
+  if (qParam) { state.query = qParam; $("#search").value = qParam; }
   render();
+}
+
+/* loading skeleton — shown while the first scan boots */
+function renderSkeletons() {
+  grid.innerHTML = "";
+  for (let i = 0; i < 9; i++) {
+    const s = document.createElement("div");
+    s.className = "card skeleton";
+    s.innerHTML =
+      '<div class="sk-thumb"></div>' +
+      '<div class="sk-body">' +
+      '<div class="sk-line w60"></div><div class="sk-line w90"></div><div class="sk-line w40"></div>' +
+      "</div>";
+    grid.appendChild(s);
+  }
+}
+
+/* tiny toast */
+function toastMsg(text, ok) {
+  let host = document.getElementById("arcade-toasts");
+  if (!host) {
+    host = document.createElement("div");
+    host.id = "arcade-toasts";
+    document.body.appendChild(host);
+  }
+  const t = document.createElement("div");
+  t.className = "arcade-toast" + (ok ? " ok" : "");
+  t.textContent = text;
+  host.appendChild(t);
+  setTimeout(() => t.classList.add("out"), 2200);
+  setTimeout(() => t.remove(), 2600);
 }
 
 /* Harness chips + badges are rendered purely from the API registry —
@@ -100,15 +182,17 @@ function hzOf(b) { return b && b.harness && b.harness !== "none" ? b.harness : n
 function visibleBuilds() {
   const q = state.query.toLowerCase();
   return state.builds.filter((b) => {
+    if (!modelVisible(modelKey(b.model) || "misc")) return false;
+    if (state.favOnly && !isFav(b.id)) return false;
     let tagOk;
-    if (state.filter.startsWith("hz:")) {
+    if (state.filter === "favs") {
+      tagOk = isFav(b.id);
+    } else if (state.filter.startsWith("hz:")) {
       tagOk = ("hz:" + (b.harness || "none")) === state.filter;
     } else if (state.filter === "all") {
       tagOk = true;
     } else if (state.filter === "incomplete") {
       tagOk = b.status === "incomplete";
-    } else if (state.filter === "multiplayer") {
-      tagOk = !!(b.multiplayer && b.multiplayer.supported);
     } else {
       tagOk = b.tags.includes(state.filter);
     }
@@ -122,82 +206,239 @@ function visibleBuilds() {
   });
 }
 
+/* ---------- hash routing: #/m/<model> and #/m/<model>/h/<harness> ---------- */
+function routeFromHash() {
+  const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
+  if (parts[0] === "m" && parts[1]) {
+    const mk = decodeURIComponent(parts[1]);
+    if (parts[2] === "h" && parts[3]) return { model: mk, harness: decodeURIComponent(parts[3]) };
+    return { model: mk, harness: null };
+  }
+  return { model: null, harness: null };
+}
+function goRoute(mk, hk) {
+  const target = !mk ? "#/"
+    : !hk ? `#/m/${encodeURIComponent(mk)}`
+    : `#/m/${encodeURIComponent(mk)}/h/${encodeURIComponent(hk)}`;
+  if (location.hash === target) render();
+  else location.hash = target;
+}
+window.addEventListener("hashchange", () => {
+  destroyLive();
+  state.route = routeFromHash();
+  render();
+});
+function applyRouteFromHash() {
+  state.route = routeFromHash();
+  render();
+}
+
 function render() {
-  const list = visibleBuilds();
+  if (state.query) { renderSearch(); return; }
+  const r = state.route;
+  if (!r.model) renderModels();
+  else if (!r.harness) renderModel(r.model);
+  else renderHarness(r.model, r.harness);
+}
+
+/* ---------- view chrome (chips / hero / crumb visibility) ---------- */
+function setChrome(mode) {
+  const chips = $("#chips"), hzChips = $("#hz-chips"), hero = $("#hero"),
+    crumb = $("#crumbRow"), vt = $("#viewtoggle");
+  chips.hidden = mode !== "models";
+  hzChips.hidden = mode !== "models";
+  vt.hidden = mode !== "games";
+  hero.hidden = mode !== "models" || !state.builds.length;
+  crumb.hidden = mode === "models";
+  const favT = $("#fav-toggle");
+  if (favT) favT.classList.toggle("on", state.favOnly);
+}
+
+/* ---------- models view ---------- */
+function renderModels() {
+  setChrome("models");
+  renderHero();
   grid.innerHTML = "";
-  grid.classList.toggle("strip", state.view === "strip");
-  $("#empty").hidden = list.length > 0;
+  grid.classList.remove("strip");
+  const mks = modelKeys();
+  $("#empty").hidden = mks.length > 0;
+  $("#count").textContent = `${state.builds.length} exhibits · pick a model`;
 
-  list.forEach((b, i) => {
-    const node = tpl.content.firstElementChild.cloneNode(true);
-    node.dataset.id = b.id;
+  mks.forEach((mk, i) => {
+    const builds = buildsOfModel(mk);
+    const node = $("#model-tpl").content.firstElementChild.cloneNode(true);
+    node.dataset.mk = mk;
+    node.style.setProperty("--ac", mkAccent(mk));
     node.style.animationDelay = `${Math.min(i, 12) * 45}ms`;
-    if (b.status === "incomplete") node.classList.add("incomplete");
-
-    const img = node.querySelector(".thumb img");
-    img.alt = b.title;
-    img.src = b.thumb;
-    img.addEventListener("load", () => node.querySelector(".thumb").classList.add("has-img"));
-    img.addEventListener("error", () => { img.removeAttribute("src"); });
-
-    const ribbon = node.querySelector(".ribbon");
-    const st = b.buildStatus;
-    if (b.status === "incomplete") {
-      ribbon.textContent = "INCOMPLETE";
-    } else if (st && st.status === "done") {
-      ribbon.textContent = "DONE";
-      ribbon.classList.add("green");
-    } else if (st && st.status === "inprogress") {
-      ribbon.textContent = "IN PROGRESS";
-      ribbon.classList.add("amber");
-    } else if (b.remote && b.status === "undeployed") {
-      ribbon.textContent = "UNDEPLOYED";
-      ribbon.classList.add("muted");
-    } else if (b.remote) {
-      ribbon.textContent = "REMOTE";
-      ribbon.classList.add("green");
-    } else {
-      ribbon.textContent = b.status === "playable" ? "PLAYABLE" : "INCOMPLETE";
-    }
-
-    // harness badge — data-driven, per-card accent color
-    const hz = hzOf(b);
-    const meta = hz ? state.hzMeta[hz] : null;
-    const badge = node.querySelector(".hz-badge");
-    if (meta) {
-      node.dataset.harness = hz;
-      node.style.setProperty("--hz", meta.color);
-      badge.querySelector(".glyph").textContent = meta.glyph;
-      badge.querySelector(".hz-name").textContent = meta.label;
-      badge.hidden = false;
-    } else {
-      badge.hidden = true;
-    }
-
-    // multiplayer badge — shown when netcode was detected or declared
-    const mpBadge = node.querySelector(".mp-badge");
-    if (mpBadge) {
-      const mp = b.multiplayer;
-      if (mp && mp.supported) {
-        mpBadge.hidden = false;
-        mpBadge.title = "Online-capable (" + mp.signals.join(", ") + ")" +
-          (mp.endpoint ? " \u00b7 " + mp.endpoint : "");
-      } else {
-        mpBadge.hidden = true;
-      }
-    }
-
-    node.querySelector(".c-title").textContent = b.title;
-    node.querySelector(".c-desc").textContent = b.description || "No description on file.";
-    const sizePart = b.remote ? "" : ` · ${fmtBytes(b.sizeBytes)} · ${b.fileCount} files`;
-    node.querySelector(".c-time").textContent = `touched ${fmtWhen(b.mtime)}${sizePart}`;
-    node.querySelector(".c-tags").textContent = b.tags.join(" · ");
-
-    attachLivePreview(node, b);
-    node.addEventListener("click", () => openOverlay(b.id));
-    node.addEventListener("keydown", (e) => { if (e.key === "Enter") openOverlay(b.id); });
+    node.querySelector(".mc-glyph-letter").textContent = mkLabel(mk).slice(0, 2);
+    node.querySelector(".mc-name").textContent = mkLabel(mk);
+    const hzs = new Set(builds.map(hzBucketOf));
+    node.querySelector(".mc-desc").textContent =
+      `${builds.length} build${builds.length === 1 ? "" : "s"} across ${hzs.size} harness${hzs.size === 1 ? "" : "es"}`;
+    node.querySelector(".mc-builds").textContent = `${builds.length} BUILDS`;
+    node.querySelector(".mc-hz").textContent = `${hzs.size} HARNESS${hzs.size === 1 ? "" : "ES"}`;
+    const favs = builds.filter((b) => isFav(b.id)).length;
+    node.querySelector(".mc-favs").textContent = `\u2605 ${favs}`;
+    const go = () => goRoute(mk);
+    node.addEventListener("click", go);
+    node.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
     grid.appendChild(node);
   });
+}
+
+/* ---------- model view (harnesses + favorites) ---------- */
+function renderModel(mk) {
+  const builds = buildsOfModel(mk);
+  if (!builds.length) { goRoute(); return; }
+  setChrome("model");
+  $("#crumb").textContent = mkLabel(mk);
+  $("#count").textContent = `${builds.length} builds · pick a harness`;
+  grid.innerHTML = "";
+  grid.classList.remove("strip");
+  const favs = builds.filter((b) => isFav(b.id));
+  const buckets = new Map();
+  for (const b of builds) {
+    const hk = hzBucketOf(b);
+    if (!buckets.has(hk)) buckets.set(hk, []);
+    buckets.get(hk).push(b);
+  }
+
+  if (favs.length) {
+    const head = document.createElement("h2");
+    head.className = "section-head";
+    head.innerHTML = `<span class="star">\u2605</span> FAVORITES`;
+    grid.appendChild(head);
+    const favGrid = document.createElement("div");
+    favGrid.className = "subgrid";
+    favs.forEach((b, i) => favGrid.appendChild(buildCardNode(b, i)));
+    grid.appendChild(favGrid);
+  }
+
+  const hHead = document.createElement("h2");
+  hHead.className = "section-head";
+  hHead.textContent = "HARNESSES";
+  grid.appendChild(hHead);
+  const hzGrid = document.createElement("div");
+  hzGrid.className = "subgrid";
+  const entries = [...buckets.entries()].sort((a, b) => b[1].length - a[1].length);
+  entries.forEach(([hk, list], i) => {
+    const node = $("#harness-tpl").content.firstElementChild.cloneNode(true);
+    node.dataset.hk = hk;
+    const meta = state.hzMeta[hk];
+    if (meta) {
+      node.style.setProperty("--hz", meta.color);
+      node.querySelector(".hc-dot").style.background = meta.color;
+      node.querySelector(".hc-name").textContent = meta.label;
+    } else {
+      node.querySelector(".hc-dot").style.background = "#8b94a7";
+      node.querySelector(".hc-name").textContent = "UNTAGGED";
+    }
+    node.querySelector(".hc-desc").textContent =
+      `${list.length} generation${list.length === 1 ? "" : "s"} by this harness on ${mkLabel(mk)}`;
+    node.querySelector(".hc-count").textContent = list.length;
+    const go = () => goRoute(mk, hk);
+    node.addEventListener("click", go);
+    node.addEventListener("keydown", (e) => { if (e.key === "Enter") go(); });
+    hzGrid.appendChild(node);
+  });
+  grid.appendChild(hzGrid);
+  $("#empty").hidden = builds.length > 0;
+}
+
+/* ---------- harness view (games) ---------- */
+function renderHarness(mk, hk) {
+  const all = buildsOfModel(mk).filter((b) => hzBucketOf(b) === hk);
+  if (!all.length) { goRoute(mk); return; }
+  const list = withPlayableLast(all.filter((b) => !state.favOnly || isFav(b.id)));
+  setChrome("games");
+  const meta = state.hzMeta[hk];
+  $("#crumb").textContent = `${mkLabel(mk)} \u00B7 ${meta ? meta.label : "UNTAGGED"}`;
+  grid.innerHTML = "";
+  grid.classList.toggle("strip", state.view === "strip");
+  $("#count").textContent = `${list.length} generations`;
+  $("#empty").textContent = list.length
+    ? "Nothing matches that filter."
+    : (state.favOnly ? "No favorites here yet — hit \u2605 on a card." : "No builds found.");
+  $("#empty").hidden = list.length > 0;
+  list.forEach((b, i) => grid.appendChild(buildCardNode(b, i)));
+}
+
+/* ---------- search (flat) ---------- */
+function renderSearch() {
+  setChrome("search");
+  $("#crumb").textContent = `SEARCH \u00B7 "${state.query}"`;
+  grid.innerHTML = "";
+  grid.classList.remove("strip");
+  const list = withPlayableLast(visibleBuilds());
+  $("#count").textContent = `${list.length} matches`;
+  $("#empty").hidden = list.length > 0;
+  list.forEach((b, i) => grid.appendChild(buildCardNode(b, i)));
+}
+
+/* ---------- game card factory ---------- */
+function buildCardNode(b, i) {
+  const node = tpl.content.firstElementChild.cloneNode(true);
+  node.dataset.id = b.id;
+  node.style.animationDelay = `${Math.min(i, 12) * 45}ms`;
+  if (b.status === "incomplete") node.classList.add("incomplete");
+
+  const img = node.querySelector(".thumb img");
+  img.alt = b.title;
+  img.src = b.thumb;
+  img.addEventListener("load", () => node.querySelector(".thumb").classList.add("has-img"));
+  img.addEventListener("error", () => { img.removeAttribute("src"); });
+
+  const ribbon = node.querySelector(".ribbon");
+  if (b.remote && b.status === "undeployed") {
+    ribbon.textContent = "UNDEPLOYED";
+    ribbon.classList.add("muted");
+  } else if (b.model) {
+    ribbon.textContent = modelTag(b.model);
+    ribbon.title = b.model;
+    if (b.remote) ribbon.classList.add("green");
+  } else if (b.remote) {
+    ribbon.textContent = "REMOTE";
+    ribbon.classList.add("green");
+  } else {
+    ribbon.textContent = b.status === "playable" ? "PLAYABLE" : "INCOMPLETE";
+  }
+
+  // harness badge — data-driven, per-card accent color
+  const hz = hzOf(b);
+  const meta = hz ? state.hzMeta[hz] : null;
+  const badge = node.querySelector(".hz-badge");
+  if (meta) {
+    node.dataset.harness = hz;
+    node.style.setProperty("--hz", meta.color);
+    badge.querySelector(".glyph").textContent = meta.glyph;
+    badge.querySelector(".hz-name").textContent = meta.label;
+    badge.hidden = false;
+  } else {
+    badge.hidden = true;
+  }
+
+  node.querySelector(".c-title").textContent = b.title;
+  node.querySelector(".c-desc").textContent = b.description || "No description on file.";
+  const sizePart = b.remote ? "" : ` · ${fmtBytes(b.sizeBytes)} · ${b.fileCount} files`;
+  node.querySelector(".c-time").textContent = `touched ${fmtWhen(b.mtime)}${sizePart}`;
+  node.querySelector(".c-tags").textContent = b.tags.join(" · ");
+
+  // favorite star
+  const favBtn = node.querySelector(".fav-btn");
+  favBtn.classList.toggle("active", isFav(b.id));
+  favBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (favorites.has(b.id)) favorites.delete(b.id);
+    else favorites.add(b.id);
+    saveFavorites();
+    favBtn.classList.toggle("active", isFav(b.id));
+    if (state.favOnly) render();
+  });
+
+  attachLivePreview(node, b);
+  node.addEventListener("click", () => openOverlay(b.id));
+  node.addEventListener("keydown", (e) => { if (e.key === "Enter") openOverlay(b.id); });
+  return node;
 }
 
 /* Hover a card 600ms -> swap the screenshot for a live muted iframe. One at a time. */
@@ -283,14 +524,10 @@ function openOverlay(id) {
   const meta = $("#ov-meta");
   const hz = hzOf(b);
   const hzLabel = hz && state.hzMeta[hz] ? state.hzMeta[hz].label : "—";
-  const mp = b.multiplayer;
-  const bst = b.buildStatus;
   meta.innerHTML = `
     <dt>STATUS</dt><dd>${b.status}</dd>
-    ${bst ? `<dt>BUILD</dt><dd>${bst.status} · checks ${bst.checks}</dd>` : ""}
     <dt>HARNESS</dt><dd class="mono">${hzLabel}</dd>
     ${b.model ? `<dt>MODEL</dt><dd class="mono">${b.model}</dd>` : ""}
-    <dt>NETCODE</dt><dd class="mono">${mp && mp.supported ? mp.signals.join(" + ") + (mp.endpoint ? " · " + mp.endpoint : "") : "single-player"}</dd>
     <dt>ENTRY</dt><dd class="mono">${b.entry || "—"}</dd>
     <dt>FOLDER</dt><dd class="mono">${b.dir}</dd>
     <dt>SIZE</dt><dd>${fmtBytes(b.sizeBytes)} · ${b.fileCount} files</dd>
@@ -345,6 +582,21 @@ function openOverlay(id) {
   popBtn.textContent = b.deployedUrl ? "\u2197 Play remote" : "\u2197 Pop out";
 
   $("#ov-folder").onclick = () => reveal(b.id);
+  const favBtn = $("#ov-fav");
+  const syncFavBtn = () => {
+    favBtn.innerHTML = isFav(b.id) ? "&#9733; Favorited" : "&#9734; Favorite";
+    favBtn.classList.toggle("active", isFav(b.id));
+  };
+  syncFavBtn();
+  favBtn.onclick = () => {
+    if (favorites.has(b.id)) favorites.delete(b.id);
+    else favorites.add(b.id);
+    saveFavorites();
+    syncFavBtn();
+    document.querySelectorAll(`.card[data-id="${b.id}"] .fav-btn`)
+      .forEach((el) => el.classList.toggle("active", isFav(b.id)));
+    if (state.favOnly) render();
+  };
   $("#ov-regen").onclick = async (e) => {
     const btn = e.currentTarget;
     btn.disabled = true; btn.textContent = "Regenerating…";
@@ -354,7 +606,9 @@ function openOverlay(id) {
       $("#hero-img").src = withBase(`/thumbs/${b.id}.png?${Date.now()}`);
       document.querySelectorAll(`.card[data-id="${b.id}"] .thumb img`)
         .forEach((im) => { im.src = withBase(`/thumbs/${b.id}.png?${Date.now()}`); });
-    } finally {
+      toastMsg("THUMBNAIL UPDATED", true);
+    } catch { toastMsg("thumbnail update failed"); }
+    finally {
       btn.disabled = false; btn.textContent = "Regenerate thumbnail";
     }
   };
@@ -374,10 +628,18 @@ function reveal(id) {
 }
 
 /* ---------- controls ---------- */
+function setSearchQuery(q) {
+  state.query = q;
+  const url = new URL(location.href);
+  if (q) url.searchParams.set("q", q);
+  else url.searchParams.delete("q");
+  history.replaceState(null, "", url);
+  render();
+}
 let searchT = null;
 $("#search").addEventListener("input", (e) => {
   clearTimeout(searchT);
-  searchT = setTimeout(() => { state.query = e.target.value.trim(); render(); }, 120);
+  searchT = setTimeout(() => setSearchQuery(e.target.value.trim()), 120);
 });
 // One delegated handler for every chip rail (#chips, #hz-chips, …) — chips
 // created later are covered automatically.
@@ -393,12 +655,54 @@ $("#viewtoggle").addEventListener("click", (e) => {
   if (!btn) return;
   document.querySelectorAll("#viewtoggle button").forEach((x) => x.classList.toggle("active", x === btn));
   state.view = btn.dataset.view;
+  localStorage.setItem("oxView", state.view);
   render();
 });
+$("#fav-toggle").addEventListener("click", () => {
+  state.favOnly = !state.favOnly;
+  localStorage.setItem("oxFavOnly", state.favOnly ? "1" : "0");
+  render();
+});
+$("#copy-link").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  try { await navigator.clipboard.writeText(location.href); toastMsg("LINK COPIED"); }
+  catch { toastMsg("couldn't copy — " + location.href); }
+});
+function randomGame() {
+  const r = state.route;
+  let pool;
+  if (r.model && r.harness) pool = buildsOfModel(r.model).filter((b) => hzBucketOf(b) === r.harness);
+  else if (r.model) pool = buildsOfModel(r.model);
+  else pool = state.builds.filter((b) => modelVisible(modelKey(b.model) || "misc"));
+  pool = pool.filter((b) => b.status === "playable" && b.entry);
+  if (!pool.length) { toastMsg("no playable builds in this view"); return; }
+  openOverlay(pool[Math.floor(Math.random() * pool.length)].id);
+}
+$("#random-btn").addEventListener("click", randomGame);
 $("#ov-close").addEventListener("click", closeOverlay);
 $("#ov-backdrop").addEventListener("click", closeOverlay);
+$("#back-btn").addEventListener("click", () => {
+  destroyLive();
+  if (state.route.harness) goRoute(state.route.model);
+  else goRoute();
+});
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !$("#overlay").hidden) closeOverlay();
+  if (e.key === "Escape" && !$("#overlay").hidden) { closeOverlay(); return; }
+  const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "");
+  if (typing || !$("#overlay").hidden) return;
+  if (e.key === "Escape") {
+    if (state.query) { $("#search").value = ""; setSearchQuery(""); }
+    else if (state.route.harness) goRoute(state.route.model);
+    else if (state.route.model) goRoute();
+  } else if (e.key === "Backspace" && !$("#search").value) {
+    if (state.route.harness) goRoute(state.route.model);
+    else if (state.route.model) goRoute();
+  } else if (e.key === "r" || e.key === "R") {
+    randomGame();
+  } else if (e.key === "g" || e.key === "G") {
+    const btn = document.querySelector(`#viewtoggle button[data-view="${state.view === "grid" ? "strip" : "grid"}"]`);
+    btn?.click();
+  }
 });
 $("#ov-reload").addEventListener("click", () => {
   const f = $("#ov-frame"); const src = f.src; f.src = ""; setTimeout(() => { f.src = src; }, 60);
@@ -472,7 +776,7 @@ $("#sync-btn").addEventListener("click", async (e) => {
   const done = () => el.classList.add("done");
   if (reduced || sessionStorage.getItem("ga-booted") || new URLSearchParams(location.search).has("noboot")) { done(); return; }
   sessionStorage.setItem("ga-booted", "1");
-  const lines = ["OX ARCADE", "INDEXING EXHIBITS… OK", "READY_"];
+  const lines = ["EPICBENCH", "INDEXING EXHIBITS… OK", "READY_"];
   const pre = document.getElementById("boot-text");
   let li = 0, ci = 0;
   const skip = () => { done(); cleanup(); };
@@ -500,10 +804,6 @@ addEventListener("keydown", (e) => {
   const typing = /^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || "");
   if (e.key === "/" && !typing) { e.preventDefault(); $("#search").focus(); }
   else if (e.key === "Escape" && typing && !$("#search").value) { $("#search").blur(); }
-  else if ((e.key === "g" || e.key === "G") && !typing) {
-    const btn = document.querySelector(`#viewtoggle button[data-view="${state.view === "grid" ? "strip" : "grid"}"]`);
-    btn?.click();
-  }
 });
 
-load();
+load().then(applyRouteFromHash);
