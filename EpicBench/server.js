@@ -365,7 +365,8 @@ function start(opts = {}) {
     const wantPort = opts.port ?? Number(process.env.ARCHIVE_PORT || 8795);
     let port = wantPort;
     let fellBack = false;
-    server.listen(port, "127.0.0.1", async () => {
+    const host = process.env.ARCHIVE_HOST || "127.0.0.1";
+    server.listen(port, host, async () => {
       const addr = server.address();
       state.port = typeof addr === "object" && addr ? addr.port : port;
       state.server = server;
@@ -388,7 +389,7 @@ function start(opts = {}) {
       if (err.code === "EADDRINUSE" && wantPort === 8795 && !fellBack) {
         fellBack = true;
         port = 8796;
-        server.listen(port, "127.0.0.1");
+        server.listen(port, process.env.ARCHIVE_HOST || "127.0.0.1");
         return;
       }
       reject(err);
