@@ -29,6 +29,9 @@ function deriveHarness(name, override) {
   return "none";
 }
 
+// Cap per-build stats walks — giant trees (60k+ files) used to dominate scans.
+// Sizes become approximate beyond the cap; the scan stays fast.
+const FILE_CAP = 6000;
 const IMAGE_RE = /\.(png|jpe?g|webp|gif)$/i;
 // Self-exclusion is identity-based: this app's own folder never exhibits
 // itself, whatever it's called (goal-archive, ox-arcade, ...). "prompt-pack"
@@ -140,9 +143,6 @@ function parseReadme(text) {
 // One readdir withFileTypes per directory; sizes/mtimes come from the SAME
 // dirent batch via fs.stat on directories only when needed — files are
 // batched through Promise.all in chunks to avoid serial await waterfalls.
-// FILE_CAP stops the walk early on giant trees (sizes become approximate,
-// but scans stay fast — a 60k-file folder used to dominate the whole scan).
-const FILE_CAP = 6000;
 async function walkStats(dir) {
   let sizeBytes = 0, fileCount = 0, maxMtime = 0;
   const absorb = (st) => {
@@ -194,10 +194,115 @@ async function collectShots(dir, id) {
   return out;
 }
 
+// Per-build agent status protocol (.status.json next to the entry):
+// {"status":"done|inprogress","checks":"passed|failed|untested",
+//  "lastChangeAt":ISO,"updatedAt":ISO}. Absent/garbage -> null.
+async function readBuildStatus(dir) {
+  let d;
+  try { d = JSON.parse(await fs.readFile(path.join(dir, ".status.json"), "utf8")); }
+  catch { return null; }
+  if (!d || typeof d !== "object") return null;
+  return {
+    status: d.status === "done" ? "done" : "inprogress",
+    checks: ["passed", "failed", "untested"].includes(d.checks) ? d.checks : "untested",
+    lastChangeAt: typeof d.lastChangeAt === "string" ? d.lastChangeAt : null,
+    updatedAt: typeof d.updatedAt === "string" ? d.updatedAt : null,
+  };
+}
+
 function tagFor(dirName, hasEntry) {
   if (!hasEntry) return ["incomplete"];
   if (/fl studio/i.test(dirName)) return ["instrument"];
   return ["game"];
+}
+
+// ---- multiplayer (netcode) detection ---------------------------------------
+// Static heuristic over the build's own text files: flags realtime-network
+// APIs so the dashboard can badge online-capable exhibits. Declarations win:
+// overrides "multiplayer": true/false (+"endpoint"), or arcade.json
+// "multiplayer": true / false / {"endpoint": "/ws/..."}.
+const NETCODE_PATTERNS = [
+  ["websocket", /\bnew\s+WebSocket\b|\brequire\(\s*['"](?:ws|socket\.io[^'"]*)['"]\s*\)|from\s+['"](?:ws|socket\.io[^'"]*)['"]|\bio\s*\(\s*['"]?\s*(?:wss?:)?\/\//i],
+  ["webrtc",    /\bRTCPeerConnection\b|\bRTCDataChannel\b/i],
+  ["sse",       /\bnew\s+EventSource\b/i],
+];
+const MP_TEXT_RE = /\.(html?|js|mjs|cjs)$/i;
+// Dev/QA dirs routinely talk raw WebSockets (CDP drivers, puppeteer, e2e
+// runners) without the GAME being online-capable — never scan them.
+const MP_SKIP_DIRS = new Set([
+  "test", "tests", "scripts", "tools", "qa", "e2e",
+  "screenshots", "shots", "reference", "docs", "saves", "test-artifacts",
+]);
+const MP_FILE_CAP = 600 * 1024;   // per file — skips bundled engines' fat chunks
+const MP_BUDGET = 3 * 1024 * 1024;
+
+async function detectNetcode(dir) {
+  const hits = new Set();
+  let budget = MP_BUDGET;
+  const stack = [dir];
+  while (stack.length && budget > 0) {
+    const cur = stack.pop();
+    let entries;
+    try { entries = await fs.readdir(cur, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (budget <= 0 || hits.size === NETCODE_PATTERNS.length) return [...hits];
+      if (e.isDirectory()) {
+        if (ENTRY_JUNK.has(e.name) || MP_SKIP_DIRS.has(e.name) || e.name.startsWith(".")) continue;
+        stack.push(path.join(cur, e.name));
+        continue;
+      }
+      if (!MP_TEXT_RE.test(e.name)) continue;
+      const p = path.join(cur, e.name);
+      let st; try { st = await fs.stat(p); } catch { continue; }
+      if (!st.isFile() || st.size > MP_FILE_CAP || st.size > budget) continue;
+      budget -= st.size;
+      let txt; try { txt = await fs.readFile(p, "utf8"); } catch { continue; }
+      for (const [name, re] of NETCODE_PATTERNS) {
+        if (!hits.has(name) && re.test(txt)) hits.add(name);
+      }
+    }
+  }
+  return [...hits];
+}
+
+function multiplayerFor(dir, ov = {}) {  const endpoint = typeof ov.endpoint === "string" ? ov.endpoint : null;
+  if (ov.multiplayer === false) {
+    return Promise.resolve({ supported: false, signals: [], endpoint, source: "override" });
+  }
+  if (ov.multiplayer === true) {
+    return detectNetcode(dir).then((signals) => ({
+      supported: true,
+      signals: signals.length ? signals : ["declared"],
+      endpoint,
+      source: "override",
+    }));
+  }
+  return detectNetcode(dir).then((signals) => ({
+    supported: signals.length > 0, signals, endpoint, source: "scan",
+  }));
+}
+
+// Per-game arcade.json declaration: {"multiplayer": true|false|{"endpoint": "/ws/..."}}
+// (same contract the repo-export path in arcade.js honors).
+async function readArcadeMeta(dir) {
+  try { return JSON.parse(await fs.readFile(path.join(dir, "arcade.json"), "utf8")) || {}; }
+  catch { return {}; }
+}
+
+// Merge order for multiplayer: .archive-overrides.json beats the game's own
+// arcade.json beats the netcode scan.
+function mpOverrideFor(ov, gameMeta) {
+  if (ov.multiplayer !== undefined || ov.endpoint !== undefined) return ov;
+  const mp = gameMeta.multiplayer;
+  const merged = { ...ov };
+  if (mp === undefined) {
+    if (typeof gameMeta.multiplayerEndpoint === "string") merged.endpoint = gameMeta.multiplayerEndpoint;
+    return merged;
+  }
+  merged.multiplayer = typeof mp === "object" && mp !== null ? true : mp;
+  if (typeof mp === "object" && mp !== null && typeof mp.endpoint === "string") merged.endpoint = mp.endpoint;
+  else if (typeof gameMeta.multiplayerEndpoint === "string") merged.endpoint = gameMeta.multiplayerEndpoint;
+  return merged;
 }
 
 async function scanBuilds(root, opts = {}) {
@@ -217,13 +322,13 @@ async function scanBuilds(root, opts = {}) {
     const id = slugify(c.name);
     if (!id) return null;
 
-    const [entry, readme, stats] = await Promise.all([
+    const [entry, readme, stats, gameMeta] = await Promise.all([
       findEntry(dir),
       readReadme(dir),
       walkStats(dir),
+      readArcadeMeta(dir),
     ]);
     const ov = overrides[id] || {};
-    if (ov.hidden) return null;   // config-driven exclusion — no folder renames needed
     const meta = parseFolderMeta(c.name);
     const parsed = parseReadme(readme);
 
@@ -244,6 +349,8 @@ async function scanBuilds(root, opts = {}) {
       fileCount: stats.fileCount,
       tags: ov.tags || tagFor(c.name, !!entry),
       shots: await collectShots(dir, id),
+      multiplayer: await multiplayerFor(dir, mpOverrideFor(ov, gameMeta)),
+      buildStatus: await readBuildStatus(dir),
       thumbWaitMs: Number(ov.thumbWaitMs) || undefined,
       harness: deriveHarness(c.name, ov.harness),
     };
@@ -253,4 +360,4 @@ async function scanBuilds(root, opts = {}) {
   return clean;
 }
 
-module.exports = { scanBuilds, slugify, findEntry, resolveEntry, deriveHarness, parseFolderMeta, HARNESS_META };
+module.exports = { scanBuilds, slugify, findEntry, resolveEntry, deriveHarness, parseFolderMeta, HARNESS_META, detectNetcode, multiplayerFor, readArcadeMeta, mpOverrideFor, readBuildStatus };
