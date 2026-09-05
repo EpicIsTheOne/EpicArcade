@@ -119,6 +119,10 @@ async function load() {
     }));
 
   state.builds = [...body.builds, ...remotes];
+  // legacy rule: harnessed builds without a model tag are pre-Astra Ox Alpha runs
+  state.builds.forEach((b) => {
+    if (!b.model && hzOf(b)) b.model = "ox-alpha";
+  });
   $("#count").textContent = `${body.count} exhibits` +
     (remotes.length ? ` + ${remotes.length} remote` : "");
   if (window.EB_BOOT) window.EB_BOOT.setLine(1, `INDEXING ${body.count} EXHIBITS\u2026 OK`);

@@ -73,11 +73,29 @@ async function parseArcadeLayout(repoDir) {
         const route = `${m.name}/${p.name}/${h.name}`;
         if (!slugOk(m.name) || !slugOk(p.name) || !slugOk(h.name)) continue;
 
-        const entry = await findEntry(gameDir);
-        if (!entry) continue; // no playable html -> not an exhibit
+        // Entry discovery with nested-layout support: some builds nest the
+        // whole game one level under the harness dir
+        // (<Harness>/<GameFolder>/index.html). The 3-segment route still
+        // serves those — the nested folder is just part of the entry path.
+        let entry = await findEntry(gameDir);
+        let nestedDir = null;
+        if (!entry) {
+          let subs;
+          try { subs = await fsp.readdir(gameDir, { withFileTypes: true }); } catch { subs = []; }
+          for (const sub of subs) {
+            if (!sub.isDirectory() || sub.name.startsWith(".")) continue;
+            const subEntry = await findEntry(path.join(gameDir, sub.name));
+            if (subEntry) {
+              entry = `${sub.name}/${subEntry.split(/[\\/]+/).join("/")}`;
+              nestedDir = path.join(gameDir, sub.name);
+              break;
+            }
+          }
+          if (!entry) continue; // no playable html anywhere -> not an exhibit
+        }
 
         let meta = {};
-        try { meta = JSON.parse(await fsp.readFile(path.join(gameDir, "arcade.json"), "utf8")) || {}; }
+        try { meta = JSON.parse(await fsp.readFile(path.join(nestedDir || gameDir, "arcade.json"), "utf8")) || {}; }
         catch {}
 
         let mtime = null;
@@ -99,7 +117,7 @@ async function parseArcadeLayout(repoDir) {
         games.push({
           source: "remote",
           route,
-          model: bracketModel || null,
+          model: bracketModel || m.name || null,
           project: p.name,
           harness: deriveHarness(h.name),
           title: meta.title || p.name,
@@ -109,7 +127,7 @@ async function parseArcadeLayout(repoDir) {
           thumb: meta.thumb || null,       // remote absolute or repo-relative
           deployed: null,                  // filled by applyDeployments()
           mtime,
-          multiplayer: await multiplayerFor(gameDir, { multiplayer: declared, endpoint }),
+          multiplayer: await multiplayerFor(nestedDir || gameDir, { multiplayer: declared, endpoint }),
         });
       }
     }
