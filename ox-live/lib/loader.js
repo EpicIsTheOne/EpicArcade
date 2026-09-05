@@ -32,9 +32,23 @@ async function scanGames(root) {
       for (const h of harnesses) {
         if (!h.isDirectory() || h.name.startsWith(".")) continue;
         const dir = path.join(projDir, h.name);
-        const file = path.join(dir, "server.mjs");
+        let file = path.join(dir, "server.mjs");
         let st;
-        try { st = await fsp.stat(file); } catch { continue; }
+        try { st = await fsp.stat(file); } catch {
+          // some builds nest the game one level deeper: <Harness>/<GameFolder>/server.mjs
+          let nested = null;
+          try {
+            const subs = await fsp.readdir(dir, { withFileTypes: true });
+            for (const sub of subs) {
+              if (!sub.isDirectory() || sub.name.startsWith(".")) continue;
+              const cand = path.join(dir, sub.name, "server.mjs");
+              try { await fsp.stat(cand); nested = cand; break; } catch { /* next */ }
+            }
+          } catch { /* no subdirs */ }
+          if (!nested) continue;
+          file = nested;
+          st = await fsp.stat(file);
+        }
         const meta = await readJson(path.join(dir, "arcade.json"));
         const declared = meta.multiplayer && typeof meta.multiplayer.endpoint === "string"
           ? meta.multiplayer.endpoint
