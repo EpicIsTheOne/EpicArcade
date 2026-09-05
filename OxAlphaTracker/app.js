@@ -250,6 +250,7 @@ function render() {
     app.appendChild(section);
   });
   updateOverall();
+  observeSections();
 }
 
 function buildModelSection(mk) {
@@ -1581,14 +1582,17 @@ const CmdK = (() => {
   setInterval(poll, 15000);
 })();
 
-/* ---------- scroll reveals (item 31) ---------- */
-(function sectionReveals() {
-  if (REDUCED_MOTION || !('IntersectionObserver' in window)) return;
-  const io = new IntersectionObserver((entries) => {
+/* ---------- scroll reveals (item 31) — wired after each render ---------- */
+function observeSections() {
+  if (REDUCED_MOTION || !('IntersectionObserver' in window)) {
+    document.querySelectorAll('.harness-section:not(.revealed)').forEach((s) => s.classList.add('revealed'));
+    return;
+  }
+  const io = observeSections._io || (observeSections._io = new IntersectionObserver((entries) => {
     entries.forEach((en) => { if (en.isIntersecting) { en.target.classList.add('revealed'); io.unobserve(en.target); } });
-  }, { threshold: 0.06 });
-  document.querySelectorAll('.harness-section').forEach((s) => io.observe(s));
-})();
+  }, { threshold: 0.06 }));
+  document.querySelectorAll('.harness-section:not(.revealed)').forEach((s) => io.observe(s));
+}
 
 /* ---------- help overlay (?) ---------- */
 const HelpOverlay = (() => {
