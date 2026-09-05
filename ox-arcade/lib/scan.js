@@ -329,6 +329,7 @@ async function scanBuilds(root, opts = {}) {
       readArcadeMeta(dir),
     ]);
     const ov = overrides[id] || {};
+    if (ov.hidden) return null;   // config-driven exclusion — no folder renames needed
     const meta = parseFolderMeta(c.name);
     const parsed = parseReadme(readme);
 
