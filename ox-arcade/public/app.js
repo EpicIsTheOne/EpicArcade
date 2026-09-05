@@ -221,7 +221,8 @@ const routeDepth = (r) => (r && r.model ? 1 : 0) + (r && r.harness ? 1 : 0);
 function routeFromHash() {
   const parts = location.hash.replace(/^#\/?/, "").split("/").filter(Boolean);
   if (parts[0] === "m" && parts[1]) {
-    const mk = decodeURIComponent(parts[1]);
+    // normalize the model key so "ox-alpha" / "OxAlpha" / "openrouter-stealth-ox-alpha" all land
+    const mk = modelKey(decodeURIComponent(parts[1])) || decodeURIComponent(parts[1]);
     if (parts[2] === "h" && parts[3]) return { model: mk, harness: decodeURIComponent(parts[3]) };
     return { model: mk, harness: null };
   }
