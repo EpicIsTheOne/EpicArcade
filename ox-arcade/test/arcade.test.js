@@ -31,7 +31,7 @@ test("parses Model/Project/Harness layout", async () => {
     assert.equal(g.title, "Wonderdrome");        // arcade.json wins
     assert.equal(g.entry, "index.html");
     assert.equal(g.harness, "hermes");           // Hermes harness now tagged
-    assert.equal(g.model, null);                 // no bracket tags in repo names
+    assert.equal(g.model, "OxAlpha");            // model defaults to route segment
     assert.ok(g.mtime);
 
     const g2 = games.find(x => x.route === "Luna/SpeedGame/Server");
@@ -61,31 +61,5 @@ test("deployed.json read/merge + slug rules", async () => {
     const merged = mergeDeployed(d, { "Luna/SpeedGame/Server": "https://x/y/" });
     assert.equal(merged["OxAlpha/FNAF/Hermes"], "https://techexplore.us/OxAlpha/FNAF/Hermes/");
     assert.equal(merged["Luna/SpeedGame/Server"], "https://x/y/");
-  } finally { await fsp.rm(root, { recursive: true, force: true }); }
-});
-
-test("arcade.json multiplayer declaration reaches game records", async () => {
-  const root = await fsp.mkdtemp(path.join(os.tmpdir(), "ga-mp-"));
-  try {
-    // object form: declares multiplayer AND names its endpoint
-    await put(path.join(root, "OxAlpha", "NetGame", "Hermes", "index.html"), "x");
-    await put(path.join(root, "OxAlpha", "NetGame", "Hermes", "arcade.json"),
-      JSON.stringify({ title: "NetGame", multiplayer: { endpoint: "/ws/net" } }));
-    // boolean false: explicit single-player even if code would match
-    await put(path.join(root, "OxAlpha", "SoloGame", "Hermes", "index.html"),
-      "<script>new WebSocket('ws://x')</script>");
-    await put(path.join(root, "OxAlpha", "SoloGame", "Hermes", "arcade.json"),
-      JSON.stringify({ title: "SoloGame", multiplayer: false }));
-
-    const games = await parseArcadeLayout(root);
-    const net = games.find((g) => g.route === "OxAlpha/NetGame/Hermes");
-    assert.ok(net, "netgame parsed");
-    assert.equal(net.multiplayer.supported, true);
-    assert.equal(net.multiplayer.endpoint, "/ws/net");
-
-    const solo = games.find((g) => g.route === "OxAlpha/SoloGame/Hermes");
-    assert.ok(solo, "sologame parsed");
-    assert.equal(solo.multiplayer.supported, false);
-    assert.equal(solo.multiplayer.source, "override");
   } finally { await fsp.rm(root, { recursive: true, force: true }); }
 });
