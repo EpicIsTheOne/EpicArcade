@@ -349,11 +349,11 @@ function start(opts = {}) {
       // arcade static frontend (reached with the /Arcade prefix stripped)
       if (url.pathname === "/" || url.pathname === "/index.html") {
         req_wants_head = false;
-        return await serveFrom(path.resolve(__dirname, "..", "..", "ox-arcade", "public"), ["index.html"], res);
+        return await serveFrom(path.join(OX, "public"), ["index.html"], res);
       }
       if (url.pathname === "/style.css" || url.pathname === "/app.js") {
         req_wants_head = false;
-        return await serveFrom(path.resolve(__dirname, "..", "..", "ox-arcade", "public"), [url.pathname.slice(1)], res);
+        return await serveFrom(path.join(OX, "public"), [url.pathname.slice(1)], res);
       }
       return notFound(res);
     } catch (err) {
