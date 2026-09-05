@@ -199,7 +199,7 @@ async function handleApi(req, res, url, ctx) {
     } catch (e) { tracker = { ok: false, error: String(e && e.message || e) }; }
     let thumbs = null;
     try {
-      thumbs = (await fsp.readdir(path.join(ctx.archiveRoot, ".archive", "thumbs"))).filter((f) => f.endsWith(".png")).length;
+      thumbs = (await fsp.readdir(thumbsDirFor(ctx.archiveRoot))).filter((f) => f.endsWith(".png")).length;
     } catch { thumbs = 0; }
     return sendJson(res, 200, {
       ok: !!builds && tracker.ok,
