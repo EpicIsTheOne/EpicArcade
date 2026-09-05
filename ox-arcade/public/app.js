@@ -34,13 +34,15 @@ function isFav(id) { return favorites.has(id); }
 
 // ---------- model grouping ----------
 // Only these models are surfaced in the UI; everything else stays hidden.
-const MODEL_FILTER = new Set(["ox-alpha", "astra", "omen-alpha"]);
-// Normalize raw model ids ("openrouter-stealth-ox-alpha") to a stable key.
+// Keys are normalized (no separators) so OxAlpha / ox-alpha / ox_alpha unify.
+const MODEL_FILTER = new Set(["oxalpha", "astra", "omenalpha"]);
+// Normalize raw model ids ("openrouter-stealth-ox-alpha", "OxAlpha") to a stable key.
 const modelKey = (m) =>
-  m ? String(m).toLowerCase().replace(/^(openrouter[-_])?(stealth[-_])?/i, "") : null;
-const MODEL_ACCENT = { "ox-alpha": "#22d3ee", "astra": "#a78bfa", "omen-alpha": "#f472b6", "gpt-5.6-terra": "#39d0c3" };
+  m ? String(m).toLowerCase().replace(/^(openrouter[-_])?(stealth[-_])?/i, "").replace(/[^a-z0-9]/g, "") : null;
+const MODEL_ACCENT = { oxalpha: "#22d3ee", astra: "#a78bfa", omenalpha: "#f472b6", gpt56terra: "#39d0c3" };
+const MODEL_DISPLAY = { oxalpha: "OX-ALPHA", astra: "ASTRA", omenalpha: "OMEN-ALPHA", gpt56terra: "GPT-5.6-TERRA" };
 const mkAccent = (mk) => MODEL_ACCENT[mk] || "#8b94a7";
-const mkLabel = (mk) => (mk === "misc" ? "UNTAGGED" : modelTag(mk));
+const mkLabel = (mk) => MODEL_DISPLAY[mk] || modelTag(mk);
 function modelVisible(mk) { return MODEL_FILTER.has(mk); }
 function buildsOfModel(mk) {
   return state.builds.filter((b) => (modelKey(b.model) || "misc") === mk);
@@ -102,7 +104,7 @@ async function load() {
       dir: g.route,
       title: g.title,
       description: g.description,
-      model: g.model,
+      model: g.model || (g.route ? g.route.split("/")[0] : null),
       entry: g.entry,
       status: g.deployed ? "playable" : "undeployed",
       url: g.url,                 // same-origin path served by this site
@@ -442,8 +444,8 @@ function buildCardNode(b, i) {
     ribbon.textContent = "UNDEPLOYED";
     ribbon.classList.add("muted");
   } else if (b.model) {
-    ribbon.textContent = modelTag(b.model);
-    ribbon.title = b.model;
+      ribbon.textContent = mkLabel(modelKey(b.model));
+      ribbon.title = b.model;
     if (b.remote) ribbon.classList.add("green");
   } else if (b.remote) {
     ribbon.textContent = "REMOTE";
