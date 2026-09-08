@@ -230,7 +230,7 @@
     const done = () => el.classList.add("done");
     if (REDUCED || sessionStorage.getItem("eb-booted")) { done(); return; }
     sessionStorage.setItem("eb-booted", "1");
-    const lines = ["EPICBENCH v2.1", "ESTABLISHING UPLINK… OK", "TRACKER ONLINE", "ARCADE ONLINE", "READY_"];
+    const lines = ["EPICBENCH v2.1", "ESTABLISHING UPLINK… OK", "PROMPTS ONLINE", "ARCADE ONLINE", "READY_"];
     const pre = g("boot-text");
     let li = 0, ci = 0;
     const skip = () => { done(); cleanup(); };
@@ -436,7 +436,7 @@
       }
       if (prompts && Array.isArray(prompts.prompts)) {
         prompts.prompts.forEach((p) => {
-          items.push({ kind: "PROMPT", label: String(p.id).padStart(2, "0") + " · " + p.title, meta: "TRACKER · " + (p.difficulty || "").toUpperCase(), url: "/Tracker/", hay: (p.id + " " + p.title + " prompt tracker").toLowerCase() });
+          items.push({ kind: "PROMPT", label: String(p.id).padStart(2, "0") + " · " + p.title, meta: "PROMPTS · " + (p.difficulty || "").toUpperCase(), url: "/Tracker/", hay: (p.id + " " + p.title + " prompt tracker").toLowerCase() });
         });
       }
       loaded = true;
