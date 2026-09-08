@@ -449,7 +449,7 @@ async function start(opts = {}) {
         req_wants_head = false;
         return await serveFrom(path.join(__dirname, "public"), ["index.html"], res);
       }
-      if (!strippedArcade && (url.pathname === "/site.css" || url.pathname === "/site.js")) {
+      if (!strippedArcade && (url.pathname === "/site.css" || url.pathname === "/site.js" || url.pathname === "/console.css")) {
         req_wants_head = false;
         return await serveFrom(path.join(__dirname, "public"), [url.pathname.slice(1)], res);
       }
@@ -457,7 +457,11 @@ async function start(opts = {}) {
       // arcade static frontend (reached with the /Arcade prefix stripped)
       if (url.pathname === "/" || url.pathname === "/index.html") {
         req_wants_head = false;
-        return await serveFrom(path.join(OX, "public"), ["index.html"], res);
+        let html = await fsp.readFile(path.join(OX, 'public', 'index.html'), 'utf8');
+        html = html.replace('</head>', '<link rel="stylesheet" href="/console.css"></head>').replace('<body>', "<body><div class=\"console-stars\" aria-hidden=\"true\"></div><div class=\"space-decor\" aria-hidden=\"true\"><div class=\"orbit-ring ring-1\"></div><div class=\"orbit-ring ring-2\"></div><div class=\"orbit-ring ring-3\"></div><div class=\"planet-earth\"></div></div><div class=\"crt-overlay\" aria-hidden=\"true\"></div><div class=\"hud-frame\" aria-hidden=\"true\"><i class=\"hud-corner tl\"></i><i class=\"hud-corner tr\"></i><i class=\"hud-corner bl\"></i><i class=\"hud-corner br\"></i></div><nav class=\"console-links\" aria-label=\"Primary navigation\"><a href=\"/\">Home</a><a href=\"/Arcade/\" aria-current=\"page\">Arcade</a><a href=\"/Tracker/\">Tracker</a><a href=\"/Community/\">Community</a></nav><header class=\"console-head\"><p class=\"console-kicker\">EPIC BENCH / PLAYABLE BUILDS</p><h1 class=\"console-title\">ARCADE</h1><p class=\"console-subtitle\">Every model. Every harness. Every build. Ready to play.</p></header>");
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(html), 'Cache-Control': 'no-cache' });
+        res.end(req.method === 'HEAD' ? undefined : html);
+        return;
       }
       if (url.pathname === "/style.css" || url.pathname === "/app.js") {
         req_wants_head = false;

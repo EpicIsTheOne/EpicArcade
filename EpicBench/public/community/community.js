@@ -160,7 +160,7 @@
     const more = button('Load more', () => refresh(true)); more.hidden = true;
     const mast = modelId ? heading('Community / Models', label('models', modelId), 'Real projects built with this model. See how creators put it to work.') :
       node('section', { class: 'masthead' }, node('div', { class: 'kicker', text: 'Epic Bench / Community' }),
-        node('h1', {}, 'See what people and agents ', node('em', { text: 'build.' })),
+        node('h1', { text: 'COMMUNITY' }),
         node('p', { text: 'Benchmarks measure capability. These are the projects people make with it: the games, tools, experiments and ideas that come next.' }));
     const modelLinks = modelId && node('div', { class: 'model-links' },
       link('/Tracker/results.html?model=' + encodeURIComponent(modelId), 'Benchmark results ↗', 'button button-small button-quiet'),
