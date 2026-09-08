@@ -13,6 +13,7 @@ const http = require("node:http");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("path");
+const os = require('node:os');
 const { spawn } = require("node:child_process");
 
 const OX = process.env.OX_DIR ||
@@ -62,7 +63,12 @@ async function serveFrom(baseDir, relParts, res) {
   if (abs !== absBase && !abs.startsWith(absBase + path.sep)) return forbidden(res);
 
   let st;
-  try { st = await fsp.stat(abs); } catch { return notFound(res); }
+  try {
+    const realBase = await fsp.realpath(absBase);
+    abs = await fsp.realpath(abs);
+    if (abs !== realBase && !abs.startsWith(realBase + path.sep)) return forbidden(res);
+    st = await fsp.stat(abs);
+  } catch { return notFound(res); }
 
   if (st.isDirectory()) {
     try { await fsp.access(path.join(abs, "index.html")); }
@@ -76,7 +82,7 @@ async function serveFrom(baseDir, relParts, res) {
     "Content-Length": st.size,
     "Cache-Control": "no-cache",
   });
-  if (req_wants_head) { res.end(); return; }
+  if (res.req?.method === 'HEAD') { res.end(); return; }
   fs.createReadStream(abs).pipe(res);
 }
 let req_wants_head = false;
@@ -231,7 +237,7 @@ async function handleApi(req, res, url, ctx) {
   return notFound(res);
 }
 
-function start(opts = {}) {
+async function start(opts = {}) {
   // games root defaults to the great-grandparent (local layout); deployments
   // set ARCHIVE_ROOT explicitly (e.g. the repo checkout on kvm2).
   const root = opts.root || process.env.ARCHIVE_ROOT ||
@@ -261,8 +267,113 @@ function start(opts = {}) {
     cacheFile: cacheFileFor(archiveRoot, root),
   });
 
+  const { createCommunity } = require('./community');
+  const { makeCatalog } = require('./community-catalog');
+  const communityOptions = {
+    dataDir: opts.communityDataDir || process.env.COMMUNITY_DATA_DIR ||
+      (fs.existsSync('/data') ? '/data/community' : path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), 'EpicBench', 'community')),
+    origin: opts.communityOrigin || process.env.COMMUNITY_ORIGIN || 'http://127.0.0.1:8795',
+    secureCookies: opts.communitySecureCookies ?? (process.env.COMMUNITY_SECURE_COOKIES === '1' || /^https:/.test(process.env.COMMUNITY_ORIGIN || '')),
+    trustProxy: process.env.COMMUNITY_TRUST_PROXY === '1',
+    adminIds: opts.communityAdminIds,
+    getCatalog: makeCatalog({ trackerDir, harnessMeta: HARNESS_META, getBuilds: () => buildsCache.peek() || [] }),
+  };
+  const community = createCommunity(communityOptions);
+  // Games need normal storage/module behavior but must never share an origin
+  // with the authenticated application. Production uses the existing arcade
+  // host. Development gets a separate, static-only listener in this process.
+  let gameBase = opts.gameOrigin || process.env.COMMUNITY_GAME_ORIGIN || '';
+  let gameServer = null;
+  if (gameBase) {
+    const target = new URL(gameBase);
+    const accountOrigin = new URL(opts.communityOrigin || process.env.COMMUNITY_ORIGIN || 'http://127.0.0.1:8795').origin;
+    if (!['http:', 'https:'].includes(target.protocol) || target.username || target.password || target.origin === accountOrigin) {
+      community.close();
+      throw new Error('COMMUNITY_GAME_ORIGIN must be a different HTTP(S) origin from COMMUNITY_ORIGIN');
+    }
+    gameBase = gameBase.replace(/\/$/, '');
+  } else {
+    if (/^https:/.test(opts.communityOrigin || process.env.COMMUNITY_ORIGIN || '')) {
+      community.close();
+      throw new Error('Set COMMUNITY_GAME_ORIGIN to the separate arcade origin for HTTPS deployments');
+    }
+    gameServer = http.createServer(async (req, res) => {
+      try {
+        if (!['GET', 'HEAD'].includes(req.method)) return sendJson(res, 405, { error: 'method' });
+        const u = new URL(req.url, 'http://games');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Referrer-Policy', 'no-referrer');
+        let match = u.pathname.match(/^\/(?:play|media)\/([\w-]+)(\/.*)?$/);
+        if (match) {
+          const dir = await resolveBuildDir(root, match[1]);
+          if (!dir) return notFound(res);
+          const parts = (match[2] || '/').slice(1).split('/').filter(Boolean);
+          return await serveFrom(dir, parts.length ? parts : ['index.html'], res);
+        }
+        const seg = u.pathname.split('/').filter(Boolean);
+        if (arcadeState.enabled && seg.length >= 3 && !['api', 'Community', 'Tracker', 'thumbs'].includes(seg[0])) {
+          return await serveFrom(arcadeState.dir, seg, res);
+        }
+        return notFound(res);
+      } catch { return sendJson(res, 500, { error: 'Game request failed' }); }
+    });
+    await new Promise((resolve, reject) => {
+      gameServer.once('error', reject);
+      gameServer.listen(opts.gamePort ?? 0, '127.0.0.1', resolve);
+    });
+    gameBase = 'http://127.0.0.1:' + gameServer.address().port;
+  }
+  state.gameOrigin = gameBase;
+  function redirectGame(url, res) {
+    res.writeHead(307, { Location: gameBase + url.pathname + url.search, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+    res.end();
+  }
+
   const server = http.createServer(async (req, res) => {
     let url = new URL(req.url, "http://x");
+    if (basePath && url.pathname === basePath) {
+      res.writeHead(301, { Location: basePath + '/' + url.search });
+      res.end(); return;
+    }
+    // Match Community before arcade prefix stripping; never give a second path
+    // access to the authenticated API.
+    if (url.pathname.startsWith('/api/community/')) {
+      try { if (await community.handle(req, res, url)) return; }
+      catch { return sendJson(res, 500, { error: 'Community request failed', code: 'internal_error' }); }
+      return notFound(res);
+    }
+    if (url.pathname === '/Community' || url.pathname.startsWith('/Community/')) {
+      if (!['GET', 'HEAD'].includes(req.method)) return sendJson(res, 405, { error: 'method' });
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Referrer-Policy', 'no-referrer');
+      res.setHeader('X-Frame-Options', 'DENY');
+      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'");
+      req_wants_head = req.method === 'HEAD';
+      const staticFiles = {
+        '/Community/community.css': 'community.css',
+        '/Community/community.js': 'community.js',
+      };
+      if (staticFiles[url.pathname]) return serveFrom(path.join(__dirname, 'public', 'community'), [staticFiles[url.pathname]], res);
+      const skillFiles = {
+        '/Community/skill/SKILL.md': ['epic-bench-community', 'SKILL.md'],
+        '/Community/skill/scripts/epic_bench_community.py': ['epic-bench-community', 'scripts', 'epic_bench_community.py'],
+        '/Community/skill/epic-bench-community.zip': ['epic-bench-community.zip'],
+      };
+      if (skillFiles[url.pathname]) {
+        res.setHeader('Content-Disposition', 'attachment');
+        return serveFrom(path.join(__dirname, 'community-skill'), skillFiles[url.pathname], res);
+      }
+      if (url.pathname === '/Community/api-docs') return serveFrom(__dirname, ['COMMUNITY.md'], res);
+      if (/^\/Community(?:\/(?:projects|creators|models)\/[^/]+|\/(?:publish|account|agent|admin))?\/?$/.test(url.pathname)) {
+        return serveFrom(path.join(__dirname, 'public', 'community'), ['index.html'], res);
+      }
+      return notFound(res);
+    }
+    if (url.pathname === '/model-catalog.js' || url.pathname === '/Arcade/model-catalog.js') {
+      req_wants_head = req.method === 'HEAD';
+      return serveFrom(path.join(OX, 'lib'), ['model-catalog.js'], res);
+    }
     // Reverse-proxy subpath support: strip BASE_PATH ("/Arcade") so the
     // app always sees root-relative paths internally.
     let strippedArcade = false;
@@ -314,19 +425,14 @@ function start(opts = {}) {
       let m;
       if ((m = url.pathname.match(/^\/play\/([\w-]+)(\/.*)?$/)) ||
           (m = url.pathname.match(/^\/media\/([\w-]+)(\/.*)?$/))) {
-        const dir = await resolveBuildDir(root, m[1]);
-        if (!dir) return notFound(res);
-        const rel = (m[2] || "/").slice(1).split("/").filter(Boolean);
-        return await serveFrom(dir, rel.length ? rel : ["index.html"], res);
+        return redirectGame(url, res);
       }
 
       // EpicArcade route: /<Model>/<Project>/<Harness>/... (sync mode only)
       const seg = url.pathname.split("/").filter(Boolean);
       if (arcadeState.enabled && seg.length >= 3 &&
           !["api", "play", "thumbs", "media"].includes(seg[0])) {
-        const gameDir = path.join(arcadeState.dir, seg[0], seg[1], seg[2]);
-        const rel = seg.slice(3);
-        return await serveFrom(gameDir, rel.length ? rel : ["index.html"], res);
+        return redirectGame(url, res);
       }
 
       if ((m = url.pathname.match(/^\/thumbs\/([\w-]+)\.(png|json)$/))) {
@@ -369,10 +475,14 @@ function start(opts = {}) {
     server.listen(port, host, async () => {
       const addr = server.address();
       state.port = typeof addr === "object" && addr ? addr.port : port;
+      if (!opts.communityOrigin && !process.env.COMMUNITY_ORIGIN) communityOptions.origin = `http://127.0.0.1:${state.port}`;
       state.server = server;
       state.close = () => new Promise((done) => {
         if (arcadeState.timer) clearInterval(arcadeState.timer);
-        server.close(done);
+        server.close(() => {
+          community.close();
+          if (gameServer) gameServer.close(done); else done();
+        });
       });
       console.log(`epicbench running at http://127.0.0.1:${state.port}  (games root: ${root}${syncEnabled ? ", sync: on" : ""})`);
       // prime the scan cache so the first page load is already warm
@@ -392,6 +502,8 @@ function start(opts = {}) {
         server.listen(port, process.env.ARCHIVE_HOST || "127.0.0.1");
         return;
       }
+      community.close();
+      gameServer?.close();
       reject(err);
     });
   });

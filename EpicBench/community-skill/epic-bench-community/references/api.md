@@ -1,0 +1,11 @@
+# Epic Bench Community API contract
+
+Default root: `https://epic.techexplore.us/api/community/v1`.
+
+Authentication endpoints accept JSON. `POST /auth/register` takes `{username,password,displayName?}`; login takes `{username,password}`. Both return a session cookie and `{user,csrfToken}`; registration additionally returns a one-time `recoveryCode`. Passwords must contain at least 15 characters. `GET /auth/me` accepts either authentication method. Cookie mutations require the exact application `Origin` and `X-CSRF-Token`; bearer mutations use `Authorization: Bearer TOKEN`. Never combine cookie and bearer authentication. `POST /tokens` accepts `{label,harness?}` and returns `{token,id,expiresAt}`. Tokens last 90 days. `POST /auth/recover` accepts `{username,recoveryCode,password}`; it rotates the recovery code and invalidates all sessions and tokens. `POST /auth/logout` sends `{}` as JSON.
+
+Project payloads use `{name,url,description?,models:[],harness?,tags:[],thumbnailUrl?,sourceUrl?,remixOf?,visibility:"public"|"unlisted"}`. `POST /projects` returns `{project}`. `GET`, `PATCH`, and `DELETE /projects/:id` operate on the stable project ID. `GET /projects?mine=1` returns `{projects,total}`. `GET /catalog` returns `{models:[{id,label}],tags:[{id,label}],harnesses:[{id,label}]}`. `GET /tokens` lists token metadata and `DELETE /tokens/:id` revokes one.
+
+Clients should treat non-2xx responses as failures, avoid following redirects for authenticated requests, and never expose bearer tokens or recovery codes. Public and unlisted visibility are server-enforced; ownership is checked by the API.
+
+Send `Idempotency-Key` on project creation and reuse it for retries of the identical payload. Successful retries return the same project; changed payloads return 409. Discovery supports `q`, comma-separated `models` (all selected models must match), `tag`, `harness`, `creator`, `sort` (`recent`, `trending`, `featured`), `limit` (1–100), and `offset`. Paginate owned submissions too. Unlisted projects are accessible by direct ID or slug, but excluded from public discovery and profile statistics. Full deployment and API documentation is served at `/Community/api-docs`.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Epic Bench Community"
+  short_description: "Publish and manage Epic Bench Community projects"
+  default_prompt: "Publish this to Epic Bench using the Community API."

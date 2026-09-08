@@ -1,3 +1,7 @@
 node_modules/
 *.log
 tests/_tmp-*
+EpicBench/data/
+EpicBench/tests/artifacts/
+EpicBench/community-skill/**/*.zip
+**/__pycache__/

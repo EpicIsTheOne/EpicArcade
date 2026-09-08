@@ -210,6 +210,10 @@ function start(opts = {}) {
 
   const server = http.createServer(async (req, res) => {
     let url = new URL(req.url, "http://x");
+    if (basePath && url.pathname === basePath) {
+      res.writeHead(301, { Location: basePath + '/' + url.search });
+      res.end(); return;
+    }
     // Reverse-proxy subpath support: strip BASE_PATH ("/OxArcade") so the
     // app always sees root-relative paths internally.
     if (basePath && (url.pathname === basePath || url.pathname.startsWith(basePath + "/"))) {
@@ -273,6 +277,9 @@ function start(opts = {}) {
       if (url.pathname === "/" || url.pathname === "/index.html") {
         req_wants_head = false;
         return await serveFrom(path.join(__dirname, "public"), ["index.html"], res);
+      }
+      if (url.pathname === '/model-catalog.js') {
+        return await serveFrom(path.join(__dirname, 'lib'), ['model-catalog.js'], res);
       }
       if (url.pathname === "/style.css" || url.pathname === "/app.js") {
         req_wants_head = false;

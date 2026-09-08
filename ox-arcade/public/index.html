@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EpicBench</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="/style.css">
-<script src="/config.js"></script>
+<link rel="stylesheet" href="style.css">
+<script src="config.js"></script>
+<script src="model-catalog.js"></script>
 </head>
 <body>
 <canvas id="stars" aria-hidden="true"></canvas>
@@ -22,6 +23,7 @@
     <button class="btn small ghost sync-btn" id="sync-btn" hidden title="Pull EpicArcade repo">&#8645; Sync</button>
   </div>
   <div class="controls">
+    <a class="btn small ghost" id="community-nav" href="https://epic.techexplore.us/Community/">Community ↗</a>
     <input id="search" type="search" placeholder="Search exhibits…" autocomplete="off" spellcheck="false">
     <nav class="chips" id="chips">
       <button class="chip active" data-filter="all">All</button>
@@ -142,6 +144,6 @@
   </article>
 </template>
 
-<script src="/app.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

@@ -26,7 +26,7 @@ th{color:#8fa8bd;font-weight:600}
 </style></head><body><div class="wrap">
 <h1>EPIC BENCH — LIVE RESULTS</h1>
 <div class="sub">Epic Bench · canonical pack <span id="packHash">…</span> · <a href="index.html">Prompt Browser</a></div>
-<nav><a href="index.html">Prompts</a><a href="results.html">Live Results</a><a href="results.html#suggest">Suggest a Prompt</a><a href="results.html#feedback">Give Feedback</a></nav>
+<nav><a href="index.html">Prompts</a><a href="results.html">Live Results</a><a href="https://epic.techexplore.us/Community/">Community</a><a href="results.html#suggest">Suggest a Prompt</a><a href="results.html#feedback">Give Feedback</a></nav>
 
 <div class="card prog" id="progCard"><b id="pDone">–</b> / <span id="pTotal">46</span> complete
 &nbsp;<span id="pCounts"></span><div class="muted" id="pUpdated"></div></div>
@@ -89,8 +89,10 @@ async function load(){try{const r=await fetch('api/status',{cache:'no-store'});c
  const pf=$('promptSel').value, sf=$('statusSel').value;
  if(pf)rows=rows.filter(x=>String(x.promptId)===pf);
  if(sf)rows=rows.filter(x=>x.status===sf);
+ const modelFilter=params.get('model');
+ if(modelFilter)rows=rows.filter(x=>x.model===modelFilter);
  rows.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
- $('rows').innerHTML=rows.slice(0,80).map(x=>`<tr><td>${esc(x.updatedAt)}</td><td>${esc(x.harness||'—')}</td><td>${esc(x.model)}</td>`+
+ $('rows').innerHTML=rows.slice(0,80).map(x=>`<tr><td>${esc(x.updatedAt)}</td><td>${esc(x.harness||'—')}</td><td><a href="https://epic.techexplore.us/Community/models/${encodeURIComponent(x.model)}" title="Explore Community projects">${esc(x.model)}</a></td>`+
   `<td>${x.promptId!=null?`${String(x.promptId).padStart(2,'0')} · ${esc((PROMPT_BY_ID[x.promptId]||{}).title||('#'+x.promptId))}`:'(run-level)'}</td>`+
   `<td><span class="pill ${x.status}">${esc(x.status)}</span></td><td>${esc(x.notes)}</td></tr>`).join('')
   ||'<tr><td colspan="6" class="muted">No results yet.</td></tr>';
