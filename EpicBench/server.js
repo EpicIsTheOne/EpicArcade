@@ -275,7 +275,9 @@ async function start(opts = {}) {
     origin: opts.communityOrigin || process.env.COMMUNITY_ORIGIN || 'http://127.0.0.1:8795',
     secureCookies: opts.communitySecureCookies ?? (process.env.COMMUNITY_SECURE_COOKIES === '1' || /^https:/.test(process.env.COMMUNITY_ORIGIN || '')),
     trustProxy: process.env.COMMUNITY_TRUST_PROXY === '1',
-    adminIds: opts.communityAdminIds,
+      adminIds: opts.communityAdminIds,
+      autoPreview: opts.autoPreview,
+      previewRenderer: opts.previewRenderer,
     getCatalog: makeCatalog({ trackerDir, harnessMeta: HARNESS_META, getBuilds: () => buildsCache.peek() || [] }),
   };
   const community = createCommunity(communityOptions);

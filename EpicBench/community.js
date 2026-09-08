@@ -6,12 +6,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const net = require('node:net');
 const os = require('node:os');
+const { createThumbnails, decodeUpload } = require('./community-thumbnails');
 
 const PREFIX = '/api/community/v1';
 const DAY = 86_400_000;
-const MAX_BODY = 64 * 1024;
+const MAX_BODY = 2 * 1024 * 1024;
 const PASSWORD_OPTIONS = { N: 32768, r: 8, p: 3, maxmem: 64 * 1024 * 1024 };
-const PROJECT_FIELDS = ['name', 'url', 'description', 'models', 'harness', 'tags', 'thumbnailUrl', 'sourceUrl', 'remixOf', 'visibility'];
+const PROJECT_FIELDS = ['name', 'url', 'description', 'models', 'harness', 'tags', 'thumbnailUrl', 'thumbnailData', 'sourceUrl', 'remixOf', 'visibility'];
 const uuid = () => crypto.randomUUID();
 const secret = () => crypto.randomBytes(32).toString('base64url');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -59,8 +60,7 @@ function publicUrl(value, name, image = false, required = false) {
   const host = url.hostname.toLowerCase().replace(/\.$/, '');
   check(['http:', 'https:'].includes(url.protocol) && (!image || url.protocol === 'https:'), `${name} requires ${image ? 'HTTPS' : 'HTTP(S)'}`);
   check(!url.username && !url.password && !/[\s\u0000-\u001f]/.test(raw), `${name} cannot contain credentials or whitespace`);
-  // No server-side link fetching. Requiring public DNS names also prevents
-  // accidental intranet, IP-literal, file and local-service publications.
+  // Preview fetching independently resolves and pins public IPs for every resource.
   check(host.includes('.') && !net.isIP(host.replace(/^\[|\]$/g, '')) && !host.includes(':') &&
     !/(^|\.)(localhost|local|internal|lan|home|test|invalid)$/.test(host) &&
     /^[a-z0-9.-]+$/.test(host), `${name} must use a public DNS hostname`);
@@ -235,6 +235,7 @@ function createCommunity(opts = {}) {
     return json(res, 200, { user: { ...publicUser(account), isAdmin: adminIds.has(account.id) }, csrfToken,
       ...(recoveryCode ? { recoveryCode } : {}) }, { 'Set-Cookie': cookie(value) });
   }
+  const thumbnails = createThumbnails(db, { enabled: opts.autoPreview !== false && process.env.COMMUNITY_AUTO_PREVIEW !== '0', renderer: opts.previewRenderer });
   function project(id) { return get('SELECT * FROM projects WHERE id=? OR slug=?', id, id); }
   function owner(p, actor) { return !!actor && p.user_id === actor.user.id; }
   function visible(p, actor, direct = false) {
@@ -246,7 +247,7 @@ function createCommunity(opts = {}) {
     const source = p.remix_of && project(p.remix_of);
     const safeRemix = source && source.visibility === 'public' && source.moderation === 'active' && !accountById(source.user_id)?.disabled;
     return { id: p.id, slug: p.slug, name: p.name, url: p.url, description: p.description, models: JSON.parse(p.models),
-      harness: p.harness, tags: JSON.parse(p.tags), thumbnailUrl: p.thumbnail_url, sourceUrl: p.source_url,
+      harness: p.harness, tags: JSON.parse(p.tags), thumbnailUrl: p.thumbnail_url, ...thumbnails.info(p), sourceUrl: p.source_url,
       remixOf: safeRemix ? source.id : null, visibility: p.visibility, creator: publicUser(accountById(p.user_id)),
       publication: { method: p.publication_method, harness: p.publication_harness },
       featured: !!p.featured, moderation: p.moderation, likes: p.likes, views: p.views,
@@ -255,6 +256,9 @@ function createCommunity(opts = {}) {
   }
   function validateProject(body, prior) {
     fields(body, PROJECT_FIELDS);
+    let thumbnailData;
+    try { thumbnailData = decodeUpload(body.thumbnailData); } catch (error) { throw new APIError(400, error.message); }
+    check(!thumbnailData || !body.thumbnailUrl, 'Choose an uploaded image or a thumbnail URL');
     const base = prior ? { name: prior.name, url: prior.url, description: prior.description, models: JSON.parse(prior.models),
       harness: prior.harness, tags: JSON.parse(prior.tags), thumbnailUrl: prior.thumbnail_url, sourceUrl: prior.source_url,
       remixOf: prior.remix_of, visibility: prior.visibility } : {};
@@ -275,7 +279,7 @@ function createCommunity(opts = {}) {
     return { name: text(value.name, 'name', 140, true), url: publicUrl(value.url, 'url', false, true),
       description: text(value.description, 'description', 4000), models: list(value.models, 'models', 8, 120),
       harness: text(value.harness, 'harness', 40) || null, tags: list(value.tags, 'tags', 8, 32),
-      thumbnailUrl: publicUrl(value.thumbnailUrl, 'thumbnailUrl', true), sourceUrl: publicUrl(value.sourceUrl, 'sourceUrl'),
+      thumbnailUrl: thumbnailData ? null : publicUrl(value.thumbnailUrl, 'thumbnailUrl', true), thumbnailData, sourceUrl: publicUrl(value.sourceUrl, 'sourceUrl'),
       remixOf: remixOf ? project(remixOf).id : null, visibility };
   }
   function pagination(url) {
@@ -437,8 +441,19 @@ function createCommunity(opts = {}) {
           JSON.stringify(p.models), p.harness, JSON.stringify(p.tags), p.thumbnailUrl, p.sourceUrl, p.remixOf, p.visibility,
           actor.method, actor.method === 'agent' ? actor.token.harness : null, 0, 'active', 0, 0, time, time);
         if (key) run('INSERT INTO publication_keys VALUES(?,?,?,?)', actor.user.id, key, id, fingerprint);
+        thumbnails.update(project(id), p.thumbnailData);
       });
       return json(res, 201, { project: projectRow(project(id), actor) });
+    }
+    match = route.match(/^\/projects\/([^/]+)\/thumbnail$/);
+    if (match && method === 'GET') {
+      const p = project(match[1]);
+      check(visible(p, actor, true), 'Project not found', 404, 'not_found');
+      const image = await thumbnails.image(p);
+      check(visible(project(p.id), authenticate(req), true), 'Project not found', 404, 'not_found');
+      if (!image) { res.writeHead(204, { 'Cache-Control': 'no-store' }); res.end(); return true; }
+      res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': image.length,
+        'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(Buffer.from(image)); return true;
     }
     match = route.match(/^\/projects\/([^/]+)$/);
     if (match) {
@@ -458,6 +473,7 @@ function createCommunity(opts = {}) {
         const v = validateProject(body, p);
         run('UPDATE projects SET name=?,url=?,description=?,models=?,harness=?,tags=?,thumbnail_url=?,source_url=?,remix_of=?,visibility=?,updated_at=? WHERE id=?',
           v.name, v.url, v.description, JSON.stringify(v.models), v.harness, JSON.stringify(v.tags), v.thumbnailUrl, v.sourceUrl, v.remixOf, v.visibility, iso(), p.id);
+        thumbnails.update(project(p.id), v.thumbnailData);
         return json(res, 200, { project: projectRow(project(p.id), actor) });
       }
     }
@@ -558,6 +574,6 @@ function createCommunity(opts = {}) {
       error.retryAfter ? { 'Retry-After': String(error.retryAfter) } : {});
     }
   }
-  return { handle, close: () => db.close(), db };
+  return { handle, close: () => { thumbnails.close(); db.close(); }, db };
 }
 module.exports = { createCommunity };

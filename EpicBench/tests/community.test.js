@@ -42,6 +42,24 @@ test("register, login, logout, recovery, cookie flags, and token revocation", as
   assert.ok((await f.request("/api/community/v1/auth/me", "GET", undefined, { cookie })).body.user); assert.equal((await f.request("/api/community/v1/auth/logout", "POST", undefined, { cookie, origin: "http://localhost", csrf: logged.body.csrfToken })).status, 200);
 });
 
+test('thumbnail upload ownership, invalid data, persistence and automatic reset use the real API', async t => {
+  const f = await fixture(t, { autoPreview: false });
+  const alice = (await f.register('thumbnailalice')).state, bob = (await f.register('thumbnailbob')).state;
+  const created = await f.request('/api/community/v1/projects', 'POST', { name: 'Cover', url: 'https://example.com', thumbnailData: 'data:image/jpeg;base64,/9j/2Q==' }, alice);
+  assert.equal(created.status, 201); const p = created.body.project;
+  assert.equal(p.thumbnailSource, 'upload');
+  const route = '/api/community/v1/projects/' + p.id;
+  assert.equal((await f.request(route + '/thumbnail')).headers['content-type'], 'image/jpeg');
+  assert.equal((await f.request(route, 'PATCH', { thumbnailData: null }, bob)).status, 403);
+  assert.equal((await f.request(route, 'PATCH', { thumbnailData: 'data:text/html;base64,WA==' }, alice)).status, 400);
+  assert.equal((await f.request(route, 'PATCH', { name: 'Renamed' }, alice)).body.project.thumbnailSource, 'upload');
+  assert.equal((await f.request(route, 'PATCH', { thumbnailData: null, thumbnailUrl: '' }, alice)).body.project.thumbnailSource, 'automatic');
+  assert.equal((await f.request(route + '/thumbnail')).status, 204);
+  assert.equal((await f.request(route, 'PATCH', { thumbnailUrl: 'https://example.com/cover.jpg' }, alice)).body.project.thumbnailSource, 'url');
+  await f.request(route, 'DELETE', undefined, alice);
+  assert.equal((await f.request(route + '/thumbnail')).status, 404);
+});
+
 test("ownership, CSRF, validation, CRUD, stable slug, and optional clearing", async t => {
   const f = await fixture(t); const alice = (await f.register("alice")).state; const bob = (await f.register("bob")).state;
   const created = await f.request("/api/community/v1/projects", "POST", { name: "Safe Project", url: "https://example.com/app", description: "hello", models: ["gpt-6-astra"], tags: ["game"], thumbnailUrl: "", sourceUrl: "", visibility: "unlisted" }, alice); assert.equal(created.status, 201); const p = created.body.project;

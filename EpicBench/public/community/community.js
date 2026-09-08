@@ -61,8 +61,8 @@
     for (const char of project.id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
     surface.dataset.palette = hash % 5;
     surface.append(node('span', { class: 'art-orbit' }), node('span', { class: 'art-mark', text: (project.tags?.[0] || 'BUILD').toUpperCase() }));
-    if (project.thumbnailUrl) {
-      const image = node('img', { src: project.thumbnailUrl, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
+    if (project.previewUrl || project.thumbnailUrl) {
+      const image = node('img', { src: project.previewUrl || project.thumbnailUrl, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
       image.addEventListener('error', () => image.remove()); surface.append(image);
     }
     return surface;
@@ -293,17 +293,42 @@
     const harness = field('Agent / harness', 'harness', { value: project?.harness || '', placeholder: 'Codex, OpenCode, Claude Code, or another harness', max: 40 });
     harness.querySelector('input').setAttribute('list', 'harnessOptions');
     harness.append(node('datalist', { id: 'harnessOptions' }, state.catalog.harnesses.map(h => node('option', { value: h.id, label: h.label }))));
+    let thumbnailData;
+    const thumbnailUrl = field('Thumbnail URL', 'thumbnailUrl', { type: 'url', value: project?.thumbnailUrl || '', placeholder: 'https://… (optional)' });
+    const thumbnailInput = thumbnailUrl.querySelector('input');
+    const upload = node('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', id: 'thumbnailUpload' });
+    const preview = node('img', { class: 'thumbnail-editor-preview', alt: 'Thumbnail preview', hidden: !project?.previewUrl, ...(project?.previewUrl ? { src: project.previewUrl } : {}) });
+    preview.addEventListener('error', () => { preview.hidden = true; });
+    const thumbnailStatus = node('p', { class: 'form-note', role: 'status', text: project?.thumbnailSource === 'upload' ? 'Your uploaded thumbnail is saved. You can replace it below.' : 'Leave this blank to use a screenshot of the first screen at your project link. You can change it anytime.' });
+    upload.addEventListener('change', safeAction(async () => {
+      const file = upload.files[0]; if (!file) return;
+      if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) { upload.value = ''; throw new Error('Choose a PNG, JPEG or WebP image under 10 MB.'); }
+      upload.disabled = true;
+      try {
+        const bitmap = await createImageBitmap(file);
+        const scale = Math.min(1, 1280 / bitmap.width, 1280 / bitmap.height);
+        const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(bitmap.width * scale)); canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        const drawing = canvas.getContext('2d'); drawing.fillStyle = '#101827'; drawing.fillRect(0, 0, canvas.width, canvas.height); drawing.drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close();
+        const encoded = canvas.toDataURL('image/jpeg', 0.82);
+        if (encoded.length > 1400000) throw new Error('This image is too detailed. Choose a smaller image.');
+        thumbnailData = encoded; thumbnailInput.value = ''; preview.src = encoded; preview.hidden = false;
+        thumbnailStatus.textContent = 'Image selected. Save your project to keep this thumbnail.';
+      } finally { upload.disabled = false; }
+    }));
+    thumbnailInput.addEventListener('input', () => { thumbnailData = null; upload.value = ''; preview.hidden = true; });
+    const thumbnailEditor = node('section', { class: 'thumbnail-editor' }, node('h2', { text: 'Thumbnail (optional)' }), thumbnailStatus, preview,
+      node('label', { for: 'thumbnailUpload', text: 'Upload an image' }), upload, thumbnailUrl,
+      button('Use automatic preview', () => { thumbnailData = null; thumbnailInput.value = ''; upload.value = ''; preview.hidden = true; thumbnailStatus.textContent = 'The linked page’s first screen will be used after you save. If it cannot load, a default cover is shown.'; }));
     const details = node('details', { class: 'optional-details', open: !!edit }, node('summary', { text: 'Add optional details' }),
       node('div', { class: 'form-stack' }, field('Description', 'description', { type: 'textarea', value: project?.description || '', max: 4000, placeholder: 'What did you make? What makes it interesting?' }),
-        models, harness, tags, field('Thumbnail URL', 'thumbnailUrl', { type: 'url', value: project?.thumbnailUrl || '', placeholder: 'https://… (optional)' }),
-        node('p', { class: 'form-note', text: 'Use a publicly hosted HTTPS image. If it cannot load, your project still gets a generated cover.' }),
+        models, harness, tags,
         field('Source / repository link', 'sourceUrl', { type: 'url', value: project?.sourceUrl || '', placeholder: 'https://github.com/… (optional)' }),
         field('Original / remix project ID', 'remixOf', { value: project?.remixOf || '', max: 80, placeholder: 'Optional public Community project ID' }),
         selectField('Visibility', 'visibility', [{ id: 'public', label: 'Public — appears in discovery' }, { id: 'unlisted', label: 'Unlisted — accessible by direct link' }], project?.visibility || 'public')));
     const form = node('form', { class: 'publish-form form-stack' },
       field('Project name', 'name', { required: true, max: 140, value: project?.name || '', placeholder: 'Give your build a name' }),
       field('Project link', 'url', { required: true, type: 'url', value: project?.url || '', placeholder: 'https://your-project.example.com' }),
-      node('p', { class: 'form-note', text: 'That is all you need. Your project will be public unless you choose Unlisted below.' }), details,
+        node('p', { class: 'form-note', text: 'That is all you need. Your project will be public unless you choose Unlisted below.' }), thumbnailEditor, details,
       node('button', { type: 'submit', class: 'button', text: edit ? 'Save changes' : 'Publish project' }));
     layout(node('section', { class: 'page-block publish-page' }, heading(edit ? 'Your publication' : 'New publication', edit ? 'Update your build.' : 'Name. Link. Published.',
       'Share what you made. Add model credits and context whenever you are ready.'), node('div', { class: 'publish-grid' }, form,
@@ -311,7 +336,9 @@
           node('p', { text: 'You can edit the link, credits and visibility later. Your Community project ID stays the same.' }), link('/Community/agent', 'Publishing with an agent? →')))));
     submit(form, async () => {
       if (!state.user && !await signIn()) return;
-      const body = Object.fromEntries(new FormData(form)); body.models = models.values(); body.tags = tags.values();
+        const body = Object.fromEntries(new FormData(form)); body.models = models.values(); body.tags = tags.values();
+        if (upload.disabled) throw new Error('Please wait for the image to finish processing.');
+        if (thumbnailData !== undefined) body.thumbnailData = thumbnailData;
       const data = await api(edit ? '/projects/' + edit : '/projects', edit ? 'PATCH' : 'POST', body, edit ? {} : { 'Idempotency-Key': publicationKey });
       notify(edit ? 'Project updated' : 'Your project is published'); navigate(routeUrl('projects', data.project.slug));
     });

@@ -24,4 +24,6 @@ Tokens expire after 90 days. Reuse the saved account with `login`, or rotate thr
 
 The CLI uses session cookies only for account/token management and a bearer token for project operations. It persists the stable project ID returned by the API, keyed by the absolute local project path when supplied. Never put passwords, recovery codes, or tokens in prompts, submissions, logs, source files, or command arguments when stdin/prompt input is practical. The CLI never prints secrets.
 
+Thumbnails are optional: leaving `--thumbnail-url` blank uses an automatic screenshot of the linked page's first screen when available. Add or replace a hosted image later with `update --thumbnail-url https://...`. The web editor also accepts image uploads and can restore automatic previews. A blocked or unavailable site keeps its default cover.
+
 Read [references/api.md](references/api.md) when constructing third-party integrations or diagnosing API responses. The CLI's `--help` is the authoritative command reference.

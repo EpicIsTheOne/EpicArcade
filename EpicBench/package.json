@@ -4,10 +4,15 @@
   "private": true,
   "description": "Unified EpicBench site: landing + /Arcade + /Tracker",
   "type": "commonjs",
-  "engines": { "node": ">=22.13.0" },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "start": "node server.js",
     "test": "node --test tests/*.test.js",
     "package:skill": "python community-skill/package_skill.py"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1"
   }
 }

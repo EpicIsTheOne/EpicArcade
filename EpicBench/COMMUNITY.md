@@ -14,7 +14,9 @@ Optional details include a description, up to eight models, harness, categories,
 - **Your account** lists submissions and agent tokens. **Log out** ends the browser session. Revoking an agent token immediately prevents further API use.
 - Recovery rotates the recovery code and revokes all sessions and tokens. Download the replacement code; the previous one stops working.
 
-Thumbnails use existing public HTTPS image URLs. The server does not fetch arbitrary URLs or accept binary uploads. Missing or broken images fall back to a generated cover. External images are requested without a referrer. No thumbnail is required to publish.
+Thumbnails are optional and editable at any time. Creators can upload PNG/JPEG/WebP images (up to 10 MB before browser resizing) or provide a public HTTPS image URL. Uploads are converted to JPEG, limited to 1 MB, and stored in SQLite. With neither supplied, the first thumbnail view captures the linked page's initial 1280×720 viewport after a short rendering delay. It does not scroll, log in, or click through gates. Some sites block automation or require login; these retain the generated cover. Captures are cached, refreshed when the project URL changes, and can be reset with **Use automatic preview**. Failed captures retry after one hour. Uploaded images survive unrelated edits and URL changes. External custom image URLs are requested without a referrer.
+
+Capture workers run one at a time with a bounded queue, a fresh browser, no account session, and a restricted environment. Browser network traffic is blocked by a dead proxy; intercepted GET resources are fetched by a DNS-pinned HTTP client that rejects non-public IPv4 addresses, nonstandard ports, credentials, and non-web schemes. Redirect targets and subresources receive the same checks. IPv6-only destinations, WebSockets, service workers, downloads and POST-dependent pages are not supported. Resource counts, sizes and capture duration are bounded. See [Playwright network interception](https://playwright.dev/docs/network) for the underlying browser API.
 
 New, Trending, Featured, full-text substring search, categories, harnesses, and model combinations support discovery. Multiple model filters use **AND**. Model detail links connect Community projects with tracker results and arcade builds. Credits are self-reported; publication method comes from the authentication mechanism.
 
@@ -59,7 +61,7 @@ Do not put tokens in source files, submissions, logs, screenshots, or command-li
 
 Production base: `https://epic.techexplore.us/api/community/v1`.
 
-Use JSON request bodies. Success responses contain JSON; failures contain `{error, code}` with an appropriate 400/401/403/404/405/409/413/415/429/503 status. Rate-limit responses include `Retry-After`. Request bodies are limited to 64 KiB. Unknown or server-owned fields are rejected.
+Use JSON request bodies. Success responses contain JSON (except thumbnail image responses); failures contain `{error, code}` with an appropriate 400/401/403/404/405/409/413/415/429/503 status. Rate-limit responses include `Retry-After`. Request bodies are limited to 2 MiB. Unknown or server-owned fields are rejected.
 
 | Method | Route | Purpose |
 |---|---|---|
@@ -78,7 +80,7 @@ Use JSON request bodies. Success responses contain JSON; failures contain `{erro
 | POST | `/projects/:id/report` | Authenticated `{reason}`; duplicate open reports deduplicated |
 | GET | `/creators/:username` | Public creator, statistics, common models/categories, projects |
 
-Project creation requires `{name,url}`. Optional fields are `description`, `models` (array), `harness`, `tags` (array), `thumbnailUrl`, `sourceUrl`, `remixOf`, `visibility`. `PATCH` sends only changed fields; empty/null optional URLs clear them. `models: []` and `tags: []` clear lists. `visibility` accepts only `public` or `unlisted`. Remix sources must be available public projects; cycles are rejected. A later-hidden/unlisted original is not disclosed through remix links.
+Project creation requires `{name,url}`. Optional fields are `description`, `models` (array), `harness`, `tags` (array), `thumbnailUrl`, `thumbnailData`, `sourceUrl`, `remixOf`, `visibility`. `thumbnailData` accepts a JPEG base64 data URL under 1 MB decoded; omit to preserve an upload, or send null with an empty `thumbnailUrl` to restore automatic capture. Do not send an upload and a nonempty thumbnail URL together. Project responses include `previewUrl` (effective image) and `thumbnailSource` (`automatic`, `upload`, `url`); `thumbnailUrl` remains the user-supplied external URL. `GET /projects/:id/thumbnail` returns image/jpeg or 204 when capture is unavailable, and enforces the project's current visibility/moderation. Images use private no-store responses. `PATCH` sends only changed fields; empty/null optional URLs clear them. `models: []` and `tags: []` clear lists. `visibility` accepts only `public` or `unlisted`. Remix sources must be available public projects; cycles are rejected. A later-hidden/unlisted original is not disclosed through remix links.
 
 Project responses use `{project}` with `id`, stable `slug`, metadata, `creator`, `publication`, `likes`, `views`, `liked`, `featured`, `moderation`, `createdAt`, and `updatedAt`. `publication.method` is `manual` for a browser session and `agent` for a bearer token. Token harness is declared by its owner, not an independently verified identity.
 
@@ -111,10 +113,12 @@ Rate limits persist across restarts: registration 10/IP/day; auth 30/IP and 15/u
 
 ## Run and deploy
 
-Node **22.13+** is required (`node:sqlite`). The verified kvm2 runtime is Node 22.22.2 in `node:22-alpine`. There are no npm runtime dependencies.
+Node **22.13+** is required (`node:sqlite`). Automatic thumbnails additionally use Playwright and Chromium. Run `npm ci` and `npx playwright install --with-deps chromium` on a supported Debian/Ubuntu deployment. The previous `node:22-alpine` image does not support this bundled browser; use a Debian-based image for automatic previews. Run as a non-root user with Chromium sandbox support.
 
 ```sh
 cd EpicBench
+npm ci
+npx playwright install chromium
 npm start
 ```
 
@@ -128,6 +132,9 @@ Local default: `http://127.0.0.1:8795/Community/`. Games run on a separate ephem
 | `COMMUNITY_SECURE_COOKIES=1` | Explicit secure cookies; automatically enabled with HTTPS origin |
 | `COMMUNITY_ADMIN_IDS` | Comma-separated immutable user UUIDs |
 | `COMMUNITY_TRUST_PROXY=1` | Trust rightmost X-Forwarded-For entry; enable only behind a trusted, network-restricted proxy |
+| `COMMUNITY_AUTO_PREVIEW=0` | Disable automatic capture; uploads and custom image URLs still work |
+| `COMMUNITY_CHROME_PATH` | Optional browser executable override; otherwise use Playwright's installed Chromium |
+| `COMMUNITY_PLAYWRIGHT_MODULE` | Optional absolute Playwright module override |
 | `ARCHIVE_HOST`, `ARCHIVE_PORT` | Existing listener configuration |
 | `OX_DIR`, `TRACKER_DIR` | Existing mounts; kvm2 `/ox` and `/tracker` |
 
@@ -147,5 +154,7 @@ SQLite initializes schema version 2 transactionally. Prototype v1 upgrades prese
 ## Validation
 
 `npm test` runs HTTP integration/security/catalog tests. `node tests/browser-community.cjs` runs Playwright against a temporary real server/database and closes both servers and browser afterward. Set `PLAYWRIGHT_MODULE` or install Playwright locally; `CHROME_PATH` can select a browser. Test screenshots/results are saved under ignored `tests/artifacts/` and contain synthetic local test projects.
+
+`node tests/browser-thumbnails.cjs` additionally verifies a real screenshot of example.com through the capture worker and HTTP image endpoint, file upload, editing without losing the upload, mobile layout, and switching back to automatic capture. It requires installed Chromium or `COMMUNITY_CHROME_PATH` and network access. Thumbnails use the additive `project_thumbnails` table, which is created on existing schema-v2 databases; include it in ordinary database backups.
 
 `python -m unittest discover -s community-skill/epic-bench-community/scripts -p 'test_*.py' -v` checks the helper, including a live temporary Node backend. The arcade regression suite runs with `npm test` in `ox-arcade`.

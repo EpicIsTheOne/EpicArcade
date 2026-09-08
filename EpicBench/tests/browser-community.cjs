@@ -13,7 +13,7 @@ catch {
 const { start } = require('../server');
 const artifacts = path.join(__dirname, 'artifacts');
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'epic-community-browser-'));
-const options = { port: 0, root: path.join(temp, 'games'), archiveRoot: path.join(temp, 'archive'), communityDataDir: path.join(temp, 'community') };
+const options = { port: 0, autoPreview: false, root: path.join(temp, 'games'), archiveRoot: path.join(temp, 'archive'), communityDataDir: path.join(temp, 'community') };
 for (const directory of [options.root, options.archiveRoot, artifacts]) fs.mkdirSync(directory, { recursive: true });
 let service, browser;
 const passed = [], errors = [];

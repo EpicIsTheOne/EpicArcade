@@ -74,7 +74,7 @@ test('invalid input fails closed, including visibility, JSON shape, URLs and pag
   for (const query of ['offset=1.5', 'limit=NaN', 'limit=0', 'offset=-1', 'limit=101', 'sort=unknown'])
     assert.equal((await f.call('/projects?' + query)).status, 400, query);
   assert.equal((await f.call('/auth/login', 'POST', null)).status, 400);
-  assert.equal((await f.call('/projects', 'POST', { ...good, description: 'x'.repeat(70000) }, user.headers)).status, 413);
+  assert.equal((await f.call('/projects', 'POST', { ...good, description: 'x'.repeat(2100000) }, user.headers)).status, 413);
   assert.equal((await f.call('/projects')).body.total, 0);
 });
 
