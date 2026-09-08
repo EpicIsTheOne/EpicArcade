@@ -12,7 +12,7 @@ const PREFIX = '/api/community/v1';
 const DAY = 86_400_000;
 const MAX_BODY = 2 * 1024 * 1024;
 const PASSWORD_OPTIONS = { N: 32768, r: 8, p: 3, maxmem: 64 * 1024 * 1024 };
-const PROJECT_FIELDS = ['name', 'url', 'description', 'models', 'harness', 'tags', 'thumbnailUrl', 'thumbnailData', 'sourceUrl', 'remixOf', 'visibility'];
+const PROJECT_FIELDS = ['name', 'url', 'description', 'prompt', 'models', 'harness', 'tags', 'thumbnailUrl', 'thumbnailData', 'sourceUrl', 'remixOf', 'visibility'];
 const uuid = () => crypto.randomUUID();
 const secret = () => crypto.randomBytes(32).toString('base64url');
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
@@ -120,7 +120,7 @@ function createCommunity(opts = {}) {
     catch (error) { db.exec('ROLLBACK'); throw error; }
   };
   const version = get('PRAGMA user_version').user_version;
-  if (version > 2) { db.close(); throw new Error('Community database is newer than this server'); }
+  if (version > 3) { db.close(); throw new Error('Community database is newer than this server'); }
   transaction(() => {
     db.exec(`
       CREATE TABLE IF NOT EXISTS users (
@@ -135,7 +135,7 @@ function createCommunity(opts = {}) {
         revoked_at TEXT, expires_at INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, user_id TEXT NOT NULL REFERENCES users(id),
-        name TEXT NOT NULL, url TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', models TEXT NOT NULL DEFAULT '[]',
+        name TEXT NOT NULL, url TEXT NOT NULL, prompt TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', models TEXT NOT NULL DEFAULT '[]',
         harness TEXT, tags TEXT NOT NULL DEFAULT '[]', thumbnail_url TEXT, source_url TEXT,
         remix_of TEXT REFERENCES projects(id) ON DELETE SET NULL, visibility TEXT NOT NULL DEFAULT 'public',
         publication_method TEXT NOT NULL, publication_harness TEXT, featured INTEGER NOT NULL DEFAULT 0,
@@ -170,8 +170,9 @@ function createCommunity(opts = {}) {
       db.exec('DELETE FROM sessions');
       run('UPDATE tokens SET expires_at=? WHERE expires_at=0', Date.now() + 90 * DAY);
     }
+    if (version <= 2 && !all('PRAGMA table_info(projects)').some(c => c.name === 'prompt')) db.exec("ALTER TABLE projects ADD COLUMN prompt TEXT NOT NULL DEFAULT ''");
     run('INSERT OR IGNORE INTO settings VALUES(?,?)', 'privacy_key', secret());
-    db.exec('PRAGMA user_version=2');
+    db.exec('PRAGMA user_version=3');
   });
   const privacyKey = get("SELECT value FROM settings WHERE key='privacy_key'").value;
   const digest = value => crypto.createHmac('sha256', privacyKey).update(value).digest('hex');
@@ -246,7 +247,7 @@ function createCommunity(opts = {}) {
   function projectRow(p, actor) {
     const source = p.remix_of && project(p.remix_of);
     const safeRemix = source && source.visibility === 'public' && source.moderation === 'active' && !accountById(source.user_id)?.disabled;
-    return { id: p.id, slug: p.slug, name: p.name, url: p.url, description: p.description, models: JSON.parse(p.models),
+    return { id: p.id, slug: p.slug, name: p.name, url: p.url, prompt: p.prompt || '', description: p.description, models: JSON.parse(p.models),
       harness: p.harness, tags: JSON.parse(p.tags), thumbnailUrl: p.thumbnail_url, ...thumbnails.info(p), sourceUrl: p.source_url,
       remixOf: safeRemix ? source.id : null, visibility: p.visibility, creator: publicUser(accountById(p.user_id)),
       publication: { method: p.publication_method, harness: p.publication_harness },
@@ -259,7 +260,7 @@ function createCommunity(opts = {}) {
     let thumbnailData;
     try { thumbnailData = decodeUpload(body.thumbnailData); } catch (error) { throw new APIError(400, error.message); }
     check(!thumbnailData || !body.thumbnailUrl, 'Choose an uploaded image or a thumbnail URL');
-    const base = prior ? { name: prior.name, url: prior.url, description: prior.description, models: JSON.parse(prior.models),
+    const base = prior ? { name: prior.name, url: prior.url, prompt: prior.prompt || '', description: prior.description, models: JSON.parse(prior.models),
       harness: prior.harness, tags: JSON.parse(prior.tags), thumbnailUrl: prior.thumbnail_url, sourceUrl: prior.source_url,
       remixOf: prior.remix_of, visibility: prior.visibility } : {};
     const value = { ...base, ...body };
@@ -277,7 +278,7 @@ function createCommunity(opts = {}) {
       check(depth < 50, 'Remix chain is too deep');
     }
     return { name: text(value.name, 'name', 140, true), url: publicUrl(value.url, 'url', false, true),
-      description: text(value.description, 'description', 4000), models: list(value.models, 'models', 8, 120),
+      prompt: text(value.prompt, 'prompt', 20000), description: text(value.description, 'description', 4000), models: list(value.models, 'models', 8, 120),
       harness: text(value.harness, 'harness', 40) || null, tags: list(value.tags, 'tags', 8, 32),
       thumbnailUrl: thumbnailData ? null : publicUrl(value.thumbnailUrl, 'thumbnailUrl', true), thumbnailData, sourceUrl: publicUrl(value.sourceUrl, 'sourceUrl'),
       remixOf: remixOf ? project(remixOf).id : null, visibility };
@@ -437,7 +438,7 @@ function createCommunity(opts = {}) {
       rate('publish:' + actor.user.id, 30, DAY);
       const slug = (p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || 'project') + '-' + id.slice(0, 8);
       transaction(() => {
-        run('INSERT INTO projects VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', id, slug, actor.user.id, p.name, p.url, p.description,
+        run('INSERT INTO projects (id,slug,user_id,name,url,prompt,description,models,harness,tags,thumbnail_url,source_url,remix_of,visibility,publication_method,publication_harness,featured,moderation,likes,views,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)', id, slug, actor.user.id, p.name, p.url, p.prompt, p.description,
           JSON.stringify(p.models), p.harness, JSON.stringify(p.tags), p.thumbnailUrl, p.sourceUrl, p.remixOf, p.visibility,
           actor.method, actor.method === 'agent' ? actor.token.harness : null, 0, 'active', 0, 0, time, time);
         if (key) run('INSERT INTO publication_keys VALUES(?,?,?,?)', actor.user.id, key, id, fingerprint);
@@ -471,8 +472,8 @@ function createCommunity(opts = {}) {
       }
       if (method === 'PATCH') {
         const v = validateProject(body, p);
-        run('UPDATE projects SET name=?,url=?,description=?,models=?,harness=?,tags=?,thumbnail_url=?,source_url=?,remix_of=?,visibility=?,updated_at=? WHERE id=?',
-          v.name, v.url, v.description, JSON.stringify(v.models), v.harness, JSON.stringify(v.tags), v.thumbnailUrl, v.sourceUrl, v.remixOf, v.visibility, iso(), p.id);
+        run('UPDATE projects SET name=?,url=?,prompt=?,description=?,models=?,harness=?,tags=?,thumbnail_url=?,source_url=?,remix_of=?,visibility=?,updated_at=? WHERE id=?',
+          v.name, v.url, v.prompt, v.description, JSON.stringify(v.models), v.harness, JSON.stringify(v.tags), v.thumbnailUrl, v.sourceUrl, v.remixOf, v.visibility, iso(), p.id);
         thumbnails.update(project(p.id), v.thumbnailData);
         return json(res, 200, { project: projectRow(project(p.id), actor) });
       }

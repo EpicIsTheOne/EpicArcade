@@ -221,6 +221,22 @@
   }
 
   function info(title, value) { return value ? node('div', { class: 'meta-item' }, node('span', { class: 'meta-label', text: title }), value) : null; }
+  async function copyText(value) {
+    if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(value);
+    const input = node('textarea', { readonly: true, style: 'position:fixed;left:-9999px' }); input.value = value; document.body.append(input);
+    input.select(); document.execCommand('copy'); input.remove();
+  }
+  function promptBlock(prompt) {
+    if (!prompt) return null;
+    const copy = button('Copy prompt', safeAction(async () => {
+      await copyText(prompt); copy.textContent = 'Copied'; copy.disabled = true;
+      setTimeout(() => { if (copy.isConnected) { copy.textContent = 'Copy prompt'; copy.disabled = false; } }, 1800);
+    }), 'button button-small button-quiet');
+    return node('section', { class: 'prompt-share', 'aria-labelledby': 'promptShareTitle' },
+      node('div', { class: 'prompt-share-head' }, node('h2', { id: 'promptShareTitle', text: 'Prompt used' }), copy),
+      node('pre', { class: 'prompt-text' }, prompt),
+      node('p', { class: 'form-note' }, 'Copy this prompt to ask your own agent to try the same idea.'));
+  }
   async function detail(id) {
     layout(loading());
     const { project } = await api('/projects/' + encodeURIComponent(id));
@@ -242,7 +258,7 @@
         node('h1', { text: project.name }), node('div', { class: 'chips' },
           project.visibility === 'unlisted' && node('span', { class: 'chip', text: 'Unlisted · direct link only' }),
           project.moderation === 'hidden' && node('span', { class: 'chip', text: 'Hidden by moderation' }))), actions),
-      art(project, 'detail-art'), node('div', { class: 'detail-cols' },
+      art(project, 'detail-art'), promptBlock(project.prompt), node('div', { class: 'detail-cols' },
         node('div', {}, project.description && node('p', { class: 'detail-lede preserve-lines', text: project.description }),
           project.remixOf && info('Remix / inspiration', link(routeUrl('projects', project.remixOf), 'Explore the original →')),
           node('p', { class: 'form-note attribution-note', text: 'Publication method is recorded by Epic Bench. Model and harness credits are supplied by the creator; they are not independently verified.' })),
@@ -321,6 +337,7 @@
       button('Use automatic preview', () => { thumbnailData = null; thumbnailInput.value = ''; upload.value = ''; preview.hidden = true; thumbnailStatus.textContent = 'The linked page’s first screen will be used after you save. If it cannot load, a default cover is shown.'; }));
     const details = node('details', { class: 'optional-details', open: !!edit }, node('summary', { text: 'Add optional details' }),
       node('div', { class: 'form-stack' }, field('Description', 'description', { type: 'textarea', value: project?.description || '', max: 4000, placeholder: 'What did you make? What makes it interesting?' }),
+        field('Prompt used (optional)', 'prompt', { type: 'textarea', value: project?.prompt || '', max: 20000, placeholder: 'Optional: paste the prompt someone could reuse with their agent.' }),
         models, harness, tags,
         field('Source / repository link', 'sourceUrl', { type: 'url', value: project?.sourceUrl || '', placeholder: 'https://github.com/… (optional)' }),
         field('Original / remix project ID', 'remixOf', { value: project?.remixOf || '', max: 80, placeholder: 'Optional public Community project ID' }),

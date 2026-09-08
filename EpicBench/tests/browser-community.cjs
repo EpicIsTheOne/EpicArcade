@@ -56,6 +56,7 @@ function step(name) { passed.push(name); console.log('PASS ' + name); }
 
   await page.getByRole('link', { name: 'Edit project', exact: true }).click();
   await page.getByLabel('Description', { exact: true }).fill('An ambient garden of generative patterns. Made with two models and a little curiosity.');
+  await page.getByLabel('Prompt used (optional)', { exact: true }).fill('Build an ambient garden of generative patterns with two models.');
   const modelPicker = page.getByRole('group', { name: 'Models used', exact: true });
   await modelPicker.getByRole('searchbox').fill('Astra');
   await modelPicker.getByLabel('GPT-6 Astra', { exact: true }).check();
@@ -70,6 +71,8 @@ function step(name) { passed.push(name); console.log('PASS ' + name); }
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.getByText('Unlisted · direct link only', { exact: true }).waitFor();
   await page.getByText('Published manually', { exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Prompt used', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Copy prompt', exact: true }).waitFor();
   const signalPath = new URL(page.url()).pathname;
   await page.getByRole('link', { name: 'GPT-6 Astra', exact: true }).waitFor();
   step('Optional metadata, searchable multi-model selection, edit prefill and unlisted publication');

@@ -6,7 +6,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
-DEFAULT_ROOT='https://epic.techexplore.us/api/community/v1'; ALLOWED={'description','models','harness','tags','thumbnailUrl','sourceUrl','remixOf','visibility'}
+DEFAULT_ROOT='https://epic.techexplore.us/api/community/v1'; ALLOWED={'description','prompt','models','harness','tags','thumbnailUrl','sourceUrl','remixOf','visibility'}
 def profile_path(): return Path(os.environ.get('APPDATA',str(Path.home()/'.config')))/'EpicBench'/'community'/'community-profile.json'
 def load():
  p=profile_path()
@@ -95,7 +95,7 @@ class API:
   except (URLError,TimeoutError) as e: raise SystemExit('Community API unavailable: '+str(e))
 def validate_metadata(d):
  if not isinstance(d,dict) or set(d)-ALLOWED: raise SystemExit('Metadata contains unsupported fields')
- for k,limit in [('description',4000),('harness',40)]:
+ for k,limit in [('description',4000),('prompt',20000),('harness',40)]:
   if k in d and (not isinstance(d[k],str) or len(d[k])>limit): raise SystemExit(k+' exceeds the text limit')
  for k,limit in [('models',120),('tags',32)]:
   if k in d and (not isinstance(d[k],list) or len(d[k])>8 or any(not isinstance(x,str) or not x.strip() or len(x)>limit for x in d[k])): raise SystemExit(k+' must contain up to eight short identifiers')
@@ -110,7 +110,7 @@ def metadata(a):
  if a.metadata:
   try: d=json.loads(Path(a.metadata).read_text(encoding='utf-8'))
   except Exception as e: raise SystemExit('Invalid metadata JSON: '+str(e))
- for k,v in [('description',a.description),('harness',a.harness),('thumbnailUrl',a.thumbnail_url),('sourceUrl',a.source_url),('visibility',a.visibility)]:
+ for k,v in [('description',a.description),('prompt',a.prompt),('harness',a.harness),('thumbnailUrl',a.thumbnail_url),('sourceUrl',a.source_url),('visibility',a.visibility)]:
   if v is not None: d[k]=v
  if a.models: d['models']=a.models
  if a.tags: d['tags']=a.tags
@@ -145,7 +145,7 @@ def main(argv=None):
  for n in ('register','login'):
   q=s.add_parser(n); q.add_argument('--username'); q.add_argument('--password'); q.add_argument('--display-name'); q.add_argument('--harness',default='agent')
  def common(q,required=False):
-  q.add_argument('--metadata'); q.add_argument('--description'); q.add_argument('--models',nargs='*'); q.add_argument('--tags',nargs='*'); q.add_argument('--harness'); q.add_argument('--thumbnail-url'); q.add_argument('--source-url'); q.add_argument('--visibility',choices=['public','unlisted'])
+  q.add_argument('--metadata'); q.add_argument('--description'); q.add_argument('--prompt'); q.add_argument('--models',nargs='*'); q.add_argument('--tags',nargs='*'); q.add_argument('--harness'); q.add_argument('--thumbnail-url'); q.add_argument('--source-url'); q.add_argument('--visibility',choices=['public','unlisted'])
  q=s.add_parser('publish'); q.add_argument('--name',required=True); q.add_argument('--url',required=True); q.add_argument('--project-path',default=os.getcwd()); q.add_argument('--new',action='store_true'); common(q)
  q=s.add_parser('update'); q.add_argument('--id'); q.add_argument('--project-path',default=os.getcwd()); q.add_argument('--name'); q.add_argument('--url'); common(q)
  q=s.add_parser('delete'); q.add_argument('--id'); q.add_argument('--project-path',default=os.getcwd())
