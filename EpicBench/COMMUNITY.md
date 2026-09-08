@@ -115,6 +115,8 @@ Rate limits persist across restarts: registration 10/IP/day; auth 30/IP and 15/u
 
 Node **22.13+** is required (`node:sqlite`). Automatic thumbnails additionally use Playwright and Chromium. Run `npm ci` and `npx playwright install --with-deps chromium` on a supported Debian/Ubuntu deployment. The previous `node:22-alpine` image does not support this bundled browser; use a Debian-based image for automatic previews. Run as a non-root user with Chromium sandbox support.
 
+The included `Dockerfile` installs the pinned browser/runtime dependencies. For the existing root-owned `/data` mount, the API keeps its current identity while capture workers drop to UID/GID 1000 (`COMMUNITY_PREVIEW_UID` / `COMMUNITY_PREVIEW_GID`). Workers receive a limited environment and use `/home/node`. Configure the container with `init: true`, `shm_size: 256mb`, and Playwright's [sandbox seccomp profile](https://github.com/microsoft/playwright/blob/main/utils/docker/seccomp_profile.json) through `security_opt`. Keep the Chromium sandbox enabled. Build the image before replacing the live container, verify capture in a disposable container, and retain the previous Compose file and a SQLite-consistent backup for rollback.
+
 ```sh
 cd EpicBench
 npm ci
