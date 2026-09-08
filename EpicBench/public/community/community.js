@@ -132,6 +132,14 @@
     input.value = value;
     return node('div', { class: 'form-field' }, node('label', { for: name, text: title }), input);
   }
+  function visibilityToggle(checked = true) {
+    const input = node('input', { type: 'checkbox', name: 'publishPublicly', id: 'publishPublicly', checked });
+    return node('div', { class: 'form-field' }, node('label', { class: 'visibility-toggle', for: 'publishPublicly' },
+      node('span', { class: 'visibility-toggle-control' }, input, node('span', { class: 'visibility-toggle-track', 'aria-hidden': 'true' })),
+      node('span', { class: 'visibility-toggle-copy' },
+        node('strong', { text: 'Publish publicly to Community now' }),
+        node('small', { text: 'On by default. Turn this off to keep the entry unlisted for review; anyone with its link can still read it.' }))));
+  }
   function field(title, name, { type = 'text', required = false, placeholder = '', value = '', max = 2048 } = {}) {
     const input = node(type === 'textarea' ? 'textarea' : 'input', { name, id: name, ...(type !== 'textarea' ? { type } : {}),
       required, placeholder, maxlength: max, ...(type !== 'textarea' ? { value } : {}) });
@@ -340,12 +348,12 @@
         field('Prompt used (optional)', 'prompt', { type: 'textarea', value: project?.prompt || '', max: 20000, placeholder: 'Optional: paste the prompt someone could reuse with their agent.' }),
         models, harness, tags,
         field('Source / repository link', 'sourceUrl', { type: 'url', value: project?.sourceUrl || '', placeholder: 'https://github.com/… (optional)' }),
-        field('Original / remix project ID', 'remixOf', { value: project?.remixOf || '', max: 80, placeholder: 'Optional public Community project ID' }),
-        selectField('Visibility', 'visibility', [{ id: 'public', label: 'Public — appears in discovery' }, { id: 'unlisted', label: 'Unlisted — accessible by direct link' }], project?.visibility || 'public')));
+        field('Original / remix project ID', 'remixOf', { value: project?.remixOf || '', max: 80, placeholder: 'Optional public Community project ID' })));
+    const publishPublicly = visibilityToggle(project?.visibility !== 'unlisted');
     const form = node('form', { class: 'publish-form form-stack' },
       field('Project name', 'name', { required: true, max: 140, value: project?.name || '', placeholder: 'Give your build a name' }),
       field('Project link', 'url', { required: true, type: 'url', value: project?.url || '', placeholder: 'https://your-project.example.com' }),
-        node('p', { class: 'form-note', text: 'That is all you need. Your project will be public unless you choose Unlisted below.' }), thumbnailEditor, details,
+        node('p', { class: 'form-note', text: 'That is all you need. Your Community entry is public by default; use the toggle below to keep it unlisted for review.' }), publishPublicly, thumbnailEditor, details,
       node('button', { type: 'submit', class: 'button', text: edit ? 'Save changes' : 'Publish project' }));
     layout(node('section', { class: 'page-block publish-page' }, heading(edit ? 'Your publication' : 'New publication', edit ? 'Update your build.' : 'Name. Link. Published.',
       'Share what you made. Add model credits and context whenever you are ready.'), node('div', { class: 'publish-grid' }, form,
@@ -354,6 +362,7 @@
     submit(form, async () => {
       if (!state.user && !await signIn()) return;
         const body = Object.fromEntries(new FormData(form)); body.models = models.values(); body.tags = tags.values();
+        body.visibility = form.elements.publishPublicly.checked ? 'public' : 'unlisted'; delete body.publishPublicly;
         if (upload.disabled) throw new Error('Please wait for the image to finish processing.');
         if (thumbnailData !== undefined) body.thumbnailData = thumbnailData;
       const data = await api(edit ? '/projects/' + edit : '/projects', edit ? 'PATCH' : 'POST', body, edit ? {} : { 'Idempotency-Key': publicationKey });

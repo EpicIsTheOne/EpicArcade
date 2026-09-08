@@ -38,6 +38,7 @@ function step(name) { passed.push(name); console.log('PASS ' + name); }
   await page.getByLabel('Project name', { exact: false }).fill('Signal Garden');
   await page.getByLabel('Project link', { exact: false }).fill('https://example.com/signal-garden');
   assert.equal(await page.locator('.optional-details').getAttribute('open'), null);
+  assert.equal(await page.getByRole('checkbox', { name: /Publish publicly to Community now/ }).isChecked(), true);
   await page.getByRole('button', { name: 'Publish project', exact: true }).click();
   await page.getByRole('button', { name: 'Register', exact: true }).click();
   await page.getByLabel('Username', { exact: false }).fill('browser_creator');
@@ -66,7 +67,9 @@ function step(name) { passed.push(name); console.log('PASS ' + name); }
   await page.getByRole('group', { name: 'Categories', exact: true }).getByLabel('Art', { exact: true }).check();
   await page.getByRole('group', { name: 'Categories', exact: true }).getByLabel('Experiment', { exact: true }).check();
   await page.getByLabel('Source / repository link', { exact: true }).fill('https://github.com/example/signal-garden');
-  await page.getByLabel('Visibility', { exact: true }).selectOption('unlisted');
+  const publishPublicly = page.getByRole('checkbox', { name: /Publish publicly to Community now/ });
+  assert.equal(await publishPublicly.isChecked(), true);
+  await publishPublicly.uncheck();
   await page.screenshot({ path: path.join(artifacts, 'community-publish-desktop.png'), fullPage: true });
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.getByText('Unlisted · direct link only', { exact: true }).waitFor();
@@ -89,7 +92,9 @@ function step(name) { passed.push(name); console.log('PASS ' + name); }
 
   await page.getByRole('link', { name: 'Edit project', exact: true }).click();
   assert.equal(await modelPicker.getByRole('checkbox', { name: 'GPT-6 Astra', exact: true }).isChecked(), true);
-  await page.getByLabel('Visibility', { exact: true }).selectOption('public');
+  const publicToggleAgain = page.getByRole('checkbox', { name: /Publish publicly to Community now/ });
+  assert.equal(await publicToggleAgain.isChecked(), false);
+  await publicToggleAgain.check();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.getByRole('heading', { name: 'Signal Garden', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Like project', exact: true }).click();
