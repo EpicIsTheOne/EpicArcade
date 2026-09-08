@@ -173,7 +173,12 @@
     const modelLinks = modelId && node('div', { class: 'model-links' },
       link('/Tracker/results.html?model=' + encodeURIComponent(modelId), 'Benchmark results ↗', 'button button-small button-quiet'),
       link('/Arcade/#/m/' + encodeURIComponent(state.catalog.models.find(m => m.id === modelId)?.arcadeKey || modelId), 'Arcade builds ↗', 'button button-small button-quiet'));
+    const hostingNote = !modelId && node('aside', { class: 'hosting-note' },
+      node('strong', { text: "Don't have your own domain?" }),
+      node('p', {}, node('span', { text: 'We suggest ' }), external('https://chatgpt.com/', 'ChatGPT Sites ↗'), node('span', { text: ' and ' }),
+        external('https://here.now/', 'here.now ↗'), node('span', { text: '. You are free to use your own domain as well!' })));
     layout(mast, modelLinks, featured, combinations,
+      hostingNote,
       node('div', { class: 'toolbar' }, node('label', { class: 'search-box' }, node('span', { text: '⌕', 'aria-hidden': 'true' }), search),
         link('/Community/publish', 'Publish a project +', 'button')), filters, tabs,
       node('div', { class: 'masthead-row' }, count, link('/Community/agent', 'Publish with your agent →', 'button button-small button-violet')), grid, more);

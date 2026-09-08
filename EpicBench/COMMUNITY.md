@@ -6,6 +6,8 @@ Community connects benchmark model identities with real projects made by people 
 
 Open **Community → Publish**. Only **Project name** and **Project link** are required. If you are not signed in, registration happens without losing the form. Use a unique username and a password of at least 15 characters. Download the private recovery file offered after registration: there is no email-based recovery service.
 
+Don't have your own domain? We suggest [ChatGPT Sites](https://chatgpt.com/) and [here.now](https://here.now/). You are free to use your own domain as well.
+
 Optional details include a description, up to eight models, harness, categories, HTTPS thumbnail URL, repository URL, and original Community project ID. Models and harnesses are separate. The model picker is searchable and accepts additional model identifiers. Existing benchmark model identities and the arcade harness registry supply the catalog.
 
 The prominent **Publish publicly to Community now** toggle is on by default because a completed Epic Bench submission is normally meant to be discoverable. Turn it off before publishing to keep the entry **unlisted** for review; anyone with the direct link can still read it. This choice can be changed later from **Edit project**.

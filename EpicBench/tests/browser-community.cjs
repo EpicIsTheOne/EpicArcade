@@ -31,8 +31,11 @@ function step(name) { passed.push(name); console.log('PASS ' + name); }
   page.on('console', message => { if (message.type() === 'error' && /Content Security Policy|Refused to/.test(message.text())) errors.push(message.text()); });
   await page.goto(base + '/Community/');
   await page.getByText('The first build starts here.').waitFor();
+  await page.getByText("Don't have your own domain?", { exact: true }).waitFor();
+  assert.equal(await page.getByRole('link', { name: 'ChatGPT Sites ↗', exact: true }).getAttribute('href'), 'https://chatgpt.com/');
+  assert.equal(await page.getByRole('link', { name: 'here.now ↗', exact: true }).getAttribute('href'), 'https://here.now/');
   await page.screenshot({ path: path.join(artifacts, 'community-empty-desktop.png'), fullPage: true });
-  step('Real empty Community and initial API load');
+  step('Real empty Community, initial API load and no-domain hosting guidance');
 
   await page.getByRole('link', { name: 'Publish a project +', exact: true }).click();
   await page.getByLabel('Project name', { exact: false }).fill('Signal Garden');
