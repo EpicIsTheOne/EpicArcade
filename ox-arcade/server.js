@@ -47,6 +47,15 @@ function sendJson(res, code, obj) {
 function notFound(res) { sendJson(res, 404, { error: "not found" }); }
 function forbidden(res) { sendJson(res, 403, { error: "forbidden" }); }
 
+// Game files are intentionally served from a separate origin in production.
+// The Arcade shell uses a same-origin HEAD probe before mounting its iframe;
+// allow that probe to follow the redirect without granting credentialed access.
+function allowGameProbe(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+}
+
 // Serve baseDir + relParts after containment check. relParts are raw
 // path segments (still percent-encoded); decoded here one by one.
 async function serveFrom(baseDir, relParts, res) {
@@ -254,6 +263,7 @@ function start(opts = {}) {
         const dir = await resolveBuildDir(root, m[1]);
         if (!dir) return notFound(res);
         const rel = (m[2] || "/").slice(1).split("/").filter(Boolean);
+        allowGameProbe(res);
         return await serveFrom(dir, rel.length ? rel : ["index.html"], res);
       }
 
@@ -263,6 +273,7 @@ function start(opts = {}) {
           !["api", "play", "thumbs", "media"].includes(seg[0])) {
         const gameDir = path.join(arcadeState.dir, seg[0], seg[1], seg[2]);
         const rel = seg.slice(3);
+        allowGameProbe(res);
         return await serveFrom(gameDir, rel.length ? rel : ["index.html"], res);
       }
 

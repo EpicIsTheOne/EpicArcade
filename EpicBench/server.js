@@ -328,7 +328,8 @@ async function start(opts = {}) {
   }
   state.gameOrigin = gameBase;
   function redirectGame(url, res) {
-    res.writeHead(307, { Location: gameBase + url.pathname + url.search, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+    res.writeHead(307, { Location: gameBase + url.pathname + url.search, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
+      'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS' });
     res.end();
   }
 

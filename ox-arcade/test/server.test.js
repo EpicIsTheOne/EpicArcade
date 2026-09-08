@@ -54,6 +54,7 @@ test("serves build files through /play with correct content", async (t) => {
     assert.ok(js.includes("console.log"));
     const jsRes = await fetch(`${base}/play/fake-game/js/main.js`);
     assert.match(jsRes.headers.get("content-type") || "", /javascript/);
+    assert.equal(jsRes.headers.get("access-control-allow-origin"), "*");
   } finally { await srv.close(); }
 });
 
@@ -123,6 +124,7 @@ test("sync mode serves repo games at /Model/Project/Harness/", async (t) => {
     assert.ok(html.includes("<b>remote</b>"));
     const js = await fetch(`${base}/OxAlpha/DemoGame/Hermes/js/m.js`);
     assert.match(js.headers.get("content-type") || "", /javascript/);
+    assert.equal(js.headers.get("access-control-allow-origin"), "*");
 
     // traversal guarded
     const evil = await fetch(`${base}/OxAlpha/DemoGame/Hermes/../../secret.txt`);
