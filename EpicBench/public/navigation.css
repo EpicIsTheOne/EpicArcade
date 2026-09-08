@@ -1,0 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap');
+/* Shared navigation; intentionally not mounted on Home. */
+nav.console-links {position:relative;z-index:30;display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap;padding:22px 20px 0;margin:0;width:100%;height:auto;box-sizing:border-box;view-transition-name:site-navigation;}
+nav.console-links a {display:block;position:relative;height:auto;margin:0;border:0;border-bottom:1px solid transparent;color:var(--muted,#7d92b0);font:600 .7rem 'Orbitron',sans-serif;letter-spacing:.14em;text-decoration:none;padding:9px 0;}
+nav.console-links a:hover,nav.console-links a[aria-current] {color:var(--cyan-soft,#67e8f9);text-shadow:0 0 12px #22d3ee66;}
+nav.console-links a[aria-current] {border-bottom-color:var(--cyan,#22d3ee);}
+nav.console-links a::after {display:none;}
+nav.console-links a:focus-visible {outline:2px solid #67e8f9;outline-offset:4px;}
+.community-nav {flex-wrap:wrap;gap:0;}
+.community-nav nav.console-links {flex:0 0 100%;order:-1;}
+.community-nav>.brand,.community-nav>.nav-actions {margin-top:18px;}
+.community-nav .nav-actions {margin-left:auto;}
+.community-nav #menuButton {display:none;}
+@media(max-width:760px) {nav.console-links {gap:17px;} .community-nav {padding-left:18px;padding-right:18px;} .community-nav nav.console-links {padding-left:0;padding-right:0;} }

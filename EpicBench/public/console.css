@@ -62,10 +62,6 @@ body { background:var(--bg); color:var(--text); font-family:'Rajdhani','Segoe UI
 .console-kicker {font:600 .72rem var(--display);letter-spacing:.45em;color:var(--cyan-soft);text-shadow:0 0 12px #22d3ee77;margin:0 0 22px;}
 .console-title,.masthead h1 {font:800 clamp(2.3rem,7.6vw,6.4rem)/1.1 var(--display);letter-spacing:.14em;text-indent:.14em;background:linear-gradient(180deg,#f0feff 0%,#9beaff 42%,#39c1e8 78%,#1178a0 100%);background-clip:text;-webkit-background-clip:text;color:transparent;filter:drop-shadow(0 0 26px #22d3ee66) drop-shadow(0 0 64px #22d3ee2e);margin:0 0 20px;}
 .console-subtitle {font-size:1.1rem;letter-spacing:.12em;color:var(--muted);margin:0;}
-.console-links {position:relative;z-index:3;display:flex;justify-content:center;gap:24px;flex-wrap:wrap;padding:22px 20px 0;}
-.console-links a {color:var(--muted);font:600 .7rem var(--display);letter-spacing:.14em;text-decoration:none;padding:9px 0;}
-.console-links a:hover,.console-links a[aria-current] {color:var(--cyan-soft);text-shadow:0 0 12px #22d3ee66;}
-.console-links a[aria-current] {border-bottom:1px solid var(--cyan);}
 .topbar {position:relative;z-index:3;max-width:1240px;margin:0 auto 24px;border:1px solid var(--line);border-radius:16px;background:var(--panel);flex-wrap:wrap;padding:20px;}
 .topbar .brand h1 {font:600 .78rem var(--display);letter-spacing:.22em;}
 .topbar .controls {flex-wrap:wrap;flex:1 1 700px;}
