@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8123
 PROMPTS = json.loads((ROOT / "prompts.json").read_text(encoding="utf-8"))
 BY_ID = {p["id"]: p for p in PROMPTS}
-FIELDS = {"id", "title", "difficulty", "harness", "filename", "text"}
+FIELDS = {"id", "title", "difficulty", "source_ids", "harness", "filename", "text"}
 RUNS_FILE = ROOT / "runs.json"
 MAX_RUNS = 5000
 VALID_STATUS = {"running", "pass", "fail", "error", "skipped"}
@@ -111,10 +111,24 @@ def _clean(s, maxlen):
     return str(s or "").strip()[:maxlen]
 
 
+def prompt_filename(p):
+    value = p.get("filename")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    title = re.sub(r"[^A-Za-z0-9]+", "_", str(p.get("title") or "prompt")).strip("_") or "prompt"
+    difficulty = re.sub(r"[^A-Za-z0-9]+", "_", str(p.get("difficulty") or "Prompt")).strip("_") or "Prompt"
+    try:
+        prefix = f"{int(p.get('id')):02d}"
+    except (TypeError, ValueError):
+        prefix = "prompt"
+    return f"{prefix}_{title} [{difficulty}].txt"
+
+
 def pack_hash():
     canonical = json.dumps(
         [{"id": p["id"], "title": p["title"], "difficulty": p["difficulty"],
-          "filename": p["filename"], "text": p["text"]} for p in PROMPTS],
+          "source_ids": p.get("source_ids", []), "filename": prompt_filename(p),
+          "text": p["text"]} for p in PROMPTS],
         sort_keys=True, ensure_ascii=False,
     ).encode("utf-8")
     return "sha256:" + hashlib.sha256(canonical).hexdigest()
@@ -438,7 +452,7 @@ class Handler(BaseHTTPRequestHandler):
             p = BY_ID.get(int(m.group(1)))
             if not p:
                 return self._error(404, f"no prompt with id {m.group(1)}")
-            extra = {"Content-Disposition": f'attachment; filename="{p["filename"]}"'}
+            extra = {"Content-Disposition": f'attachment; filename="{prompt_filename(p)}"'}
             return self._bytes(200, resolve_placeholders(p["text"]).encode("utf-8"), "text/plain; charset=utf-8", extra)
         if path == "/api/progress":
             return self._json(progress_summary())
@@ -521,7 +535,7 @@ class Handler(BaseHTTPRequestHandler):
             "endpoints": {
                 "GET /api": "this help",
                 "GET /api/meta": "counts and difficulty breakdown",
-                "GET /api/prompts": "all prompts; optional query params: difficulty=Hard|Medium|Light|'Very Hard', ids=1,2,3, search=<substring>, fields=id,title,difficulty,text,filename,harness",
+                "GET /api/prompts": "all prompts; optional query params: difficulty=Hard|Medium|Light|'Very Hard', ids=1,2,3, search=<substring>, fields=id,title,difficulty,source_ids,text,filename,harness",
                 "GET /api/prompts/{id}": "single prompt object",
                 "GET /api/prompts/{id}/text": "raw prompt text as plain text (copy-paste ready)",
                 "GET /api/status": "benchmark run statuses; optional filters run=, model=, status=running|pass|fail|error|skipped, promptId=",

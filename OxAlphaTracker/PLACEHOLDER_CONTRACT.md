@@ -33,17 +33,17 @@ stays portable and path-free:
   `UNAVAILABLE` unless the skill is installed there — correct by contract,
   since the server cannot know the client machine's skills.
 
-Introduced: 2026-08-23 — added to all 46 prompts, inserted as
-"OPTIONAL CAPABILITY — ISOLATED E2E TESTING" directly after the
-"Optional capabilities" section.
+Legacy note: the current Astra-native pack contains no runtime placeholders;
+this resolver remains for older or externally supplied prompt packs. The
+previous 46-source pack inserted "OPTIONAL CAPABILITY — ISOLATED E2E TESTING"
+directly after the "Optional capabilities" section.
 
 ## Legacy hardcoded capability references (pending migration)
 
-The image-generation block in every prompt currently hardcodes
-`C:\Users\Epic\.agents\skills\gpt-image-2\scripts\gpt_image.mjs`. Per contract
-rule 3 this should eventually become a placeholder
-(`{{IMAGE_GEN_SCRIPT_PATH}}`); left untouched for now to keep task content
-immutable. Fish Audio and multiplayer blocks likewise predate this contract.
+The previous pack's image-generation block hardcoded
+`C:\Users\Epic\.agents\skills\gpt-image-2\scripts\gpt_image.mjs`. The current
+Astra-native text is intentionally shorter and does not carry that block.
+Fish Audio and multiplayer blocks likewise belong to the legacy pack.
 
 ## {{SYNTH_SONG_ENGINE_SKILL_PATH}}
 
@@ -67,8 +67,5 @@ the kvm2 production instance resolves it), then
 <home>/.agents/skills/..., then <home>/.claude/skills/...; first existing
 file wins, else UNAVAILABLE. Visible via GET /api/placeholders.
 
-Introduced: 2026-08-26 — added as an optional capability block to prompts
-21 (FNF Style Rhythm Game Original Song), 26 (Music Visualizer), and
-40 (Interactive Music Video), inserted between the IMAGE GENERATION block and
-the CONDITIONAL MULTIPLAYER BUILD CONTRACT v2 section. Deliberately NOT added
-to prompt 9 (FL Studio Browser DAW) — the engine would trivialize that task.
+Legacy note: the resolver remains available for older prompt packs; the
+current Astra-native pack does not carry this capability block.
