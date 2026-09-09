@@ -25,6 +25,16 @@
   const safeAction = action => async event => { try { await action(event); } catch (error) { notify(error.message, true); } };
   const routeUrl = (kind, id) => `/Community/${kind}/${encodeURIComponent(id)}`;
   const external = (url, text, className = '') => node('a', { href: url, text, class: className, target: '_blank', rel: 'noopener noreferrer' });
+  function embeddableUrl(value) {
+    let url;
+    try { url = new URL(value); } catch { return null; }
+    const host = url.hostname.toLowerCase().replace(/\.$/, '');
+    const literalIp = /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(':');
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || literalIp || !host.includes('.') ||
+      !/^[a-z0-9.-]+$/.test(host) || /(^|\.)(localhost|local|internal|lan|home|test|invalid)$/.test(host)) return null;
+    if (url.origin === location.origin && /^\/Community(?:\/|$)/i.test(url.pathname)) return null;
+    return url.href;
+  }
   const initials = creator => (creator.displayName || creator.username).split(/\s+/).map(x => x[0]).join('').slice(0, 2).toUpperCase();
   function notify(message, error = false) {
     const toast = node('div', { class: `toast${error ? ' error' : ''}`, text: message });
@@ -250,6 +260,25 @@
       node('pre', { class: 'prompt-text' }, prompt),
       node('p', { class: 'form-note' }, 'Copy this prompt to ask your own agent to try the same idea.'));
   }
+  function projectEmbed(project) {
+    const source = embeddableUrl(project.url);
+    if (!source) return null;
+    const frame = node('iframe', { class: 'project-embed-frame', src: source, title: `Play ${project.name} on Epic Bench`, loading: 'eager',
+      allow: 'autoplay; fullscreen',
+      sandbox: 'allow-scripts allow-same-origin allow-pointer-lock allow-popups', referrerpolicy: 'no-referrer' });
+    const stage = node('div', { class: 'project-embed-stage' }, frame);
+    const fullscreen = button('⛶ Fullscreen', safeAction(async () => {
+      if (document.fullscreenElement) return document.exitFullscreen?.();
+      const target = typeof stage.requestFullscreen === 'function' ? stage : frame;
+      if (typeof target.requestFullscreen !== 'function') throw new Error('Fullscreen is not supported in this browser.');
+      await target.requestFullscreen();
+    }), 'button button-small button-quiet');
+    fullscreen.setAttribute('aria-label', 'Fullscreen');
+    return node('section', { class: 'project-embed', 'aria-labelledby': 'projectEmbedTitle' },
+      node('div', { class: 'project-embed-head' }, node('div', {}, node('h2', { id: 'projectEmbedTitle', text: 'Play on Epic Bench' }),
+        node('p', { class: 'form-note', text: 'This project is running in an embedded preview.' })), fullscreen), stage,
+      node('p', { class: 'form-note project-embed-note', text: 'Some hosts block embedded playback. If the preview stays blank, use “Open project ↗” above.' }));
+  }
   async function detail(id) {
     layout(loading());
     const { project } = await api('/projects/' + encodeURIComponent(id));
@@ -266,12 +295,13 @@
     const views = node('span', { text: `${project.views} views` });
     const published = project.publication.method === 'agent' ?
       `Published by ${project.publication.harness ? label('harnesses', project.publication.harness) : 'an agent'} · API submission` : 'Published manually';
+    const embed = projectEmbed(project);
     layout(node('article', { class: 'detail' }, node('div', { class: 'detail-head' },
       node('div', {}, node('div', { class: 'kicker', text: project.featured ? 'Featured Community project' : 'Community project' }),
         node('h1', { text: project.name }), node('div', { class: 'chips' },
           project.visibility === 'unlisted' && node('span', { class: 'chip', text: 'Unlisted · direct link only' }),
           project.moderation === 'hidden' && node('span', { class: 'chip', text: 'Hidden by moderation' }))), actions),
-      art(project, 'detail-art'), promptBlock(project.prompt), node('div', { class: 'detail-cols' },
+      art(project, 'detail-art'), embed, promptBlock(project.prompt), node('div', { class: 'detail-cols' },
         node('div', {}, project.description && node('p', { class: 'detail-lede preserve-lines', text: project.description }),
           project.remixOf && info('Remix / inspiration', link(routeUrl('projects', project.remixOf), 'Explore the original →')),
           node('p', { class: 'form-note attribution-note', text: 'Publication method is recorded by Epic Bench. Model and harness credits are supplied by the creator; they are not independently verified.' })),

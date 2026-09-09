@@ -351,7 +351,7 @@ async function start(opts = {}) {
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Referrer-Policy', 'no-referrer');
       res.setHeader('X-Frame-Options', 'DENY');
-      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'");
+      res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https: data:; connect-src 'self'; frame-src https: http:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'");
       req_wants_head = req.method === 'HEAD';
       const staticFiles = {
         '/Community/community.css': 'community.css',

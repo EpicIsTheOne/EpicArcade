@@ -29,7 +29,9 @@ function step(name) { passed.push(name); console.log('PASS ' + name); }
   page.setDefaultTimeout(12000);
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error' && /Content Security Policy|Refused to/.test(message.text())) errors.push(message.text()); });
-  await page.goto(base + '/Community/');
+  const communityResponse = await page.goto(base + '/Community/');
+  assert.match(communityResponse.headers()['content-security-policy'], /frame-src https: http:/);
+  assert.equal(communityResponse.headers()['x-frame-options'], 'DENY');
   await page.getByText('The first build starts here.').waitFor();
   await page.getByText("Don't have your own domain?", { exact: true }).waitFor();
   assert.equal(await page.getByRole('link', { name: 'ChatGPT Sites ↗', exact: true }).getAttribute('href'), 'https://chatgpt.com/');
@@ -56,6 +58,17 @@ function step(name) { passed.push(name); console.log('PASS ' + name); }
   assert(JSON.parse(await fsp.readFile(recoveryPath, 'utf8')).recoveryCode);
   await page.getByRole('button', { name: 'Done', exact: true }).click();
   await page.getByRole('heading', { name: 'Signal Garden', exact: true }).waitFor();
+  const embed = page.getByRole('region', { name: 'Play on Epic Bench', exact: true });
+  await embed.waitFor();
+  assert.equal(await embed.locator('iframe').getAttribute('src'), 'https://example.com/signal-garden');
+  assert.equal(await embed.locator('iframe').getAttribute('allow'), 'autoplay; fullscreen');
+  assert.match(await embed.locator('iframe').getAttribute('sandbox'), /allow-scripts/);
+  await page.evaluate(() => {
+    const stage = document.querySelector('.project-embed-stage');
+    stage.requestFullscreen = () => { window.__communityFullscreenRequested = true; return Promise.resolve(); };
+  });
+  await embed.getByRole('button', { name: 'Fullscreen', exact: true }).click();
+  assert.equal(await page.evaluate(() => window.__communityFullscreenRequested), true);
   step('Human registration, private recovery download, Name + Link publication retaining draft');
 
   await page.getByRole('link', { name: 'Edit project', exact: true }).click();
