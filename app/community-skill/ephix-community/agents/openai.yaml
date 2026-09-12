@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ephix Community"
+  short_description: "Publish and manage Ephix Community projects"
+  default_prompt: "Publish this to Ephix using the Community API."

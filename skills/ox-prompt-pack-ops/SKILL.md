@@ -1,7 +1,7 @@
 ---
 name: ox-prompt-pack-ops
 description: >
-  MUST USE when editing, extending, validating, or deploying the OX Alpha
+  MUST USE when editing, extending, validating, or deploying the Ephix
   benchmark prompt pack (46 prompts behind techexplore.us/OxAlphaTracker,
   local http://127.0.0.1:8932) — e.g. "add a skill/capability to the benchmark
   prompts", "edit prompts.json", "update the tracker", "deploy the prompt
@@ -11,17 +11,17 @@ description: >
   + kvm2, and the post-edit validation checklist.
 ---
 
-# Ox Alpha Prompt Pack — edit & deploy ops
+# Ephix Prompt Pack — edit & deploy ops
 
 ## Where everything lives
 
 | Piece | Path |
 |---|---|
-| Dev copy of pack (source of truth for edits) | `C:\Users\Epic\Documents\ChatGPT\Ox model test\prompts.json` |
-| Served copy (repo) | `EpicArcade\OxAlphaTracker\prompts.json` inside `C:\Users\Epic\Documents\ChatGPT\Ox model test\EpicArcade` |
-| API server | project root `api_server.py` ↔ repo `OxAlphaTracker\api_server.py` |
-| Placeholder contract | `OxAlphaTracker\PLACEHOLDER_CONTRACT.md` |
-| Prod server | kvm2 (`ssh kvm2`), `/opt/ox-arcade`, container `oxalphatracker`, https://techexplore.us/OxAlphaTracker/ |
+| Dev copy of pack (source of truth for edits) | `D:\Ox model test\prompts.json` |
+| Served copy (repo) | `tracker\prompts.json` inside the Ephix repo (`D:\Ox model test\Ephix`) |
+| API server | project root `api_server.py` ↔ repo `tracker\api_server.py` |
+| Placeholder contract | `tracker\PLACEHOLDER_CONTRACT.md` |
+| Prod server | kvm2 (`ssh kvm2`), `/opt/ox-arcade` (repo checkout), container `oxalphatracker`, https://techexplore.us/OxAlphaTracker/ |
 | Local dev server | `http://127.0.0.1:8932`, PID tracked in `.api-server.pid` |
 
 Prompt record shape: `{id, title, difficulty, harness, filename, text}` — exactly **46** records.
@@ -66,12 +66,14 @@ Keep a timestamped backup of `prompts.json` next to it before writing.
 
 ```powershell
 # 1. sync edited files into the repo clone
-Copy-Item ..\prompts.json            EpicArcade\OxAlphaTracker\
-Copy-Item ..\api_server.py           EpicArcade\OxAlphaTracker\
-cd EpicArcade
-git add OxAlphaTracker/ ; git commit -m "..."; git push origin main
+Copy-Item ..\prompts.json            Ephix\tracker\
+Copy-Item ..\api_server.py           Ephix\tracker\
+cd Ephix
+git add tracker/ ; git commit -m "..."; git push origin main
 
-# 2. prod: pull + restart (container serves from bind-mounted checkout)
+# 2. prod: pull + restart (container serves from bind-mounted checkout).
+#    After the Ephix rebrand the container's host-side mount source must point
+#    at tracker/ instead of OxAlphaTracker/ (one-time docker mount update).
 ssh kvm2 "cd /opt/ox-arcade && git pull --ff-only origin main && docker restart oxalphatracker"
 
 # 3. verify prod
@@ -103,7 +105,7 @@ Set-Content .api-server.pid $newPid
 
 ## Hard limits
 
-- Never touch `OxAlphaTracker/.env` (API key) or `runs.json` state in commits.
+- Never touch `tracker/.env` (API key) or `runs.json` state in commits.
 - Never force-push or rebase shared history; fast-forward only.
 - Never restart/kvm2-touch anything besides `oxalphatracker` for prompt work.
 - This skill is tooling documentation — do NOT add it as a capability block

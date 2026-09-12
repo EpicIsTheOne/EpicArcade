@@ -2,15 +2,15 @@
 name: ox-multiplayer-games
 description: >
   MUST USE when creating, building, modifying, or deploying multiplayer /
-  online / networked games for the Ox Arcade (techexplore.us/OxArcade) or any
-  OX Alpha stack game — e.g. "make a multiplayer game", "add netcode", "tag
+  online / networked games for the Ephix Arcade (techexplore.us/OxArcade) or any
+  Ephix stack game — e.g. "make a multiplayer game", "add netcode", "tag
   this game as online", "why is my game not showing the MP badge". Encodes the
   expected layout, arcade.json manifest format, netcode requirements that the
   scanner detects, deployment targets on kvm2, and verification steps. Also
   applies when a game should be tagged online-capable without shipping netcode.
 ---
 
-# Multiplayer / online games in the Ox Arcade
+# Multiplayer / online games in the Ephix Arcade
 
 How games get the "⇄ MP" badge and appear under the **Online** filter at
 https://techexplore.us/OxArcade/, and how to build games that legitimately
@@ -49,7 +49,7 @@ Multiplayer-declaring forms (pick one):
 
 ## If you implement netcode, make it detectable
 
-The scanner (`ox-arcade/lib/scan.js`) flags these APIs in the game's own files:
+The scanner (`arcade/lib/scan.js` in the Ephix repo) flags these APIs in the game's own files:
 
 | Signal     | Detected patterns |
 |------------|-------------------|
@@ -68,13 +68,16 @@ Scanner constraints your code must respect:
 
 ## Layout & deploy targets
 
-- Local repo: `github.com/EpicIsTheOne/EpicArcade` → `OxAlpha/<Model>/<Project>/<Harness>/`.
+- Ephix repo (local + kvm2 checkout): `github.com/EpicIsTheOne/EpicArcade` →
+  `OxAlpha/<Model>/<Project>/<Harness>/` (builds live under the `OxAlpha/`
+  model folder; the folder name is part of the deployed layout — do not rename).
 - kvm2 runtime: `/var/www/OxArcade/games-root/<GameName>/` (flat, one folder per
   build, entry `index.html`). Served by container `oxarcade`, bind-mounted from
-  `/opt/ox-arcade/ox-arcade`.
-- Shared backends: container `oxlive` (ox-live runtime, port 8090 on kvm2) hosts
-  multiplayer server code so multiple games can share one process.
-- Code changes inside `ox-arcade/` itself need `docker restart oxarcade`;
+  the repo checkout's `arcade/` folder (formerly `ox-arcade/` — renamed in the
+  Ephix rebrand; update the container's host-side mount path once when pulling).
+- Shared backends: container `oxlive` (the repo's `live/` runtime, port 8090 on
+  kvm2) hosts multiplayer server code so multiple games can share one process.
+- Code changes inside `arcade/` itself need `docker restart oxarcade`;
   game content + arcade.json changes do not.
 
 ## Going live + verification

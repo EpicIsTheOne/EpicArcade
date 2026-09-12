@@ -1,7 +1,11 @@
 node_modules/
 *.log
 tests/_tmp-*
-EpicBench/data/
-EpicBench/tests/artifacts/
-EpicBench/community-skill/**/*.zip
+app/tests/tmp*/
+.archive/
+app/data/
+app/tests/artifacts/
+app/community-skill/**/*.zip
 **/__pycache__/
+tracker/prompts.json.*bak*
+tracker/prompts.json.backup*
