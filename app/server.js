@@ -368,7 +368,7 @@ async function start(opts = {}) {
         return serveFrom(path.join(__dirname, 'community-skill'), skillFiles[url.pathname], res);
       }
       if (url.pathname === '/Community/api-docs') return serveFrom(__dirname, ['COMMUNITY.md'], res);
-      if (/^\/Community(?:\/(?:projects|creators|models)\/[^/]+|\/(?:publish|account|agent|admin))?\/?$/.test(url.pathname)) {
+      if (/^\/Community(?:\/(?:projects|creators|models)\/[^/]+|\/(?:publish|account|agent|admin|notifications|appeals|reset-password))?\/?$/.test(url.pathname)) {
         return serveFrom(path.join(__dirname, 'public', 'community'), ['index.html'], res);
       }
       return notFound(res);

@@ -95,7 +95,7 @@ test('unlisted relationships stay undiscoverable and deletion handles reports an
   assert.equal(f.db.prepare('SELECT COUNT(*) n FROM reports').get().n, 0);
 });
 
-test('moderators feature, hide, resolve reports and disable or restore accounts', async t => {
+test('administrators feature, hide, resolve reports and ban or restore accounts', async t => {
   const f = await fixture(t), admin = await f.register('moderator'), creator = await f.register('builder');
   f.restart([admin.user.id]);
   const project = (await f.call('/projects', 'POST', { name: 'Moderated', url: 'https://example.com' }, creator.headers)).body.project;
@@ -103,18 +103,18 @@ test('moderators feature, hide, resolve reports and disable or restore accounts'
   await f.call('/admin/projects/' + project.id, 'PATCH', { featured: true }, admin.headers);
   assert.equal((await f.call('/projects?sort=featured')).body.total, 1);
   const report = (await f.call(`/projects/${project.id}/report`, 'POST', { reason: 'Please inspect' }, creator.headers)).body;
-  await f.call('/admin/reports/' + report.id, 'PATCH', { status: 'resolved' }, admin.headers);
+  await f.call('/admin/reports/' + report.id, 'PATCH', { status: 'resolved', reason: 'Reviewed' }, admin.headers);
   assert.equal((await f.call('/admin/reports', 'GET', undefined, admin.headers)).body.reports.length, 0);
-  await f.call('/admin/projects/' + project.id, 'PATCH', { moderation: 'hidden' }, admin.headers);
+  await f.call('/admin/projects/' + project.id, 'PATCH', { moderation: 'hidden', reason: 'Policy violation' }, admin.headers);
   assert.equal((await f.call('/projects')).body.total, 0);
   assert.equal((await f.call('/projects?mine=1', 'GET', undefined, creator.headers)).body.projects[0].moderation, 'hidden');
-  await f.call('/admin/projects/' + project.id, 'PATCH', { moderation: 'active' }, admin.headers);
+  await f.call('/admin/projects/' + project.id, 'PATCH', { moderation: 'active', reason: 'Restored after review' }, admin.headers);
   const token = (await f.call('/tokens', 'POST', { label: 'agent' }, creator.headers)).body;
-  await f.call('/admin/accounts/' + creator.user.id, 'PATCH', { disabled: true }, admin.headers);
+  await f.call('/admin/accounts/' + creator.user.id + '/ban', 'POST', { reason: 'Abuse test' }, admin.headers);
   assert.equal((await f.call('/projects')).body.total, 0);
   assert.equal((await f.call('/projects/' + project.id)).status, 404);
   assert.equal((await f.call('/projects?mine=1', 'GET', undefined, { Authorization: 'Bearer ' + token.token })).status, 401);
-  assert.equal((await f.call('/admin/accounts/' + creator.user.id, 'PATCH', { disabled: false }, admin.headers)).status, 200);
+  assert.equal((await f.call('/admin/accounts/' + creator.user.id + '/unban', 'POST', { reason: 'Appeal accepted' }, admin.headers)).status, 200);
   assert.equal((await f.call('/projects')).body.total, 1);
   assert.equal((await f.call('/auth/me', 'GET', undefined, creator.headers)).body.user, null);
   assert(f.db.prepare('SELECT COUNT(*) n FROM moderation_log').get().n >= 5);
@@ -154,4 +154,67 @@ test('trending ignores old lifetime totals and gives new zero-engagement project
   f.db.prepare("UPDATE projects SET likes=100000,views=1000000,created_at='2020-01-01T00:00:00.000Z' WHERE id=?").run(old.id);
   const ranked = (await f.call('/projects?sort=trending')).body.projects;
   assert.equal(ranked[0].id, fresh.id);
+});
+
+test('comments, replies, owner controls, reports and inbox enforce discussion boundaries', async t => {
+  const f = await fixture(t), owner = await f.register('commentowner'), guest = await f.register('commentguest');
+  const project = (await f.call('/projects', 'POST', { name: 'Discuss', url: 'https://example.com/discuss' }, owner.headers)).body.project;
+  const made = await f.call(`/projects/${project.id}/comments`, 'POST', { body: 'This can include ordinary profanity.' }, guest.headers);
+  assert.equal(made.status, 201); const top = made.body.comment;
+  assert.equal((await f.call(`/projects/${project.id}/comments`)).body.comments[0].body, 'This can include ordinary profanity.');
+  assert.equal((await f.call('/notifications', 'GET', undefined, owner.headers)).body.unread, 1);
+  const reply = await f.call(`/projects/${project.id}/comments`, 'POST', { body: 'Thanks', parentId: top.id }, owner.headers);
+  assert.equal(reply.status, 201);
+  assert.equal((await f.call(`/projects/${project.id}/comments`, 'POST', { body: 'Too deep', parentId: reply.body.comment.id }, guest.headers)).status, 400);
+  assert.equal((await f.call(`/comments/${top.id}`, 'PATCH', { body: 'Edited safely' }, guest.headers)).body.comment.edited, true);
+  assert.equal((await f.call(`/comments/${top.id}/report`, 'POST', { reason: 'Please review' }, owner.headers)).status, 201);
+  assert.equal((await f.call(`/projects/${project.id}/comments/${top.id}/moderation`, 'PATCH', { hidden: true }, owner.headers)).body.comment.status, 'owner_hidden');
+  assert.equal((await f.call(`/projects/${project.id}/comments/${top.id}/moderation`, 'PATCH', { hidden: false }, owner.headers)).body.comment.status, 'active');
+  await f.call('/notifications/read-all', 'POST', {}, guest.headers);
+  assert.equal((await f.call('/notifications', 'GET', undefined, guest.headers)).body.unread, 0);
+  assert.equal((await f.call(`/comments/${top.id}`, 'DELETE', {}, owner.headers)).status, 403);
+  assert.equal((await f.call(`/comments/${top.id}`, 'DELETE', {}, guest.headers)).body.comment.status, 'author_deleted');
+});
+
+test('roles, sanctions, appeals and administrator reset links are scoped and revocable', async t => {
+  const f = await fixture(t), admin = await f.register('rootadmin'), moderator = await f.register('staffuser'), member = await f.register('appealer');
+  f.restart([admin.user.id]);
+  assert.equal((await f.call(`/admin/accounts/${moderator.user.id}/role`, 'PATCH', { role: 'moderator', reason: 'Trusted reviewer' }, admin.headers)).status, 200);
+  const modMe = await f.call('/auth/me', 'GET', undefined, moderator.headers); assert.equal(modMe.body.user.role, 'moderator');
+  const reviewProject = (await f.call('/projects', 'POST', { name: 'Role boundaries', url: 'https://example.com/roles' }, member.headers)).body.project;
+  assert.equal((await f.call(`/admin/projects/${reviewProject.id}`, 'PATCH', { moderation: 'hidden', reason: 'Moderator review' }, moderator.headers)).status, 200);
+  assert.equal((await f.call(`/admin/projects/${reviewProject.id}`, 'PATCH', { featured: true }, moderator.headers)).status, 403);
+  assert.equal((await f.call(`/admin/projects/${reviewProject.id}`, 'PATCH', { moderation: 'active', reason: 'Moderator restored' }, moderator.headers)).status, 200);
+  const expiresAt = new Date(Date.now() + 600_000).toISOString();
+  assert.equal((await f.call(`/admin/accounts/${member.user.id}/timeout`, 'POST', { reason: 'Cool down', expiresAt }, moderator.headers)).status, 200);
+  assert.equal((await f.call('/projects', 'POST', { name: 'Blocked', url: 'https://example.com' }, member.headers)).status, 403);
+  const timeoutAppeal = await f.call('/appeals/mine', 'POST', { message: 'Please reconsider' }, member.headers); assert.equal(timeoutAppeal.status, 201);
+  assert.equal((await f.call(`/admin/appeals/${timeoutAppeal.body.id}`, 'PATCH', { status: 'approved', reason: 'Accepted' }, admin.headers)).status, 200);
+  assert.equal((await f.call('/projects', 'POST', { name: 'Allowed', url: 'https://example.com/allowed' }, member.headers)).status, 201);
+  assert.equal((await f.call(`/admin/accounts/${member.user.id}/ban`, 'POST', { reason: 'Severe abuse' }, moderator.headers)).status, 200);
+  const bannedLogin = await f.call('/auth/login', 'POST', { username: 'appealer', password: 'a-private-testing-password' });
+  assert.equal(bannedLogin.status, 200); assert.equal(bannedLogin.body.user.sanction.kind, 'ban');
+  const appealHeaders = { Cookie: bannedLogin.headers.get('set-cookie').split(';')[0], Origin: 'http://localhost', 'X-CSRF-Token': bannedLogin.body.csrfToken };
+  assert.equal((await f.call('/projects', 'GET', undefined, appealHeaders)).status, 403);
+  const banAppeal = await f.call('/appeals/mine', 'POST', { message: 'I understand the rules' }, appealHeaders); assert.equal(banAppeal.status, 201);
+  assert.equal((await f.call(`/admin/appeals/${banAppeal.body.id}`, 'PATCH', { status: 'approved', reason: 'Final chance' }, admin.headers)).status, 200);
+  const reset = await f.call(`/admin/accounts/${member.user.id}/password-reset`, 'POST', { reason: 'Requested by account owner' }, admin.headers);
+  assert.equal(reset.status, 201); const token = reset.body.resetUrl.split('#token=')[1]; assert.ok(token);
+  const changed = await f.call('/auth/reset-password', 'POST', { token, password: 'a-brand-new-private-password' });
+  assert.equal(changed.status, 200); assert.ok(changed.body.recoveryCode);
+  assert.equal((await f.call('/auth/reset-password', 'POST', { token, password: 'another-brand-new-password' })).status, 401);
+  assert.equal((await f.call('/auth/login', 'POST', { username: 'appealer', password: 'a-private-testing-password' })).status, 401);
+  assert.equal((await f.call('/auth/login', 'POST', { username: 'appealer', password: 'a-brand-new-private-password' })).status, 200);
+  assert.equal((await f.call(`/admin/accounts/${admin.user.id}/ban`, 'POST', { reason: 'Not allowed' }, moderator.headers)).status, 403);
+});
+
+test('schema v3 disabled accounts migrate to preserved legacy bans', async t => {
+  const f = await fixture(t), user = await f.register('legacydisabled');
+  f.db.prepare('UPDATE users SET disabled=1 WHERE id=?').run(user.user.id);
+  f.db.exec('DELETE FROM sanctions; PRAGMA user_version=3');
+  f.restart([]);
+  const login = await f.call('/auth/login', 'POST', { username: 'legacydisabled', password: 'a-private-testing-password' });
+  assert.equal(login.status, 200); assert.equal(login.body.user.sanction.kind, 'ban');
+  assert.equal(login.body.user.sanction.reason, 'Legacy disabled account');
+  assert.equal(f.db.prepare('PRAGMA user_version').get().user_version, 4);
 });

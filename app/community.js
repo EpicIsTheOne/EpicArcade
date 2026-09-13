@@ -120,15 +120,16 @@ function createCommunity(opts = {}) {
     catch (error) { db.exec('ROLLBACK'); throw error; }
   };
   const version = get('PRAGMA user_version').user_version;
-  if (version > 3) { db.close(); throw new Error('Community database is newer than this server'); }
+  if (version > 4) { db.close(); throw new Error('Community database is newer than this server'); }
   transaction(() => {
     db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY, username TEXT UNIQUE COLLATE NOCASE, display_name TEXT,
-        password TEXT NOT NULL, recovery_hash TEXT NOT NULL, created_at TEXT NOT NULL, disabled INTEGER NOT NULL DEFAULT 0);
+        password TEXT NOT NULL, recovery_hash TEXT NOT NULL, created_at TEXT NOT NULL, disabled INTEGER NOT NULL DEFAULT 0,
+        role TEXT NOT NULL DEFAULT 'member');
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        csrf TEXT NOT NULL, expires INTEGER NOT NULL);
+        csrf TEXT NOT NULL, expires INTEGER NOT NULL, scope TEXT NOT NULL DEFAULT 'full');
       CREATE TABLE IF NOT EXISTS tokens (
         id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         label TEXT NOT NULL, token_hash TEXT UNIQUE NOT NULL, harness TEXT, created_at TEXT NOT NULL,
@@ -158,9 +159,36 @@ function createCommunity(opts = {}) {
       CREATE TABLE IF NOT EXISTS publication_keys (user_id TEXT NOT NULL REFERENCES users(id), key TEXT NOT NULL,
         project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE, body_hash TEXT NOT NULL,
         PRIMARY KEY(user_id,key));
+      CREATE TABLE IF NOT EXISTS comments (
+        id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id), parent_id TEXT REFERENCES comments(id) ON DELETE CASCADE,
+        body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS comment_reports (
+        id TEXT PRIMARY KEY, comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id), reason TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, type TEXT NOT NULL,
+        actor_id TEXT REFERENCES users(id) ON DELETE SET NULL, project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+        comment_id TEXT REFERENCES comments(id) ON DELETE CASCADE, message TEXT NOT NULL, read_at TEXT, created_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS sanctions (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), kind TEXT NOT NULL, reason TEXT NOT NULL,
+        actor_id TEXT, created_at TEXT NOT NULL, expires_at TEXT, active INTEGER NOT NULL DEFAULT 1,
+        lifted_at TEXT, lifted_by TEXT, lift_reason TEXT);
+      CREATE TABLE IF NOT EXISTS appeals (
+        id TEXT PRIMARY KEY, sanction_id TEXT NOT NULL REFERENCES sanctions(id), user_id TEXT NOT NULL REFERENCES users(id),
+        message TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at TEXT NOT NULL,
+        decided_at TEXT, decided_by TEXT, decision_reason TEXT);
+      CREATE TABLE IF NOT EXISTS password_reset_tokens (
+        id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, token_hash TEXT UNIQUE NOT NULL,
+        created_by TEXT NOT NULL, created_at TEXT NOT NULL, expires_at INTEGER NOT NULL, used_at TEXT);
       CREATE INDEX IF NOT EXISTS project_discovery ON projects(visibility,moderation,created_at);
       CREATE INDEX IF NOT EXISTS project_owner ON projects(user_id,created_at);
       CREATE INDEX IF NOT EXISTS report_queue ON reports(status,created_at);
+      CREATE INDEX IF NOT EXISTS comment_threads ON comments(project_id,parent_id,created_at);
+      CREATE INDEX IF NOT EXISTS comment_report_queue ON comment_reports(status,created_at);
+      CREATE INDEX IF NOT EXISTS notification_inbox ON notifications(user_id,read_at,created_at);
+      CREATE INDEX IF NOT EXISTS sanction_state ON sanctions(user_id,active,expires_at);
+      CREATE INDEX IF NOT EXISTS appeal_queue ON appeals(status,created_at);
     `);
     if (!all('PRAGMA table_info(tokens)').some(c => c.name === 'expires_at')) db.exec('ALTER TABLE tokens ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0');
     if (!all('PRAGMA table_info(likes)').some(c => c.name === 'created_at')) db.exec("ALTER TABLE likes ADD COLUMN created_at TEXT NOT NULL DEFAULT ''");
@@ -171,8 +199,17 @@ function createCommunity(opts = {}) {
       run('UPDATE tokens SET expires_at=? WHERE expires_at=0', Date.now() + 90 * DAY);
     }
     if (version <= 2 && !all('PRAGMA table_info(projects)').some(c => c.name === 'prompt')) db.exec("ALTER TABLE projects ADD COLUMN prompt TEXT NOT NULL DEFAULT ''");
+    if (!all('PRAGMA table_info(users)').some(c => c.name === 'role')) db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'member'");
+    if (!all('PRAGMA table_info(sessions)').some(c => c.name === 'scope')) db.exec("ALTER TABLE sessions ADD COLUMN scope TEXT NOT NULL DEFAULT 'full'");
+    if (version <= 3) {
+      const legacyActor = 'system:migration';
+      for (const user of all('SELECT id FROM users WHERE disabled=1')) {
+        run('INSERT OR IGNORE INTO sanctions (id,user_id,kind,reason,actor_id,created_at,active) VALUES(?,?,?,?,?,?,1)',
+          'legacy-' + user.id, user.id, 'ban', 'Legacy disabled account', legacyActor, iso());
+      }
+    }
     run('INSERT OR IGNORE INTO settings VALUES(?,?)', 'privacy_key', secret());
-    db.exec('PRAGMA user_version=3');
+    db.exec('PRAGMA user_version=4');
   });
   const privacyKey = get("SELECT value FROM settings WHERE key='privacy_key'").value;
   const digest = value => crypto.createHmac('sha256', privacyKey).update(value).digest('hex');
@@ -181,7 +218,20 @@ function createCommunity(opts = {}) {
   let passwordJobs = 0, lastCleanup = 0;
   const publicUser = account => account ? { id: account.id, username: account.username, displayName: account.display_name, createdAt: account.created_at } : null;
   const accountById = id => get('SELECT * FROM users WHERE id=?', id);
-  const isAdmin = actor => !!actor && adminIds.has(actor.user.id);
+  const roleOf = account => account ? (adminIds.has(account.id) ? 'admin' : account.role || 'member') : 'member';
+  const roleRank = role => ({ member: 0, moderator: 1, admin: 2 })[role] ?? 0;
+  const isAdmin = actor => !!actor && roleOf(actor.user) === 'admin';
+  const isStaff = actor => !!actor && roleRank(roleOf(actor.user)) >= 1;
+  const activeSanction = userId => get(`SELECT * FROM sanctions WHERE user_id=? AND active=1
+    AND (kind='ban' OR expires_at IS NULL OR expires_at>?) ORDER BY CASE kind WHEN 'ban' THEN 0 ELSE 1 END,created_at DESC LIMIT 1`, userId, iso());
+  const isBanned = userId => !!get("SELECT 1 FROM sanctions WHERE user_id=? AND active=1 AND kind='ban'", userId);
+  const unreadCount = userId => get('SELECT COUNT(*) n FROM notifications WHERE user_id=? AND read_at IS NULL', userId).n;
+  function accountView(account) {
+    const sanction = activeSanction(account.id);
+    return { ...publicUser(account), role: roleOf(account), isAdmin: roleOf(account) === 'admin', isModerator: roleRank(roleOf(account)) >= 1,
+      sanction: sanction ? { id: sanction.id, kind: sanction.kind, reason: sanction.reason, expiresAt: sanction.expires_at } : null,
+      unreadNotifications: unreadCount(account.id) };
+  }
   function clientIP(req) {
     if (opts.trustProxy) {
       // Only enable behind a firewall-restricted, trusted reverse proxy. It
@@ -210,7 +260,7 @@ function createCommunity(opts = {}) {
       check(!cookies.length && /^Bearer [A-Za-z0-9_-]+$/i.test(bearer), 'Use one authentication method', 401, 'unauthorized');
       const token = get('SELECT * FROM tokens WHERE token_hash=? AND revoked_at IS NULL AND expires_at>?', hash(bearer.slice(7)), Date.now());
       const user = token && accountById(token.user_id);
-      check(user && !user.disabled, 'Token is invalid, expired, or revoked', 401, 'unauthorized');
+      check(user && !user.disabled && !activeSanction(user.id), 'Token is invalid, expired, revoked, or restricted', 401, 'unauthorized');
       return { user, method: 'agent', token };
     }
     if (!cookies.length) return null;
@@ -218,9 +268,17 @@ function createCommunity(opts = {}) {
     if (!/^[A-Za-z0-9_-]{43}$/.test(value)) return null;
     const session = get('SELECT * FROM sessions WHERE id=? AND expires>?', hash(value), Date.now());
     const user = session && accountById(session.user_id);
-    return user && !user.disabled ? { user, method: 'manual', session } : null;
+    if (!user || user.disabled && session.scope !== 'appeal') return null;
+    const effectiveSession = session.scope === 'appeal' && !activeSanction(user.id) ? { ...session, scope: 'full' } : session;
+    return { user, method: 'manual', session: effectiveSession };
   }
   function requireAuth(actor) { check(actor, 'Sign in to continue', 401, 'unauthorized'); }
+  function requireWrite(actor) {
+    requireAuth(actor);
+    check(actor.method !== 'manual' || actor.session.scope === 'full', 'This account is restricted to appeals', 403, 'sanctioned');
+    const sanction = activeSanction(actor.user.id);
+    check(!sanction, sanction?.kind === 'timeout' ? 'This account is timed out' : 'This account is banned', 403, 'sanctioned');
+  }
   function csrf(req, actor) {
     requireAuth(actor);
     if (actor.method === 'agent') return;
@@ -230,18 +288,18 @@ function createCommunity(opts = {}) {
   function cookie(value, expire = false) {
     return `${cookieName}=${value}; Max-Age=${expire ? 0 : 30 * 86400}; HttpOnly; SameSite=Lax; Path=/${opts.secureCookies ? '; Secure' : ''}`;
   }
-  function login(res, account, recoveryCode) {
+  function login(res, account, recoveryCode, scope = 'full') {
     const value = secret(), csrfToken = secret();
-    run('INSERT INTO sessions VALUES(?,?,?,?)', hash(value), account.id, csrfToken, Date.now() + 30 * DAY);
-    return json(res, 200, { user: { ...publicUser(account), isAdmin: adminIds.has(account.id) }, csrfToken,
+    run('INSERT INTO sessions (id,user_id,csrf,expires,scope) VALUES(?,?,?,?,?)', hash(value), account.id, csrfToken, Date.now() + 30 * DAY, scope);
+    return json(res, 200, { user: accountView(account), csrfToken,
       ...(recoveryCode ? { recoveryCode } : {}) }, { 'Set-Cookie': cookie(value) });
   }
   const thumbnails = createThumbnails(db, { enabled: opts.autoPreview !== false && process.env.COMMUNITY_AUTO_PREVIEW !== '0', renderer: opts.previewRenderer });
   function project(id) { return get('SELECT * FROM projects WHERE id=? OR slug=?', id, id); }
   function owner(p, actor) { return !!actor && p.user_id === actor.user.id; }
   function visible(p, actor, direct = false) {
-    if (!p || accountById(p.user_id)?.disabled) return false;
-    if (owner(p, actor) || isAdmin(actor)) return direct || p.visibility === 'public' && p.moderation === 'active';
+    if (!p || accountById(p.user_id)?.disabled || isBanned(p.user_id)) return false;
+    if (owner(p, actor) || isStaff(actor)) return direct || p.visibility === 'public' && p.moderation === 'active';
     return p.moderation === 'active' && (p.visibility === 'public' || direct && p.visibility === 'unlisted');
   }
   function projectRow(p, actor) {
@@ -330,6 +388,31 @@ function createCommunity(opts = {}) {
   function audit(actor, action, target, details) {
     run('INSERT INTO moderation_log VALUES(?,?,?,?,?,?)', uuid(), actor.user.id, action, target, JSON.stringify(details), iso());
   }
+  function notifyUser(userId, type, actorId, projectId, commentId, message) {
+    if (!userId || userId === actorId) return;
+    run('INSERT INTO notifications VALUES(?,?,?,?,?,?,?,?,?)', uuid(), userId, type, actorId || null, projectId || null,
+      commentId || null, text(message, 'message', 300, true), null, iso());
+  }
+  function canTarget(actor, target, roleChange = false) {
+    check(target, 'Account not found', 404, 'not_found');
+    check(target.id !== actor.user.id, 'You cannot target your own account', 403, 'forbidden');
+    check(!adminIds.has(target.id), 'Bootstrap administrators are protected', 403, 'forbidden');
+    if (!roleChange) check(roleRank(roleOf(target)) < roleRank(roleOf(actor.user)), 'Staff may only sanction lower roles', 403, 'forbidden');
+  }
+  function comment(id) { return get('SELECT * FROM comments WHERE id=?', id); }
+  function commentRow(c, actor) {
+    const author = accountById(c.user_id), banned = isBanned(c.user_id), staff = isStaff(actor);
+    const status = banned ? 'banned' : c.status;
+    const readable = status === 'active' || staff;
+    return { id: c.id, projectId: c.project_id, parentId: c.parent_id, author: publicUser(author),
+      body: readable ? c.body : null, status, replyCount: get('SELECT COUNT(*) n FROM comments WHERE parent_id=?', c.id).n,
+      edited: c.updated_at !== c.created_at, createdAt: c.created_at, updatedAt: c.updated_at,
+      capabilities: { edit: !!actor && c.user_id === actor.user.id && c.status === 'active' && !activeSanction(actor.user.id),
+        delete: !!actor && c.user_id === actor.user.id && c.status === 'active' && !activeSanction(actor.user.id),
+        report: !!actor && c.user_id !== actor.user.id && c.status === 'active' && !activeSanction(actor.user.id),
+        ownerModerate: !!actor && project(c.project_id)?.user_id === actor.user.id && c.user_id !== actor.user.id && !activeSanction(actor.user.id),
+        staffModerate: staff } };
+  }
   async function dispatch(req, res, url) {
     const method = req.method;
     check(['GET', 'POST', 'PATCH', 'DELETE'].includes(method), 'Method not allowed', 405, 'method');
@@ -344,13 +427,16 @@ function createCommunity(opts = {}) {
     } else rate('read:' + ip, 600, 60_000);
     const action = route.match(/^\/projects\/([^/]+)\/(like|view|report)$/);
     if (action) check(method === 'POST', 'Action requires POST', 405, 'method');
-    const publicMutation = ['/auth/register', '/auth/login', '/auth/recover'].includes(route) || action?.[2] === 'view';
+    const publicMutation = ['/auth/register', '/auth/login', '/auth/recover', '/auth/reset-password'].includes(route) || action?.[2] === 'view';
     if (mutation && !publicMutation) csrf(req, actor);
     const body = mutation ? await readBody(req) : {};
     if (mutation) {
       actor = authenticate(req);
       if (!publicMutation) csrf(req, actor);
     }
+    const appealAllowed = route === '/auth/logout' || route === '/auth/me' || route === '/appeals/mine';
+    if (actor?.session?.scope === 'appeal' && !publicMutation) check(appealAllowed, 'This session is restricted to appeals', 403, 'sanctioned');
+    if (mutation && !publicMutation && !appealAllowed) requireWrite(actor);
 
     if (route === '/catalog' && method === 'GET') {
       const base = opts.getCatalog ? await opts.getCatalog() : { models: [], tags: [], harnesses: [] };
@@ -373,14 +459,16 @@ function createCommunity(opts = {}) {
           const uid = uuid(), recoveryCode = secret(), encoded = await passwordHash(pw);
           // Check uniqueness again after asynchronous KDF to handle parallel registration.
           check(!get('SELECT 1 FROM users WHERE username=?', username), 'Username is already in use', 409, 'conflict');
-          run('INSERT INTO users VALUES(?,?,?,?,?,?,0)', uid, username, text(body.displayName, 'displayName', 80) || username, encoded, hash(recoveryCode), iso());
+          run('INSERT INTO users (id,username,display_name,password,recovery_hash,created_at,disabled,role) VALUES(?,?,?,?,?,?,0,?)', uid, username, text(body.displayName, 'displayName', 80) || username, encoded, hash(recoveryCode), iso(), 'member');
           return login(res, accountById(uid), recoveryCode);
         }
         if (route === '/auth/login') {
           const matches = await passwordMatches(pw, account?.password || 's2$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
           const current = account && accountById(account.id);
-          check(current && !current.disabled && current.password === account.password && matches, 'Invalid credentials', 401, 'unauthorized');
-          return login(res, current);
+          check(current && current.password === account.password && matches, 'Invalid credentials', 401, 'unauthorized');
+          const sanction = activeSanction(current.id);
+          check(!current.disabled || sanction?.kind === 'ban', 'Invalid credentials', 401, 'unauthorized');
+          return login(res, current, null, sanction?.kind === 'ban' ? 'appeal' : 'full');
         }
         const code = text(body.recoveryCode, 'recoveryCode', 100, true);
         check(account && !account.disabled && hash(code) === account.recovery_hash, 'Invalid recovery details', 401, 'unauthorized');
@@ -396,8 +484,29 @@ function createCommunity(opts = {}) {
         return json(res, 200, { ok: true, recoveryCode }, { 'Set-Cookie': cookie('', true) });
       } finally { passwordJobs--; }
     }
+    if (route === '/auth/reset-password' && method === 'POST') {
+      fields(body, ['token', 'password']);
+      const token = text(body.token, 'token', 200, true), pw = password(body.password);
+      rate('reset-ip:' + ip, 20, 60 * 60_000);
+      const record = get('SELECT * FROM password_reset_tokens WHERE token_hash=? AND used_at IS NULL AND expires_at>?', hash(token), Date.now());
+      check(record, 'Reset link is invalid or expired', 401, 'unauthorized');
+      check(passwordJobs < 4, 'Password service is busy. Please retry shortly.', 503, 'busy');
+      passwordJobs++;
+      try {
+        const encoded = await passwordHash(pw), recoveryCode = secret();
+        transaction(() => {
+          const current = get('SELECT * FROM password_reset_tokens WHERE id=? AND used_at IS NULL AND expires_at>?', record.id, Date.now());
+          check(current, 'Reset link has already been used or expired', 401, 'unauthorized');
+          run('UPDATE users SET password=?,recovery_hash=? WHERE id=?', encoded, hash(recoveryCode), record.user_id);
+          run('UPDATE password_reset_tokens SET used_at=? WHERE id=?', iso(), record.id);
+          run('DELETE FROM sessions WHERE user_id=?', record.user_id);
+          run('UPDATE tokens SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL', iso(), record.user_id);
+        });
+        return json(res, 200, { ok: true, recoveryCode }, { 'Set-Cookie': cookie('', true) });
+      } finally { passwordJobs--; }
+    }
     if (route === '/auth/me' && method === 'GET') return json(res, 200, {
-      user: actor ? { ...publicUser(actor.user), isAdmin: isAdmin(actor) } : null, csrfToken: actor?.session?.csrf || null
+      user: actor ? accountView(actor.user) : null, csrfToken: actor?.session?.csrf || null
     });
     if (route === '/auth/logout' && method === 'POST') {
       fields(body, []);
@@ -509,6 +618,109 @@ function createCommunity(opts = {}) {
       if (!prior) run('INSERT INTO reports VALUES(?,?,?,?,?,?)', id, p.id, actor.user.id, reason, 'open', iso());
       return json(res, prior ? 200 : 201, { ok: true, id });
     }
+    match = route.match(/^\/projects\/([^/]+)\/comments$/);
+    if (match) {
+      const p = project(match[1]);
+      check(visible(p, actor, true), 'Project not found', 404, 'not_found');
+      if (method === 'GET') {
+        const { limit, offset } = pagination(url);
+        const total = get('SELECT COUNT(*) n FROM comments WHERE project_id=? AND parent_id IS NULL', p.id).n;
+        const items = all('SELECT * FROM comments WHERE project_id=? AND parent_id IS NULL ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?', p.id, limit, offset);
+        return json(res, 200, { comments: items.map(c => commentRow(c, actor)), total });
+      }
+      if (method === 'POST') {
+        fields(body, ['body', 'parentId']);
+        rate('comment-window:' + actor.user.id, 10, 10 * 60_000);
+        rate('comment-day:' + actor.user.id, 100, DAY);
+        const parentId = text(body.parentId, 'parentId', 80) || null;
+        let parent = null;
+        if (parentId) {
+          parent = comment(parentId);
+          check(parent && parent.project_id === p.id, 'Reply parent not found', 404, 'not_found');
+          check(!parent.parent_id, 'Replies may only be one level deep');
+          check(parent.status !== 'moderator_removed', 'This discussion is closed');
+        }
+        const id = uuid(), time = iso(), value = text(body.body, 'body', 2000, true);
+        run('INSERT INTO comments VALUES(?,?,?,?,?,?,?,?)', id, p.id, actor.user.id, parentId, value, 'active', time, time);
+        if (parent) notifyUser(parent.user_id, 'reply', actor.user.id, p.id, id, `${actor.user.display_name || actor.user.username} replied to your comment.`);
+        else notifyUser(p.user_id, 'project_comment', actor.user.id, p.id, id, `${actor.user.display_name || actor.user.username} commented on ${p.name}.`);
+        return json(res, 201, { comment: commentRow(comment(id), actor) });
+      }
+    }
+    match = route.match(/^\/comments\/([^/]+)\/replies$/);
+    if (match && method === 'GET') {
+      const parent = comment(match[1]);
+      check(parent && !parent.parent_id && visible(project(parent.project_id), actor, true), 'Comment not found', 404, 'not_found');
+      const { limit, offset } = pagination(url);
+      const total = get('SELECT COUNT(*) n FROM comments WHERE parent_id=?', parent.id).n;
+      return json(res, 200, { comments: all('SELECT * FROM comments WHERE parent_id=? ORDER BY created_at,id LIMIT ? OFFSET ?', parent.id, limit, offset).map(c => commentRow(c, actor)), total });
+    }
+    match = route.match(/^\/comments\/([^/]+)$/);
+    if (match && ['PATCH', 'DELETE'].includes(method)) {
+      const c = comment(match[1]);
+      check(c && visible(project(c.project_id), actor, true), 'Comment not found', 404, 'not_found');
+      check(c.user_id === actor.user.id, 'Only the author can change this comment', 403, 'forbidden');
+      check(c.status === 'active', 'This comment can no longer be changed', 409, 'conflict');
+      if (method === 'DELETE') {
+        fields(body, []); run("UPDATE comments SET status='author_deleted',updated_at=? WHERE id=?", iso(), c.id);
+        return json(res, 200, { comment: commentRow(comment(c.id), actor) });
+      }
+      fields(body, ['body']);
+      run('UPDATE comments SET body=?,updated_at=? WHERE id=?', text(body.body, 'body', 2000, true), iso(), c.id);
+      return json(res, 200, { comment: commentRow(comment(c.id), actor) });
+    }
+    match = route.match(/^\/comments\/([^/]+)\/report$/);
+    if (match && method === 'POST') {
+      const c = comment(match[1]);
+      check(c && c.status === 'active' && c.user_id !== actor.user.id && visible(project(c.project_id), actor, true), 'Comment not found', 404, 'not_found');
+      fields(body, ['reason']); rate('report:' + actor.user.id, 10, DAY);
+      const reason = text(body.reason, 'reason', 500, true);
+      const prior = get("SELECT id FROM comment_reports WHERE comment_id=? AND user_id=? AND status='open'", c.id, actor.user.id);
+      const id = prior?.id || uuid();
+      if (!prior) run('INSERT INTO comment_reports VALUES(?,?,?,?,?,?)', id, c.id, actor.user.id, reason, 'open', iso());
+      return json(res, prior ? 200 : 201, { ok: true, id });
+    }
+    match = route.match(/^\/projects\/([^/]+)\/comments\/([^/]+)\/moderation$/);
+    if (match && method === 'PATCH') {
+      const p = project(match[1]), c = comment(match[2]);
+      check(p && c && c.project_id === p.id && p.user_id === actor.user.id, 'Comment not found', 404, 'not_found');
+      fields(body, ['hidden']); check(typeof body.hidden === 'boolean', 'hidden must be boolean');
+      check(c.status !== 'moderator_removed' && c.status !== 'author_deleted', 'Staff or author state cannot be overridden', 409, 'conflict');
+      run('UPDATE comments SET status=?,updated_at=? WHERE id=?', body.hidden ? 'owner_hidden' : 'active', iso(), c.id);
+      notifyUser(c.user_id, 'content_moderated', actor.user.id, p.id, c.id, body.hidden ? `Your comment on ${p.name} was hidden by the project owner.` : `Your comment on ${p.name} was restored.`);
+      return json(res, 200, { comment: commentRow(comment(c.id), actor) });
+    }
+    if (route === '/notifications' && method === 'GET') {
+      requireAuth(actor); const { limit, offset } = pagination(url);
+      const total = get('SELECT COUNT(*) n FROM notifications WHERE user_id=?', actor.user.id).n;
+      const rows = all(`SELECT n.*,u.username actor_username,u.display_name actor_name FROM notifications n LEFT JOIN users u ON u.id=n.actor_id
+        WHERE n.user_id=? ORDER BY n.created_at DESC,n.id DESC LIMIT ? OFFSET ?`, actor.user.id, limit, offset);
+      return json(res, 200, { notifications: rows.map(n => ({ id: n.id, type: n.type, actor: n.actor_id ? { id: n.actor_id, username: n.actor_username, displayName: n.actor_name } : null,
+        projectId: n.project_id, commentId: n.comment_id, message: n.message, readAt: n.read_at, createdAt: n.created_at })), total, unread: unreadCount(actor.user.id) });
+    }
+    match = route.match(/^\/notifications\/([^/]+)$/);
+    if (match && method === 'PATCH') {
+      fields(body, ['read']); check(body.read === true, 'read must be true');
+      check(run('UPDATE notifications SET read_at=COALESCE(read_at,?) WHERE id=? AND user_id=?', iso(), match[1], actor.user.id).changes, 'Notification not found', 404, 'not_found');
+      return json(res, 200, { ok: true, unread: unreadCount(actor.user.id) });
+    }
+    if (route === '/notifications/read-all' && method === 'POST') {
+      fields(body, []); run('UPDATE notifications SET read_at=? WHERE user_id=? AND read_at IS NULL', iso(), actor.user.id);
+      return json(res, 200, { ok: true, unread: 0 });
+    }
+    if (route === '/appeals/mine') {
+      requireAuth(actor);
+      if (method === 'GET') return json(res, 200, { appeals: all(`SELECT a.id,a.sanction_id AS sanctionId,a.message,a.status,a.created_at AS createdAt,
+        a.decided_at AS decidedAt,a.decision_reason AS decisionReason,s.kind,s.reason,s.expires_at AS expiresAt
+        FROM appeals a JOIN sanctions s ON s.id=a.sanction_id WHERE a.user_id=? ORDER BY a.created_at DESC`, actor.user.id) });
+      if (method === 'POST') {
+        fields(body, ['message']);
+        const sanction = activeSanction(actor.user.id); check(sanction, 'There is no active sanction to appeal', 409, 'conflict');
+        check(!get("SELECT 1 FROM appeals WHERE sanction_id=? AND status='open'", sanction.id), 'An appeal is already open', 409, 'conflict');
+        const id = uuid(); run('INSERT INTO appeals (id,sanction_id,user_id,message,status,created_at) VALUES(?,?,?,?,?,?)', id, sanction.id, actor.user.id, text(body.message, 'message', 2000, true), 'open', iso());
+        return json(res, 201, { ok: true, id });
+      }
+    }
     match = route.match(/^\/creators\/([^/]+)$/);
     if (match && method === 'GET') {
       const creator = get('SELECT * FROM users WHERE username=? AND disabled=0', match[1]);
@@ -520,7 +732,7 @@ function createCommunity(opts = {}) {
       return json(res, 200, { creator: publicUser(creator), stats, models: common('models'), tags: common('tags'), projects: items.map(p => projectRow(p, actor)) });
     }
     if (route.startsWith('/admin/')) {
-      check(isAdmin(actor), 'Administrator access required', 403, 'forbidden');
+      check(isStaff(actor), 'Staff access required', 403, 'forbidden');
       if (route === '/admin/reports' && method === 'GET') {
         const { limit, offset } = pagination(url);
         return json(res, 200, { reports: all(`SELECT r.id,r.project_id AS projectId,r.user_id AS reporterId,r.reason,r.status,r.created_at AS createdAt,
@@ -529,31 +741,135 @@ function createCommunity(opts = {}) {
       }
       match = route.match(/^\/admin\/reports\/([^/]+)$/);
       if (match && method === 'PATCH') {
-        fields(body, ['status']); check(['open', 'resolved'].includes(body.status), 'status must be open or resolved');
-        check(get('SELECT 1 FROM reports WHERE id=?', match[1]), 'Report not found', 404);
-        transaction(() => { run('UPDATE reports SET status=? WHERE id=?', body.status, match[1]); audit(actor, 'report', match[1], body); });
+        fields(body, ['status', 'reason']); check(['open', 'resolved'].includes(body.status), 'status must be open or resolved');
+        const reason = text(body.reason, 'reason', 500, true);
+        const report = get('SELECT * FROM reports WHERE id=?', match[1]); check(report, 'Report not found', 404);
+        transaction(() => { run('UPDATE reports SET status=? WHERE id=?', body.status, match[1]); audit(actor, 'report', match[1], { from: report.status, to: body.status, reason }); });
         return json(res, 200, { ok: true });
       }
       match = route.match(/^\/admin\/projects\/([^/]+)$/);
       if (match && method === 'PATCH') {
-        fields(body, ['featured', 'moderation']);
+        fields(body, ['featured', 'moderation', 'reason']);
         check(body.featured === undefined || typeof body.featured === 'boolean', 'featured must be boolean');
+        if (body.featured !== undefined) check(isAdmin(actor), 'Only administrators can feature projects', 403, 'forbidden');
         check(body.moderation === undefined || ['active', 'hidden'].includes(body.moderation), 'Invalid moderation state');
+        const reason = body.moderation === undefined ? text(body.reason, 'reason', 500) : text(body.reason, 'reason', 500, true);
         const p = project(match[1]); check(p, 'Project not found', 404, 'not_found');
-        transaction(() => { run('UPDATE projects SET featured=?,moderation=?,updated_at=? WHERE id=?', body.featured === undefined ? p.featured : Number(body.featured), body.moderation || p.moderation, iso(), p.id); audit(actor, 'project', p.id, body); });
+        const nextFeatured = body.featured === undefined ? p.featured : Number(body.featured), nextModeration = body.moderation || p.moderation;
+        transaction(() => { run('UPDATE projects SET featured=?,moderation=?,updated_at=? WHERE id=?', nextFeatured, nextModeration, iso(), p.id); audit(actor, 'project', p.id, { featured: { from: !!p.featured, to: !!nextFeatured }, moderation: { from: p.moderation, to: nextModeration }, reason }); });
+        if (body.moderation !== undefined) notifyUser(p.user_id, 'content_moderated', actor.user.id, p.id, null, body.moderation === 'hidden' ? `Your project ${p.name} was hidden by Community staff.` : `Your project ${p.name} was restored by Community staff.`);
         return json(res, 200, { project: projectRow(project(p.id), actor) });
       }
-      match = route.match(/^\/admin\/accounts\/([^/]+)$/);
+      if (route === '/admin/comment-reports' && method === 'GET') {
+        const { limit, offset } = pagination(url);
+        return json(res, 200, { reports: all(`SELECT r.id,r.comment_id AS commentId,r.user_id AS reporterId,r.reason,r.status,r.created_at AS createdAt,
+          c.project_id AS projectId,c.user_id AS authorId,c.body,c.status AS commentStatus,p.name AS projectName
+          FROM comment_reports r JOIN comments c ON c.id=r.comment_id JOIN projects p ON p.id=c.project_id
+          WHERE r.status='open' ORDER BY r.created_at DESC LIMIT ? OFFSET ?`, limit, offset) });
+      }
+      match = route.match(/^\/admin\/comment-reports\/([^/]+)$/);
       if (match && method === 'PATCH') {
-        fields(body, ['disabled']); check(typeof body.disabled === 'boolean', 'disabled must be boolean');
-        check(accountById(match[1]), 'Account not found', 404, 'not_found');
-        check(!body.disabled || match[1] !== actor.user.id, 'Administrators cannot disable their current account');
-        transaction(() => {
-          run('UPDATE users SET disabled=? WHERE id=?', Number(body.disabled), match[1]);
-          if (body.disabled) { run('DELETE FROM sessions WHERE user_id=?', match[1]); run('UPDATE tokens SET revoked_at=? WHERE user_id=?', iso(), match[1]); }
-          audit(actor, 'account', match[1], body);
-        });
+        fields(body, ['status', 'reason']); check(['open', 'resolved'].includes(body.status), 'status must be open or resolved');
+        const reason = text(body.reason, 'reason', 500, true);
+        const report = get('SELECT * FROM comment_reports WHERE id=?', match[1]); check(report, 'Report not found', 404, 'not_found');
+        transaction(() => { run('UPDATE comment_reports SET status=? WHERE id=?', body.status, match[1]); audit(actor, 'comment_report', match[1], { from: report.status, to: body.status, reason }); });
         return json(res, 200, { ok: true });
+      }
+      match = route.match(/^\/admin\/comments\/([^/]+)$/);
+      if (match && method === 'PATCH') {
+        fields(body, ['status', 'reason']); check(['active', 'moderator_removed'].includes(body.status), 'Invalid comment moderation state');
+        const reason = text(body.reason, 'reason', 500, true), c = comment(match[1]); check(c, 'Comment not found', 404, 'not_found');
+        check(c.status !== 'author_deleted', 'Author-deleted comments cannot be restored', 409, 'conflict');
+        transaction(() => { run('UPDATE comments SET status=?,updated_at=? WHERE id=?', body.status, iso(), c.id); audit(actor, 'comment', c.id, { from: c.status, to: body.status, reason }); });
+        notifyUser(c.user_id, 'content_moderated', actor.user.id, c.project_id, c.id, body.status === 'moderator_removed' ? 'Your comment was removed by Community staff.' : 'Your comment was restored by Community staff.');
+        return json(res, 200, { comment: commentRow(comment(c.id), actor) });
+      }
+      if (route === '/admin/accounts' && method === 'GET') {
+        const query = text(url.searchParams.get('search'), 'search', 80).toLowerCase(), { limit, offset } = pagination(url);
+        const pattern = `%${query}%`;
+        const rows = all(`SELECT * FROM users WHERE ?='' OR lower(username) LIKE ? OR lower(display_name) LIKE ? OR lower(id) LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?`, query, pattern, pattern, pattern, limit, offset);
+        return json(res, 200, { accounts: rows.map(u => ({ ...accountView(u), bootstrapAdmin: adminIds.has(u.id) })) });
+      }
+      match = route.match(/^\/admin\/accounts\/([^/]+)\/role$/);
+      if (match && method === 'PATCH') {
+        check(isAdmin(actor), 'Administrator access required', 403, 'forbidden');
+        fields(body, ['role', 'reason']); check(['member', 'moderator', 'admin'].includes(body.role), 'Invalid role');
+        const target = accountById(match[1]); canTarget(actor, target, true); const reason = text(body.reason, 'reason', 500, true);
+        if (roleOf(target) === 'admin' && body.role !== 'admin') {
+          const databaseAdmins = get("SELECT COUNT(*) n FROM users WHERE role='admin' AND disabled=0").n;
+          check(adminIds.size > 0 || databaseAdmins > 1, 'The final active administrator cannot be demoted', 409, 'conflict');
+        }
+        transaction(() => { run('UPDATE users SET role=? WHERE id=?', body.role, target.id); audit(actor, 'role', target.id, { from: roleOf(target), to: body.role, reason }); });
+        notifyUser(target.id, 'role_changed', actor.user.id, null, null, `Your Community role is now ${body.role}.`);
+        return json(res, 200, { account: accountView(accountById(target.id)) });
+      }
+      match = route.match(/^\/admin\/accounts\/([^/]+)\/(kick|timeout|ban|unban)$/);
+      if (match && method === 'POST') {
+        const target = accountById(match[1]); canTarget(actor, target); const operation = match[2];
+        fields(body, operation === 'timeout' ? ['reason', 'expiresAt'] : ['reason']);
+        const reason = text(body.reason, 'reason', 500, true), now = iso();
+        let expiresAt = null;
+        if (operation === 'timeout') {
+          const time = Date.parse(body.expiresAt); check(Number.isFinite(time) && time > Date.now() && time <= Date.now() + 365 * DAY, 'Timeout expiry must be within the next year');
+          expiresAt = new Date(time).toISOString();
+        }
+        const previousSanction = activeSanction(target.id);
+        check(!(operation === 'timeout' && previousSanction?.kind === 'ban'), 'Lift the active ban before applying a timeout', 409, 'conflict');
+        transaction(() => {
+          if (operation === 'kick') {
+            run('DELETE FROM sessions WHERE user_id=?', target.id); run('UPDATE tokens SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL', now, target.id);
+          } else if (operation === 'unban') {
+            run("UPDATE sanctions SET active=0,lifted_at=?,lifted_by=?,lift_reason=? WHERE user_id=? AND active=1", now, actor.user.id, reason, target.id);
+            run('UPDATE users SET disabled=0 WHERE id=?', target.id);
+          } else {
+            const id = uuid(); run("UPDATE sanctions SET active=0,lifted_at=?,lifted_by=?,lift_reason='Replaced by newer sanction' WHERE user_id=? AND active=1", now, actor.user.id, target.id);
+            run('INSERT INTO sanctions (id,user_id,kind,reason,actor_id,created_at,expires_at,active) VALUES(?,?,?,?,?,?,?,1)', id, target.id, operation, reason, actor.user.id, now, expiresAt);
+            if (operation === 'ban') {
+              run('UPDATE users SET disabled=1 WHERE id=?', target.id);
+              run('DELETE FROM sessions WHERE user_id=?', target.id);
+              run('UPDATE tokens SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL', now, target.id);
+            }
+          }
+          audit(actor, operation, target.id, { from: previousSanction ? { kind: previousSanction.kind, expiresAt: previousSanction.expires_at } : null, to: operation === 'unban' || operation === 'kick' ? null : { kind: operation, expiresAt }, reason });
+        });
+        notifyUser(target.id, 'sanction', actor.user.id, null, null, operation === 'unban' ? 'Your Community ban or timeout was lifted.' : operation === 'kick' ? 'You were signed out of Community by staff.' : `Your Community account received a ${operation}.`);
+        return json(res, 200, { ok: true, account: accountView(accountById(target.id)) });
+      }
+      match = route.match(/^\/admin\/accounts\/([^/]+)\/password-reset$/);
+      if (match && method === 'POST') {
+        check(isAdmin(actor), 'Administrator access required', 403, 'forbidden');
+        const target = accountById(match[1]); canTarget(actor, target); fields(body, ['reason']); const reason = text(body.reason, 'reason', 500, true);
+        const token = secret(), id = uuid(), createdAt = iso();
+        transaction(() => { run('UPDATE password_reset_tokens SET used_at=? WHERE user_id=? AND used_at IS NULL', createdAt, target.id);
+          run('INSERT INTO password_reset_tokens VALUES(?,?,?,?,?,?,NULL)', id, target.id, hash(token), actor.user.id, createdAt, Date.now() + 60 * 60_000);
+          audit(actor, 'password_reset_issued', target.id, { reason, expiresAt: new Date(Date.now() + 60 * 60_000).toISOString() }); });
+        notifyUser(target.id, 'password_reset_issued', actor.user.id, null, null, 'A Community administrator issued a password-reset link for your account.');
+        return json(res, 201, { resetUrl: `${opts.origin}/Community/reset-password#token=${token}`, expiresAt: Date.now() + 60 * 60_000 });
+      }
+      if (route === '/admin/appeals' && method === 'GET') {
+        check(isAdmin(actor), 'Administrator access required', 403, 'forbidden');
+        const { limit, offset } = pagination(url);
+        return json(res, 200, { appeals: all(`SELECT a.id,a.sanction_id AS sanctionId,a.user_id AS userId,a.message,a.status,a.created_at AS createdAt,
+          s.kind,s.reason,s.expires_at AS expiresAt,u.username,u.display_name AS displayName FROM appeals a JOIN sanctions s ON s.id=a.sanction_id JOIN users u ON u.id=a.user_id
+          WHERE a.status='open' ORDER BY a.created_at LIMIT ? OFFSET ?`, limit, offset) });
+      }
+      match = route.match(/^\/admin\/appeals\/([^/]+)$/);
+      if (match && method === 'PATCH') {
+        check(isAdmin(actor), 'Administrator access required', 403, 'forbidden');
+        fields(body, ['status', 'reason']); check(['approved', 'denied'].includes(body.status), 'status must be approved or denied');
+        const reason = text(body.reason, 'reason', 500, true), appeal = get("SELECT * FROM appeals WHERE id=? AND status='open'", match[1]); check(appeal, 'Open appeal not found', 404, 'not_found');
+        const target = accountById(appeal.user_id); canTarget(actor, target); const time = iso();
+        transaction(() => {
+          run('UPDATE appeals SET status=?,decided_at=?,decided_by=?,decision_reason=? WHERE id=?', body.status, time, actor.user.id, reason, appeal.id);
+          if (body.status === 'approved') { run('UPDATE sanctions SET active=0,lifted_at=?,lifted_by=?,lift_reason=? WHERE id=?', time, actor.user.id, reason, appeal.sanction_id); run('UPDATE users SET disabled=0 WHERE id=?', target.id); }
+          audit(actor, 'appeal', appeal.id, { from: 'open', to: body.status, reason });
+        });
+        notifyUser(target.id, 'appeal_decided', actor.user.id, null, null, `Your Community appeal was ${body.status}.`);
+        return json(res, 200, { ok: true });
+      }
+      if (route === '/admin/audit' && method === 'GET') {
+        check(isAdmin(actor), 'Administrator access required', 403, 'forbidden'); const { limit, offset } = pagination(url);
+        return json(res, 200, { entries: all('SELECT id,actor_id AS actorId,action,target_id AS targetId,details,created_at AS createdAt FROM moderation_log ORDER BY created_at DESC LIMIT ? OFFSET ?', limit, offset).map(row => ({ ...row, details: JSON.parse(row.details) })) });
       }
     }
     throw new APIError(404, 'Route not found', 'not_found');
@@ -566,6 +882,10 @@ function createCommunity(opts = {}) {
         run('DELETE FROM limits WHERE reset_at<?', Date.now());
         run('DELETE FROM sessions WHERE expires<?', Date.now());
         run('DELETE FROM view_events WHERE day<?', new Date(Date.now() - 30 * DAY).toISOString().slice(0, 10));
+        run("UPDATE sanctions SET active=0,lifted_at=COALESCE(lifted_at,?),lift_reason=COALESCE(lift_reason,'Expired') WHERE active=1 AND kind='timeout' AND expires_at<=?", iso(), iso());
+        run("UPDATE appeals SET status='expired',decided_at=? WHERE status='open' AND sanction_id IN (SELECT id FROM sanctions WHERE active=0 AND lift_reason='Expired')", iso());
+        run('DELETE FROM notifications WHERE read_at IS NOT NULL AND read_at<?', new Date(Date.now() - 90 * DAY).toISOString());
+        run('DELETE FROM password_reset_tokens WHERE expires_at<? OR used_at IS NOT NULL', Date.now() - DAY);
       }
       return await dispatch(req, res, url);
     } catch (error) {

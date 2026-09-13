@@ -20,6 +20,7 @@
   };
   const label = (type, id) => state.catalog[type].find(item => item.id === id)?.label || id;
   const date = value => new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const dateTime = value => new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
   const link = (href, text, className = '') => node('a', { href, text, class: className });
   const button = (text, action, className = 'button button-quiet') => node('button', { type: 'button', class: className, text, onclick: action });
   const safeAction = action => async event => { try { await action(event); } catch (error) { notify(error.message, true); } };
@@ -72,6 +73,11 @@
     accountButton.classList.toggle('is-signed-out', !state.user);
     accountButton.textContent = state.user ? initials(state.user) : 'Log in / Register';
     accountButton.setAttribute('aria-label', state.user ? 'Your account' : 'Log in or register');
+    const inbox = document.getElementById('inboxLink'), inboxCount = document.getElementById('inboxCount');
+    inbox.hidden = !state.user || state.user.sanction?.kind === 'ban';
+    const unread = state.user?.unreadNotifications || 0;
+    inboxCount.textContent = unread ? `(${unread})` : '';
+    inbox.setAttribute('aria-label', unread ? `Inbox, ${unread} unread` : 'Inbox');
   }
   function heading(kicker, title, copy) {
     return node('div', { class: 'page-heading' }, node('div', { class: 'kicker', text: kicker }), node('h1', { text: title }), copy && node('p', { class: 'detail-lede', text: copy }));
@@ -344,6 +350,7 @@
     const owned = state.user?.id === project.creator.id;
     const like = button(`${project.liked ? '♥' : '♡'} ${project.likes}`, safeAction(async () => {
       if (!state.user && !await signIn()) return;
+      if (state.user?.sanction) return navigate('/Community/appeals');
       const result = await api(`/projects/${project.id}/like`, 'POST', {});
       like.textContent = `${result.liked ? '♥' : '♡'} ${result.likes}`; like.setAttribute('aria-pressed', result.liked);
     }));
@@ -355,6 +362,7 @@
     const published = project.publication.method === 'agent' ?
       `Published by ${project.publication.harness ? label('harnesses', project.publication.harness) : 'an agent'} · API submission` : 'Published manually';
     const embed = projectEmbed(project);
+    const discussion = node('section', { class: 'discussion', 'aria-labelledby': 'discussionTitle' }, loading());
     layout(node('article', { class: 'detail' }, node('div', { class: 'detail-head' },
       node('div', {}, node('div', { class: 'kicker', text: project.featured ? 'Featured Community project' : 'Community project' }),
         node('h1', { text: project.name }), node('div', { class: 'chips' },
@@ -370,11 +378,81 @@
           project.tags.length && info('Categories', node('div', { class: 'chips' }, project.tags.map(tag => link('/Community/?tag=' + encodeURIComponent(tag), label('tags', tag), 'chip')))),
           info('Publication', node('div', {}, node('span', { text: published }), node('small', { text: date(project.createdAt) }))),
           info('Reach', views), project.sourceUrl && info('Source', external(project.sourceUrl, 'View source ↗')),
-          info('Stable project ID', node('code', { class: 'project-id', text: project.id }))))));
+          info('Stable project ID', node('code', { class: 'project-id', text: project.id }))))), discussion);
     if (state.user?.isAdmin) app.querySelector('.detail-actions').append(button(project.featured ? 'Remove feature' : 'Feature project', safeAction(async () => {
       await api('/admin/projects/' + project.id, 'PATCH', { featured: !project.featured }); detail(project.id);
     })));
+    if (state.user?.isModerator) app.querySelector('.detail-actions').append(button(project.moderation === 'hidden' ? 'Restore project' : 'Hide project', () => staffReason(project.moderation === 'hidden' ? 'Restore project' : 'Hide project', async reason => {
+      await api('/admin/projects/' + project.id, 'PATCH', { moderation: project.moderation === 'hidden' ? 'active' : 'hidden', reason }); closeModal(); detail(project.id);
+    })));
     api(`/projects/${project.id}/view`, 'POST', {}).then(result => { views.textContent = `${result.views} views`; }).catch(() => {});
+    await renderComments(project, discussion);
+  }
+
+  async function renderComments(project, root) {
+    const data = await api(`/projects/${project.id}/comments?limit=20`);
+    const list = node('div', { class: 'comment-list' });
+    const composer = node('form', { class: 'comment-composer' }, field('Add to the discussion', 'body', { type: 'textarea', required: true, max: 2000, placeholder: 'Share feedback, ask a question, or encourage the creator…' }),
+      node('p', { class: 'form-note', text: 'Cursing is allowed. Threats, hateful slurs, sexual exploitation, doxxing, severe harassment, scams, malware, and spam are not.' }),
+      node('button', { class: 'button', type: 'submit', text: 'Post comment' }));
+    if (!state.user) composer.replaceChildren(node('p', { text: 'Sign in to join the discussion.' }), button('Log in or register', safeAction(async () => { if (await signIn()) renderComments(project, root); }), 'button'));
+    else if (state.user.sanction) composer.replaceChildren(node('p', { class: 'inline-error', text: state.user.sanction.kind === 'timeout' ? `Commenting is unavailable until ${dateTime(state.user.sanction.expiresAt)}.` : 'This account is restricted.' }), link('/Community/appeals', 'View or submit an appeal', 'button button-quiet'));
+    else submit(composer, async () => { await api(`/projects/${project.id}/comments`, 'POST', { body: composer.elements.body.value }); notify('Comment posted'); await renderComments(project, root); });
+    root.replaceChildren(node('div', { class: 'discussion-head' }, node('div', {}, node('div', { class: 'kicker', text: 'Community discussion' }), node('h2', { id: 'discussionTitle', text: `Comments · ${data.total}` }))), composer,
+      data.comments.length ? list : empty('No comments yet.', 'Start a useful conversation about this project.'));
+    for (const item of data.comments) list.append(await commentCard(project, item));
+    if (data.total > data.comments.length) {
+      let offset = data.comments.length;
+      const more = button('Load more comments', safeAction(async () => {
+        const next = await api(`/projects/${project.id}/comments?limit=20&offset=${offset}`);
+        for (const item of next.comments) list.append(await commentCard(project, item));
+        offset += next.comments.length; more.hidden = offset >= next.total;
+      }), 'button button-quiet'); root.append(more);
+    }
+  }
+
+  async function commentCard(project, item) {
+    const copy = item.body || ({ author_deleted: 'Comment deleted by its author.', owner_hidden: 'Comment hidden by the project owner.', moderator_removed: 'Comment removed by Community staff.', banned: 'Comment unavailable while this account is banned.' }[item.status] || 'Comment unavailable.');
+    const actions = node('div', { class: 'comment-actions' });
+    if (item.capabilities.edit) actions.append(button('Edit', () => commentEdit(project, item)));
+    if (item.capabilities.delete) actions.append(button('Delete', safeAction(async () => { await api('/comments/' + item.id, 'DELETE', {}); notify('Comment deleted'); detail(project.id); })));
+    if (item.capabilities.report) actions.append(button('Report', () => commentReport(project, item)));
+    if (item.capabilities.ownerModerate) actions.append(button(item.status === 'owner_hidden' ? 'Restore' : 'Hide', safeAction(async () => {
+      await api(`/projects/${project.id}/comments/${item.id}/moderation`, 'PATCH', { hidden: item.status !== 'owner_hidden' }); notify('Comment visibility updated'); detail(project.id);
+    })));
+    if (item.capabilities.staffModerate && item.status !== 'author_deleted') actions.append(button(item.status === 'moderator_removed' ? 'Staff restore' : 'Staff remove', () => staffReason('Moderate comment', async reason => {
+      await api('/admin/comments/' + item.id, 'PATCH', { status: item.status === 'moderator_removed' ? 'active' : 'moderator_removed', reason }); closeModal(); detail(project.id);
+    })));
+    if (state.user && !state.user.sanction && !item.parentId && item.status !== 'moderator_removed') actions.append(button('Reply', () => commentReply(project, item)));
+    const replies = node('div', { class: 'reply-list' });
+    if (!item.parentId && item.replyCount) {
+      const data = await api(`/comments/${item.id}/replies?limit=20`);
+      for (const reply of data.comments) replies.append(await commentCard(project, reply));
+      if (data.total > data.comments.length) {
+        let offset = data.comments.length;
+        const more = button('Load more replies', safeAction(async () => {
+          const next = await api(`/comments/${item.id}/replies?limit=20&offset=${offset}`);
+          for (const reply of next.comments) replies.insertBefore(await commentCard(project, reply), more);
+          offset += next.comments.length; more.hidden = offset >= next.total;
+        }), 'button button-small button-quiet'); replies.append(more);
+      }
+    }
+    return node('article', { class: `comment-card status-${item.status}`, 'data-comment-id': item.id },
+      node('div', { class: 'comment-meta' }, link(routeUrl('creators', item.author.username), item.author.displayName || '@' + item.author.username), node('span', { text: dateTime(item.createdAt) }), item.edited && node('span', { text: 'Edited' })),
+      node('p', { class: 'comment-body', text: copy }), actions, replies);
+  }
+
+  function commentEdit(project, item) {
+    const form = node('form', { class: 'form-stack' }, field('Edit comment', 'editBody', { type: 'textarea', required: true, max: 2000, value: item.body }), node('button', { class: 'button', type: 'submit', text: 'Save edit' }));
+    openModal('Edit comment', form); submit(form, async () => { await api('/comments/' + item.id, 'PATCH', { body: form.elements.editBody.value }); closeModal(); detail(project.id); });
+  }
+  function commentReply(project, item) {
+    const form = node('form', { class: 'form-stack' }, field(`Reply to ${item.author.displayName}`, 'replyBody', { type: 'textarea', required: true, max: 2000 }), node('button', { class: 'button', type: 'submit', text: 'Post reply' }));
+    openModal('Reply', form); submit(form, async () => { await api(`/projects/${project.id}/comments`, 'POST', { body: form.elements.replyBody.value, parentId: item.id }); closeModal(); detail(project.id); });
+  }
+  function commentReport(project, item) {
+    const form = node('form', { class: 'form-stack' }, field('Why should staff review this?', 'reportReason', { type: 'textarea', required: true, max: 500 }), node('p', { class: 'form-note', text: 'Ordinary profanity alone is allowed. Report threats, hate, exploitation, doxxing, severe harassment, scams, malware, or spam.' }), node('button', { class: 'button', type: 'submit', text: 'Send report' }));
+    openModal('Report comment', form); submit(form, async () => { await api('/comments/' + item.id + '/report', 'POST', { reason: form.elements.reportReason.value }); closeModal(); notify('Report received'); });
   }
   function report(project) {
     const form = node('form', { class: 'form-stack' }, field('Reason for report', 'reason', { type: 'textarea', required: true, max: 500 }),
@@ -403,6 +481,7 @@
     const edit = new URLSearchParams(location.search).get('edit');
     const publicationKey = crypto.randomUUID();
     if (edit && !state.user && !await signIn()) return navigate('/Community/');
+    if (state.user?.sanction) return navigate('/Community/appeals');
     let project = null;
     if (edit) { layout(loading()); project = (await api('/projects/' + encodeURIComponent(edit))).project; }
     if (project && project.creator.id !== state.user?.id) throw new Error('Only the creator can edit this project.');
@@ -455,6 +534,7 @@
           node('p', { text: 'You can edit the link, credits and visibility later. Your Community project ID stays the same.' }), link('/Community/agent', 'Publishing with an agent? →')))));
     submit(form, async () => {
       if (!state.user && !await signIn()) return;
+      if (state.user?.sanction) return navigate('/Community/appeals');
         const body = Object.fromEntries(new FormData(form)); body.models = models.values(); body.tags = tags.values();
         body.visibility = form.elements.publishPublicly.checked ? 'public' : 'unlisted'; delete body.publishPublicly;
         if (upload.disabled) throw new Error('Please wait for the image to finish processing.');
@@ -478,6 +558,7 @@
   }
   async function account() {
     if (!state.user && !await signIn()) return navigate('/Community/');
+    if (state.user?.sanction?.kind === 'ban') return navigate('/Community/appeals');
     layout(loading());
     const [mine, tokens] = await Promise.all([api('/projects?mine=1&limit=100'), api('/tokens')]);
     const submissions = node('div', { class: 'project-grid' }, mine.projects.length ? mine.projects.map(projectCard) : empty('Your first build is waiting.', 'Publish with a name and a link.', true));
@@ -497,7 +578,9 @@
       button('Revoke', safeAction(async () => { await api('/tokens/' + token.id, 'DELETE'); notify('Token revoked'); account(); })))) : node('p', { class: 'form-note', text: 'No agent tokens yet.' }));
     layout(node('section', { class: 'account-page' }, heading('Your Community account', state.user.displayName, '@' + state.user.username),
       node('div', { class: 'detail-actions' }, link(routeUrl('creators', state.user.username), 'Public profile', 'button button-quiet'), link('/Community/publish', 'Publish a project', 'button'),
-        state.user.isAdmin && link('/Community/admin', 'Moderation', 'button button-violet'), button('Log out', safeAction(async () => {
+        link('/Community/notifications', `Inbox${state.user.unreadNotifications ? ` · ${state.user.unreadNotifications}` : ''}`, 'button button-quiet'),
+        state.user.sanction && link('/Community/appeals', 'Appeal', 'button button-quiet'),
+        state.user.isModerator && link('/Community/admin', 'Moderation', 'button button-violet'), button('Log out', safeAction(async () => {
           await api('/auth/logout', 'POST', {}); state.user = null; state.csrf = ''; notify('Logged out'); navigate('/Community/');
         }))),
       node('section', { class: 'info-card account-tokens' }, node('h2', { text: 'Agent access' }),
@@ -535,30 +618,112 @@
         node('p', { text: 'The bundled Python helper uses the same public API as other integrations. It can also recover accounts, rotate tokens, change visibility and delete owned publications.' }),
         node('a', { href: '/Community/api-docs', target: '_blank', rel: 'noopener', text: 'Read API and account documentation ↗' }))));
   }
+  function staffReason(title, action) {
+    const form = node('form', { class: 'form-stack' }, field('Reason', 'staffReason', { type: 'textarea', required: true, max: 500, placeholder: 'Required for the audit record' }), node('button', { class: 'button', type: 'submit', text: 'Confirm' }));
+    openModal(title, form); submit(form, async () => action(form.elements.staffReason.value));
+  }
+
+  async function notifications() {
+    if (!state.user && !await signIn()) return navigate('/Community/');
+    if (state.user?.sanction?.kind === 'ban') return navigate('/Community/appeals');
+    const data = await api('/notifications?limit=100');
+    const items = data.notifications.map(item => node('article', { class: `notification-row${item.readAt ? '' : ' unread'}` },
+      node('div', {}, node('strong', { text: item.message }), node('small', { text: dateTime(item.createdAt) })),
+      node('div', { class: 'detail-actions' }, item.projectId && link(routeUrl('projects', item.projectId), 'Open project', 'button button-small button-quiet'),
+        !item.readAt && button('Mark read', safeAction(async () => { const result = await api('/notifications/' + item.id, 'PATCH', { read: true }); state.user.unreadNotifications = result.unread; notifications(); })) )));
+    layout(node('section', { class: 'account-page' }, heading('Community inbox', 'Notifications', `${data.unread} unread`),
+      data.unread > 0 && button('Mark all read', safeAction(async () => { await api('/notifications/read-all', 'POST', {}); state.user.unreadNotifications = 0; notifications(); }), 'button'),
+      node('div', { class: 'notification-list' }, items.length ? items : empty('Your inbox is clear.', 'Comments, replies, moderation, sanctions, and appeal decisions will appear here.'))));
+  }
+
+  async function appeals() {
+    if (!state.user && !await signIn()) return navigate('/Community/');
+    const data = await api('/appeals/mine'), active = state.user.sanction;
+    const form = active && !data.appeals.some(a => a.status === 'open') ? node('form', { class: 'comment-composer' },
+      field('Explain why the sanction should be reconsidered', 'message', { type: 'textarea', required: true, max: 2000 }), node('button', { class: 'button', type: 'submit', text: 'Submit appeal' })) : null;
+    if (form) submit(form, async () => { await api('/appeals/mine', 'POST', { message: form.elements.message.value }); notify('Appeal submitted'); appeals(); });
+    layout(node('section', { class: 'account-page' }, heading('Account review', active ? `${active.kind[0].toUpperCase() + active.kind.slice(1)} active` : 'No active sanction', active ? active.reason : 'Your account currently has full access.'),
+      active?.expiresAt && node('p', { text: 'Ends ' + dateTime(active.expiresAt) }), form,
+      node('div', { class: 'admin-table' }, data.appeals.length ? data.appeals.map(item => node('article', { class: 'report-row' }, node('strong', { text: `${item.kind} appeal · ${item.status}` }), node('p', { text: item.message }), item.decisionReason && node('p', { text: `Decision: ${item.decisionReason}` }), node('small', { text: dateTime(item.createdAt) }))) : node('p', { text: 'No appeals submitted.' }))));
+  }
+
+  function resetPassword() {
+    const token = location.hash.startsWith('#token=') ? location.hash.slice(7) : '';
+    const form = node('form', { class: 'publish-form narrow-form' }, field('New password', 'password', { type: 'password', required: true, max: 256, placeholder: 'At least 15 characters' }), field('Confirm new password', 'confirm', { type: 'password', required: true, max: 256 }), node('button', { class: 'button', type: 'submit', text: 'Reset password' }));
+    for (const input of form.querySelectorAll('input')) input.minLength = 15;
+    submit(form, async () => {
+      if (!token) throw new Error('This reset link is incomplete.');
+      if (form.elements.password.value !== form.elements.confirm.value) throw new Error('Passwords do not match.');
+      const data = await api('/auth/reset-password', 'POST', { token, password: form.elements.password.value }); state.user = null; state.csrf = ''; history.replaceState({}, '', '/Community/reset-password');
+      showSecret('Save your new recovery code', { server: location.origin, recoveryCode: data.recoveryCode }, 'ephix-recovery.json', () => navigate('/Community/account'));
+    });
+    layout(node('section', { class: 'page-block' }, heading('Account recovery', 'Choose a new password', 'This one-use link expires after one hour. Completing the reset signs out every existing browser and agent session.'), form));
+  }
+
   async function admin() {
     if (!state.user && !await signIn()) return navigate('/Community/');
-    if (!state.user?.isAdmin) return layout(empty('Administrator access required.', 'This area is restricted to trusted Ephix administrators.'));
-    const { reports } = await api('/admin/reports?limit=100');
+    if (state.user?.sanction?.kind === 'ban') return navigate('/Community/appeals');
+    if (!state.user?.isModerator) return layout(empty('Staff access required.', 'This area is restricted to Ephix moderators and administrators.'));
+    const [projectData, commentData, appealData, auditData] = await Promise.all([api('/admin/reports?limit=100'), api('/admin/comment-reports?limit=100'),
+      state.user.isAdmin ? api('/admin/appeals?limit=100') : Promise.resolve({ appeals: [] }), state.user.isAdmin ? api('/admin/audit?limit=50') : Promise.resolve({ entries: [] })]);
     const manual = node('form', { class: 'form-stack' }, field('Project ID', 'projectId', { required: true, max: 80 }),
-      selectField('Action', 'action', [{ id: 'feature', label: 'Feature' }, { id: 'unfeature', label: 'Remove feature' }, { id: 'hide', label: 'Hide' }, { id: 'restore', label: 'Restore' }], 'feature'),
+      selectField('Action', 'action', [...(state.user.isAdmin ? [{ id: 'feature', label: 'Feature' }, { id: 'unfeature', label: 'Remove feature' }] : []), { id: 'hide', label: 'Hide' }, { id: 'restore', label: 'Restore' }], state.user.isAdmin ? 'feature' : 'hide'),
+      field('Reason for hide or restore', 'reason', { type: 'textarea', max: 500 }),
       node('button', { class: 'button', type: 'submit', text: 'Apply project action' }));
     submit(manual, async () => {
       const values = Object.fromEntries(new FormData(manual));
-      const body = values.action === 'feature' || values.action === 'unfeature' ? { featured: values.action === 'feature' } : { moderation: values.action === 'hide' ? 'hidden' : 'active' };
+      if ((values.action === 'hide' || values.action === 'restore') && !values.reason.trim()) throw new Error('A reason is required.');
+      const body = values.action === 'feature' || values.action === 'unfeature' ? { featured: values.action === 'feature' } : { moderation: values.action === 'hide' ? 'hidden' : 'active', reason: values.reason };
       await api('/admin/projects/' + encodeURIComponent(values.projectId), 'PATCH', body); notify('Project moderation updated');
     });
-    const accounts = node('form', { class: 'form-stack' }, field('Creator account ID', 'accountId', { required: true, max: 80 }),
-      selectField('Account state', 'disabled', [{ id: 'true', label: 'Disable account and revoke access' }, { id: 'false', label: 'Restore account' }], 'true'),
-      node('button', { class: 'button', type: 'submit', text: 'Apply account action' }));
-    submit(accounts, async () => { const body = Object.fromEntries(new FormData(accounts)); await api('/admin/accounts/' + encodeURIComponent(body.accountId), 'PATCH', { disabled: body.disabled === 'true' }); notify('Account state updated'); });
+    const accountResults = node('div', { class: 'account-results' });
+    const accounts = node('form', { class: 'form-stack' }, field('Search username, display name, or ID', 'search', { required: true, max: 80 }), node('button', { class: 'button', type: 'submit', text: 'Find accounts' }));
+    submit(accounts, async () => { const data = await api('/admin/accounts?limit=50&search=' + encodeURIComponent(accounts.elements.search.value)); accountResults.replaceChildren(...data.accounts.map(staffAccountCard)); });
     layout(node('section', { class: 'admin-page' }, heading('Community operations', 'Keep the gallery useful.', 'Review reports, select standout projects and manage abusive accounts.'),
-      node('div', { class: 'admin-table' }, reports.length ? reports.map(report => node('article', { class: 'report-row' },
+      node('h2', { class: 'section-label', text: 'Project reports' }), node('div', { class: 'admin-table' }, projectData.reports.length ? projectData.reports.map(report => node('article', { class: 'report-row' },
         link(routeUrl('projects', report.projectId), report.projectName), node('p', { text: report.reason }),
         node('small', { text: `Creator ID: ${report.creatorId} · ${date(report.createdAt)}` }), node('div', { class: 'detail-actions' },
-          button('Hide project', safeAction(async () => { await api('/admin/projects/' + report.projectId, 'PATCH', { moderation: 'hidden' }); notify('Project hidden'); })),
-          button('Resolve report', safeAction(async () => { await api('/admin/reports/' + report.id, 'PATCH', { status: 'resolved' }); admin(); }))))) : node('p', { text: 'No open reports.' })),
+          button('Hide project', () => staffReason('Hide project', async reason => { await api('/admin/projects/' + report.projectId, 'PATCH', { moderation: 'hidden', reason }); closeModal(); admin(); })),
+          button('Resolve report', () => staffReason('Resolve report', async reason => { await api('/admin/reports/' + report.id, 'PATCH', { status: 'resolved', reason }); closeModal(); admin(); }))))) : node('p', { text: 'No open project reports.' })),
+      node('h2', { class: 'section-label', text: 'Comment reports' }), node('div', { class: 'admin-table' }, commentData.reports.length ? commentData.reports.map(report => node('article', { class: 'report-row' },
+        link(routeUrl('projects', report.projectId), report.projectName), node('p', { text: report.body }), node('small', { text: `Report: ${report.reason}` }), node('div', { class: 'detail-actions' },
+          button('Remove comment', () => staffReason('Remove comment', async reason => { await api('/admin/comments/' + report.commentId, 'PATCH', { status: 'moderator_removed', reason }); closeModal(); admin(); })),
+          button('Resolve report', () => staffReason('Resolve report', async reason => { await api('/admin/comment-reports/' + report.id, 'PATCH', { status: 'resolved', reason }); closeModal(); admin(); }))))) : node('p', { text: 'No open comment reports.' })),
+      state.user.isAdmin && node('div', {}, node('h2', { class: 'section-label', text: 'Appeals' }), node('div', { class: 'admin-table' }, appealData.appeals.length ? appealData.appeals.map(item => node('article', { class: 'report-row' }, node('strong', { text: `${item.displayName} · ${item.kind}` }), node('p', { text: item.message }), node('small', { text: `Original reason: ${item.reason}` }), node('div', { class: 'detail-actions' },
+        button('Approve', () => staffReason('Approve appeal', async reason => { await api('/admin/appeals/' + item.id, 'PATCH', { status: 'approved', reason }); closeModal(); admin(); })), button('Deny', () => staffReason('Deny appeal', async reason => { await api('/admin/appeals/' + item.id, 'PATCH', { status: 'denied', reason }); closeModal(); admin(); }))))) : node('p', { text: 'No open appeals.' }))),
       node('div', { class: 'publish-grid admin-tools' }, node('div', { class: 'info-card' }, node('h2', { text: 'Project controls' }), manual),
-        node('div', { class: 'info-card' }, node('h2', { text: 'Account controls' }), accounts))));
+        node('div', { class: 'info-card' }, node('h2', { text: 'Account controls' }), accounts, accountResults)),
+      state.user.isAdmin && node('div', {}, node('h2', { class: 'section-label', text: 'Recent audit history' }), node('div', { class: 'admin-table' }, auditData.entries.length ? auditData.entries.map(entry => node('article', { class: 'report-row' }, node('strong', { text: entry.action }), node('p', { text: `Target: ${entry.targetId}` }), node('small', { text: `${dateTime(entry.createdAt)} · ${entry.details.reason || 'No reason recorded'}` }))) : node('p', { text: 'No staff actions recorded.' })))));
+  }
+
+  function staffAccountCard(account) {
+    const actions = node('div', { class: 'detail-actions' }), ranks = { member: 0, moderator: 1, admin: 2 };
+    const act = (label, operation) => actions.append(button(label, () => sanctionDialog(account, operation)));
+    if (account.id !== state.user.id && !account.bootstrapAdmin && ranks[account.role] < ranks[state.user.role]) {
+      act('Kick', 'kick'); act('Timeout', 'timeout'); act('Ban', 'ban'); if (account.sanction) act('Lift sanction', 'unban');
+      if (state.user.isAdmin) actions.append(button('Reset password', () => staffReason('Issue password reset', async reason => {
+        const data = await api(`/admin/accounts/${account.id}/password-reset`, 'POST', { reason }); closeModal();
+        openModal('Copy the one-use reset link', [node('p', { text: 'This link expires in one hour and is shown once.' }), node('pre', { class: 'secret-value', text: data.resetUrl }), button('Copy link', safeAction(async () => { await navigator.clipboard.writeText(data.resetUrl); notify('Reset link copied'); }))]);
+      })));
+    }
+    if (state.user.isAdmin && account.id !== state.user.id && !account.bootstrapAdmin) {
+      const role = node('select', { 'aria-label': `Role for @${account.username}` }, ['member', 'moderator', 'admin'].map(value => node('option', { value, text: value }))); role.value = account.role;
+      actions.append(role, button('Change role', () => staffReason('Change account role', async reason => { await api(`/admin/accounts/${account.id}/role`, 'PATCH', { role: role.value, reason }); closeModal(); admin(); })));
+    }
+    return node('article', { class: 'account-result' }, node('strong', { text: `${account.displayName} · @${account.username}` }), node('small', { text: `${account.role}${account.bootstrapAdmin ? ' · protected bootstrap admin' : ''}` }), account.sanction && node('p', { class: 'inline-error', text: `${account.sanction.kind}: ${account.sanction.reason}` }), actions);
+  }
+
+  function sanctionDialog(account, operation) {
+    const duration = operation === 'timeout' ? selectField('Duration', 'duration', [{ id: '10', label: '10 minutes' }, { id: '60', label: '1 hour' }, { id: '1440', label: '1 day' }, { id: '10080', label: '7 days' }, { id: 'custom', label: 'Custom expiry' }], '60') : null;
+    const custom = operation === 'timeout' ? field('Custom expiry', 'expiresAt', { type: 'datetime-local' }) : null; if (custom) custom.hidden = true;
+    const form = node('form', { class: 'form-stack' }, duration, custom, field('Reason', 'sanctionReason', { type: 'textarea', required: true, max: 500 }), node('button', { class: 'button', type: 'submit', text: `Confirm ${operation}` }));
+    duration?.querySelector('select').addEventListener('change', event => { custom.hidden = event.target.value !== 'custom'; });
+    openModal(`${operation[0].toUpperCase() + operation.slice(1)} @${account.username}`, form);
+    submit(form, async () => {
+      const body = { reason: form.elements.sanctionReason.value };
+      if (operation === 'timeout') { const minutes = form.elements.duration.value; if (minutes === 'custom' && !form.elements.expiresAt.value) throw new Error('Choose a custom expiry.'); body.expiresAt = minutes === 'custom' ? new Date(form.elements.expiresAt.value).toISOString() : new Date(Date.now() + Number(minutes) * 60_000).toISOString(); }
+      await api(`/admin/accounts/${account.id}/${operation}`, 'POST', body); closeModal(); notify(`Account ${operation} complete`); admin();
+    });
   }
 
   function openModal(title, content, onClose = null) {
@@ -615,6 +780,7 @@
         if (mode === 'register') body.displayName = form.elements.displayName.value;
         const data = await api('/auth/' + mode, 'POST', body);
         state.user = data.user; state.csrf = data.csrfToken; completed = true; closeModal();
+        if (data.user.sanction?.kind === 'ban') { navigate('/Community/appeals'); return resolve(data.user); }
         if (data.recoveryCode) showSecret('Save your recovery code', { server: location.origin, username: data.user.username, recoveryCode: data.recoveryCode }, 'ephix-recovery.json', () => resolve(data.user));
         else resolve(data.user);
       });
@@ -651,6 +817,9 @@
       else if (path === '/Community/account') await account();
       else if (path === '/Community/agent') agent();
       else if (path === '/Community/admin') await admin();
+      else if (path === '/Community/notifications') await notifications();
+      else if (path === '/Community/appeals') await appeals();
+      else if (path === '/Community/reset-password') resetPassword();
       else if (path.startsWith('/Community/projects/')) await detail(decodeURIComponent(path.slice('/Community/projects/'.length)));
       else if (path.startsWith('/Community/creators/')) await creator(decodeURIComponent(path.slice('/Community/creators/'.length)));
       else if (path.startsWith('/Community/models/')) await browse(decodeURIComponent(path.slice('/Community/models/'.length)));
@@ -661,7 +830,7 @@
     const anchor = event.target.closest('a');
     if (anchor && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey &&
       !anchor.hasAttribute('download') && !anchor.target && anchor.origin === location.origin &&
-      /^\/Community(?:\/?$|\/(?:publish|account|admin|agent)(?:\?|$)|\/(?:projects|creators|models)\/)/.test(anchor.pathname)) {
+      /^\/Community(?:\/?$|\/(?:publish|account|admin|agent|notifications|appeals|reset-password)(?:\?|$)|\/(?:projects|creators|models)\/)/.test(anchor.pathname)) {
       event.preventDefault(); navigate(anchor.href);
     }
   });
@@ -672,8 +841,9 @@
   window.addEventListener('popstate', goRender);
   async function boot() {
     try {
-      const [catalog, me] = await Promise.all([api('/catalog'), api('/auth/me')]);
-      state.catalog = catalog; state.user = me.user; state.csrf = me.csrfToken || ''; await render();
+      const me = await api('/auth/me'); state.user = me.user; state.csrf = me.csrfToken || '';
+      if (state.user?.sanction?.kind === 'ban') { if (location.pathname !== '/Community/appeals') history.replaceState({}, '', '/Community/appeals'); await render(); return; }
+      state.catalog = await api('/catalog'); await render();
     } catch (error) { layout(empty('Community is temporarily unavailable.', error.message), button('Try again', boot)); }
   }
   boot();

@@ -24,7 +24,11 @@ Capture workers run one at a time with a bounded queue, a fresh browser, no acco
 
 New, Trending, Featured, full-text substring search, categories, harnesses, and model combinations support discovery. Multiple model filters use **AND**. Model detail links connect Community projects with tracker results and arcade builds. Credits are self-reported; publication method comes from the authentication mechanism.
 
-Comments are intentionally deferred. Project IDs and creator ownership provide the future relationship boundary; no empty comment tables or mocked comment UI ship.
+## Comments and Community rules
+
+Signed-in members can leave comments on project pages and reply one level deep. Top-level comments are newest first; replies are chronological. Comments are limited to 2,000 characters and 10 posts per 10 minutes, with a daily limit of 100. Authors can edit or soft-delete their comments. Project owners can hide comments on their own projects, while staff can remove or restore them with an audited reason. Tombstones preserve readable reply threads.
+
+Ordinary profanity is allowed. Threats, hateful slurs, sexual exploitation, doxxing, severe targeted harassment, scams, malware, and spam are prohibited. Ephix uses member reports and human review rather than an automatic word filter. The in-app inbox records comments on owned projects, replies, moderation, sanctions, password-reset issuance, role changes, and appeal decisions. Read notifications are retained for 90 days.
 
 ## Agent skill
 
@@ -83,6 +87,14 @@ Use JSON request bodies. Success responses contain JSON (except thumbnail image 
 | POST | `/projects/:id/like` | Toggle one authenticated account's like |
 | POST | `/projects/:id/view` | Count at most one view per account or anonymous IP per UTC day |
 | POST | `/projects/:id/report` | Authenticated `{reason}`; duplicate open reports deduplicated |
+| GET / POST | `/projects/:id/comments` | Paginate top-level comments / create a comment or one-level reply |
+| GET | `/comments/:id/replies` | Paginate replies in chronological order |
+| PATCH / DELETE | `/comments/:id` | Edit or soft-delete an authored comment |
+| POST | `/comments/:id/report` | Report another member's active comment |
+| PATCH | `/projects/:projectId/comments/:commentId/moderation` | Project owner hide/restore control |
+| GET | `/notifications` | Paginated in-app inbox and unread count |
+| PATCH / POST | `/notifications/:id`, `/notifications/read-all` | Mark one or all notifications read |
+| GET / POST | `/appeals/mine` | View or submit an appeal for the active sanction |
 | GET | `/creators/:username` | Public creator, statistics, common models/categories, projects |
 
 Project creation requires `{name,url}`. Optional fields are `description`, `prompt` (string, up to 20,000 characters), `models` (array), `harness`, `tags` (array), `thumbnailUrl`, `thumbnailData`, `sourceUrl`, `remixOf`, `visibility`. `visibility` defaults to `public`; the web editor's checked-by-default public toggle maps to `visibility: "public"`, while turning it off maps to `visibility: "unlisted"`. A supplied prompt is shown on the public showcase with a copy control; omit it when there is no reusable prompt or the creator does not want to share it. `thumbnailData` accepts a JPEG base64 data URL under 1 MB decoded; omit to preserve an upload, or send null with an empty `thumbnailUrl` to restore automatic capture. Do not send an upload and a nonempty thumbnail URL together. Project responses include `previewUrl` (effective image) and `thumbnailSource` (`automatic`, `upload`, `url`); `thumbnailUrl` remains the user-supplied external URL. `GET /projects/:id/thumbnail` returns image/jpeg or 204 when capture is unavailable, and enforces the project's current visibility/moderation. Images use private no-store responses. `PATCH` sends only changed fields; empty/null optional URLs clear them. `models: []` and `tags: []` clear lists. `visibility` accepts only `public` or `unlisted`. Remix sources must be available public projects; cycles are rejected. A later-hidden/unlisted original is not disclosed through remix links.
@@ -105,14 +117,23 @@ Passwords use scrypt with per-password random salt and bounded concurrent KDF wo
 
 Create an ordinary account, read its immutable ID from `/auth/me`, and add that ID to `COMMUNITY_ADMIN_IDS`. Restart the service. Never grant privileges by username or “first account.” The account page then exposes **Moderation** at `/Community/admin`.
 
-Admins can feature/unfeature or hide/restore projects, resolve reports, and disable/restore accounts. Disabling revokes sessions/tokens and removes the account's projects from public access. Restoring does not revive revoked credentials. Admins cannot disable their own active account. Moderation actions are recorded in `moderation_log`.
+Effective roles are `member`, `moderator`, and `admin`. IDs in `COMMUNITY_ADMIN_IDS` remain protected bootstrap administrators. Administrators can assign stored roles without relying on usernames. Moderators can review reports, remove or restore comments, hide or restore projects, and kick, timeout, ban, or unban members. Administrators inherit those permissions and can manage roles, decide appeals, inspect audit history, and issue one-hour password-reset links. Staff can sanction only lower roles, cannot target themselves, and cannot target bootstrap administrators.
+
+A kick revokes all sessions and agent tokens but permits immediate login. A timeout blocks account mutations until its expiry while allowing browsing and appeals. A ban revokes access and hides the account's projects and comments until lifted. A valid banned login receives an appeal-only session. Password-reset links contain a one-use token in the URL fragment; only its hash is stored. Successful reset rotates the recovery code and revokes all existing access.
 
 | Method | Admin route | Body |
 |---|---|---|
 | GET | `/admin/reports` | Paginated open reports |
-| PATCH | `/admin/reports/:id` | `{status: "open" | "resolved"}` |
-| PATCH | `/admin/projects/:id` | `{featured?: boolean, moderation?: "active" | "hidden"}` |
-| PATCH | `/admin/accounts/:id` | `{disabled: boolean}` |
+| PATCH | `/admin/reports/:id` | `{status: "open" | "resolved",reason}` |
+| PATCH | `/admin/projects/:id` | `{featured?: boolean, moderation?: "active" | "hidden", reason?}`; reason required for moderation |
+| GET | `/admin/accounts?search=...` | Search accounts, roles, and active sanctions |
+| PATCH | `/admin/accounts/:id/role` | Admin-only role change with `{role,reason}` |
+| POST | `/admin/accounts/:id/kick\|timeout\|ban\|unban` | Audited account action with a required reason |
+| POST | `/admin/accounts/:id/password-reset` | Admin-only one-use reset-link issuance |
+| GET / PATCH | `/admin/appeals`, `/admin/appeals/:id` | Admin appeal queue and decisions |
+| GET / PATCH | `/admin/comment-reports`, `/admin/comment-reports/:id` | Comment report queue |
+| PATCH | `/admin/comments/:id` | Remove or restore a comment with a reason |
+| GET | `/admin/audit` | Admin-only moderation history |
 
 Rate limits persist across restarts: registration 10/IP/day; auth 30/IP and 15/username per 15 minutes; writes 180/IP and 120/account/minute; publishing 30/account/day; reporting 10/account/day; reads 600/IP/minute. Anonymous view identity uses a keyed hash of IP, never raw IP storage. Recent view events are retained for 30 days. Trending uses recent likes (14 days), views (7 days, capped contribution), project-age decay, and a small freshness prior; lifetime popularity and edits cannot keep an old project permanently at the top.
 
@@ -156,7 +177,7 @@ npm test
 
 Deploy the scoped Ephix, shared catalog, arcade navigation/server, and tracker-results changes. Build the skill ZIP on the server (it is intentionally gitignored). Configure `COMMUNITY_ORIGIN=https://epic.techexplore.us`, `COMMUNITY_GAME_ORIGIN=https://techexplore.us/OxArcade`, `COMMUNITY_DATA_DIR=/data/community`, secure cookies and trusted-proxy handling. Restart both Node servers to load changed JS; tracker Python does not require schema changes. Verify health, HTTPS cookie flags, Community routes, real registration/publication, and both game-host routes. This implementation does not itself deploy or create production accounts.
 
-SQLite initializes schema version 3 transactionally. Prototype v1 upgrades preserve accounts/projects and invalidate old clear-stored sessions; v2 databases gain the optional prompt column while preserving existing publications. A newer unknown schema fails startup. WAL, foreign keys and a busy timeout are enabled. Before upgrading an existing deployment, make a SQLite-consistent backup (online backup or stop the service and copy the database with WAL/SHM). Never copy only the live main database and assume it is complete. Rollback must pair matching code with its database backup. Do not commit database files.
+SQLite initializes schema version 4 transactionally. Existing databases gain roles, scoped sessions, comments, reports, notifications, sanctions, appeals, and reset tokens. Legacy disabled accounts become active legacy bans without losing account or project data. A newer unknown schema fails startup. WAL, foreign keys and a busy timeout are enabled. Before upgrading an existing deployment, make a SQLite-consistent backup (online backup or stop the service and copy the database with WAL/SHM). Never copy only the live main database and assume it is complete. Rollback must pair matching code with its database backup. Do not commit database files.
 
 ## Validation
 
