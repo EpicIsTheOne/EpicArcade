@@ -166,7 +166,7 @@ function step(name) { passed.push(name); console.log('PASS ' + name); }
   await page.getByRole('button', { name: 'Revoke', exact: true }).click();
   await page.getByText('No agent tokens yet.', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await page.getByRole('button', { name: 'Log in or register', exact: true }).click();
   await page.getByLabel('Username', { exact: false }).fill('browser_creator');
   await page.getByLabel('Password', { exact: false }).fill('private-browser-test-password');
   await page.getByRole('dialog').getByRole('button', { name: 'Log in', exact: true }).last().click();

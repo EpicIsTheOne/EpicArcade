@@ -68,8 +68,10 @@
       });
     }
     revealScan();
-    document.getElementById('accountButton').textContent = state.user ? initials(state.user) : '↗';
-    document.getElementById('accountButton').setAttribute('aria-label', state.user ? 'Your account' : 'Sign in');
+    const accountButton = document.getElementById('accountButton');
+    accountButton.classList.toggle('is-signed-out', !state.user);
+    accountButton.textContent = state.user ? initials(state.user) : 'Log in / Register';
+    accountButton.setAttribute('aria-label', state.user ? 'Your account' : 'Log in or register');
   }
   function heading(kicker, title, copy) {
     return node('div', { class: 'page-heading' }, node('div', { class: 'kicker', text: kicker }), node('h1', { text: title }), copy && node('p', { class: 'detail-lede', text: copy }));
