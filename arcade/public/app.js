@@ -39,12 +39,12 @@ const MODEL_FILTER = new Set(["oxalpha", "astra", "omenalpha"]);
 // Normalize raw model ids ("openrouter-stealth-ox-alpha", "OxAlpha") to a stable key.
 const modelKey = (m) =>
   m ? String(m).toLowerCase().replace(/^(openrouter[-_])?(stealth[-_])?/i, "").replace(/[^a-z0-9]/g, "") : null;
-const MODEL_ACCENT = { oxalpha: "#22d3ee", astra: "#a78bfa", omenalpha: "#f472b6", gpt56terra: "#39d0c3" };
+const MODEL_ACCENT = { oxalpha: "#1769ff", astra: "#a8b0bc", omenalpha: "#f4f6f8", gpt56terra: "#687585" };
 const MODEL_DISPLAY = { oxalpha: "OX-ALPHA", astra: "ASTRA", omenalpha: "OMEN-ALPHA", gpt56terra: "GPT-5.6-TERRA" };
 for (const model of window.EPHIX_MODELS?.models || []) MODEL_DISPLAY[model.arcadeKey] = model.label;
 const COMMUNITY_BASE = location.pathname.startsWith('/Arcade') ? '' : 'https://epic.techexplore.us';
 document.getElementById('community-nav').href = COMMUNITY_BASE + '/Community/';
-const mkAccent = (mk) => MODEL_ACCENT[mk] || "#8b94a7";
+const mkAccent = (mk) => MODEL_ACCENT[mk] || "#a8b0bc";
 const mkLabel = (mk) => MODEL_DISPLAY[mk] || modelTag(mk);
 function modelVisible(mk) { return MODEL_FILTER.has(mk); }
 function buildsOfModel(mk) {
@@ -235,16 +235,26 @@ function goRoute(mk, hk) {
   const target = !mk ? "#/"
     : !hk ? `#/m/${encodeURIComponent(mk)}`
     : `#/m/${encodeURIComponent(mk)}/h/${encodeURIComponent(hk)}`;
-  if (location.hash === target) render();
+  if (location.hash === target) routeRender();
   else {
     state._dir = routeDepth({ model: mk, harness: hk }) < routeDepth(state.route) ? "back" : "fwd";
     location.hash = target;
   }
 }
+let inVT = false;
+function routeRender() {
+  // route changes ride the channel-switch transition; filter re-renders keep FLIP
+  if (REDUCED || !document.startViewTransition) { render(); return; }
+  inVT = true;
+  try {
+    const vt = document.startViewTransition(() => { render(); });
+    vt.finished.finally(() => { inVT = false; });
+  } catch (e) { inVT = false; render(); }
+}
 window.addEventListener("hashchange", () => {
   destroyLive();
   state.route = routeFromHash();
-  render();
+  routeRender();
 });
 function applyRouteFromHash() {
   state.route = routeFromHash();
@@ -252,16 +262,37 @@ function applyRouteFromHash() {
 }
 
 function render() {
-  if (state.query) { renderSearch(); return; }
-  const r = state.route;
-  if (!r.model) renderModels();
-  else if (!r.harness) renderModel(r.model);
-  else renderHarness(r.model, r.harness);
-  // view morph (item 10)
-  grid.classList.remove("view-enter-fwd", "view-enter-back");
-  void grid.offsetWidth;
-  grid.classList.add(state._dir === "back" ? "view-enter-back" : "view-enter-fwd");
-  state._dir = null;
+  // FLIP: cards with stable ids glide to their new spot across filter/view re-renders
+  const before = new Map();
+  if (!REDUCED) grid.querySelectorAll(".card[data-id]").forEach((c) => before.set(c.dataset.id, c.getBoundingClientRect()));
+  if (state.query) renderSearch();
+  else {
+    const r = state.route;
+    if (!r.model) renderModels();
+    else if (!r.harness) renderModel(r.model);
+    else renderHarness(r.model, r.harness);
+  }
+  if (!REDUCED && !inVT && before.size) {
+    grid.querySelectorAll(".card[data-id]").forEach((card) => {
+      const first = before.get(card.dataset.id);
+      if (!first) return;
+      card.style.animation = "none";
+      const last = card.getBoundingClientRect();
+      const dx = first.left - last.left, dy = first.top - last.top;
+      if (dx || dy) {
+        card.classList.add("is-flipping");
+        card.style.transform = `translate(${dx}px, ${dy}px)`;
+        requestAnimationFrame(() => requestAnimationFrame(() => { card.classList.remove("is-flipping"); card.style.transform = ""; }));
+      }
+    });
+  }
+  // view morph (item 10) — only on real route changes, not filter re-renders
+  if (state._dir) {
+    grid.classList.remove("view-enter-fwd", "view-enter-back");
+    void grid.offsetWidth;
+    grid.classList.add(state._dir === "back" ? "view-enter-back" : "view-enter-fwd");
+    state._dir = null;
+  }
 }
 
 /* ---------- view chrome (chips / hero / crumb visibility) ---------- */
@@ -272,6 +303,8 @@ function setChrome(mode) {
   hzChips.hidden = mode !== "models";
   vt.hidden = mode !== "games";
   hero.hidden = mode !== "models" || !state.builds.length;
+  const shell = document.querySelector(".hero-shell");
+  if (shell) shell.hidden = hero.hidden;
   if (reel) reel.hidden = mode !== "models";
   crumb.hidden = mode === "models";
   const favT = $("#fav-toggle");
@@ -393,7 +426,7 @@ function renderModel(mk) {
       node.querySelector(".hc-dot").style.background = meta.color;
       node.querySelector(".hc-name").textContent = meta.label;
     } else {
-      node.querySelector(".hc-dot").style.background = "#8b94a7";
+      node.querySelector(".hc-dot").style.background = "#a8b0bc";
       node.querySelector(".hc-name").textContent = "UNTAGGED";
     }
     node.querySelector(".hc-desc").textContent =
@@ -548,9 +581,15 @@ function renderHero() {
     .sort((a, b) => (b.mtime || "").localeCompare(a.mtime || ""))[0];
   const hero = $("#hero");
   if (!newest) { hero.hidden = true; return; }
+  const prevId = hero.dataset.id;
   hero.hidden = false;
   hero.dataset.id = newest.id;
-  $("#hero-img").src = newest.thumb;
+  const standby = $(".hero-standby");
+  const hasThumb = !!newest.thumb;
+  if (standby) standby.hidden = hasThumb;
+  hero.classList.toggle("is-standby", !hasThumb);
+  if (hasThumb) $("#hero-img").src = newest.thumb;
+  else $("#hero-img").removeAttribute("src");
   $("#hero-title").textContent = newest.title;
   $("#hero-desc").textContent = newest.description || "Fresh out of a goal loop.";
   const heroHz = hzOf(newest);
@@ -558,6 +597,12 @@ function renderHero() {
     "LATEST EXHIBIT" + (heroHz && state.hzMeta[heroHz] ? " · " + state.hzMeta[heroHz].label : "");
   $("#hero-play").onclick = () => openOverlay(newest.id);
   $("#hero-folder").onclick = () => reveal(newest.id);
+  if (prevId && prevId !== newest.id && !REDUCED) {
+    hero.classList.remove("is-swap");
+    void hero.offsetWidth;
+    hero.classList.add("is-swap");
+    setTimeout(() => hero.classList.remove("is-swap"), 520);
+  }
 }
 
 /* ---------- overlay ---------- */
@@ -591,6 +636,14 @@ function openOverlay(id, fromCard) {
   const b = state.builds.find((x) => x.id === id);
   if (!b) return;
   state.overlayId = id;
+
+  // stage: iframe fades in once it actually paints
+  const stage = $("#ov-stage");
+  if (!stage.dataset.readyHook) {
+    stage.dataset.readyHook = "1";
+    $("#ov-frame").addEventListener("load", () => stage.classList.add("is-ready"));
+  }
+  stage.classList.remove("is-ready");
 
   // FLIP open animation (item 13): panel grows out of the clicked card
   const panel = document.querySelector(".overlay-panel");
@@ -857,7 +910,7 @@ function updateExhibitFavicon() {
     c.beginPath();
     c.arc(32, 32, 30, 0, Math.PI * 2);
     c.fill();
-    c.strokeStyle = "#22d3ee";
+    c.strokeStyle = "#1769ff";
     c.lineWidth = 3;
     c.stroke();
     c.fillStyle = "#e6f5ff";
@@ -897,46 +950,7 @@ $("#sync-btn").addEventListener("click", async (e) => {
     btn.textContent = old;
   }
 });
-/* ---------- starfield ---------- */
-(function starfield() {
-  const cv = document.getElementById("stars");
-  if (!cv || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const ctx = cv.getContext("2d");
-  let W, H, stars = [], mx = 0, my = 0;
-  const N = 140;
-  function resize() {
-    W = cv.width = innerWidth; H = cv.height = innerHeight;
-    stars = Array.from({ length: N }, () => ({
-      x: Math.random() * W, y: Math.random() * H,
-      r: Math.random() * 1.3 + 0.3,
-      vx: (Math.random() - 0.5) * 0.06,
-      vy: (Math.random() - 0.5) * 0.06,
-      a: Math.random() * 0.5 + 0.25,
-    }));
-  }
-  addEventListener("resize", resize); resize();
-  addEventListener("pointermove", (e) => {
-    mx = (e.clientX / W - 0.5) * 12; my = (e.clientY / H - 0.5) * 12;
-  });
-  let running = true;
-  document.addEventListener("visibilitychange", () => { running = !document.hidden; });
-  (function frame() {
-    requestAnimationFrame(frame);
-    if (!running) return;
-    ctx.clearRect(0, 0, W, H);
-    for (const s of stars) {
-      s.x += s.vx; s.y += s.vy;
-      if (s.x < 0) s.x += W; if (s.x > W) s.x -= W;
-      if (s.y < 0) s.y += H; if (s.y > H) s.y -= H;
-      ctx.globalAlpha = s.a;
-      ctx.fillStyle = "#cfe0ff";
-      ctx.beginPath();
-      ctx.arc(s.x + mx * (s.r / 1.6), s.y + my * (s.r / 1.6), s.r, 0, 7);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  })();
-})();
+/* starfield removed — brand ink layers live in CSS now */
 
 /* ---------- boot sequence ---------- */
 (function boot() {

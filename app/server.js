@@ -404,7 +404,7 @@ async function start(opts = {}) {
         const rel = rest === "/" ? ["index.html"] : rest.slice(1).split("/").filter(Boolean);
         if (rest === '/' || rest === '/index.html' || rest === '/results.html') {
           let html = await fsp.readFile(rest === '/results.html' ? path.join(trackerDir, 'results.html') : path.join(__dirname, 'public', 'prompts.html'), 'utf8');
-          html = html.replace('</head>', '<link rel="stylesheet" href="/navigation.css"><link rel="stylesheet" href="/transitions.css"></head>').replace('<body>', "<body><nav class=\"console-links\" aria-label=\"Primary navigation\"><a href=\"/\">Home</a><a href=\"/Arcade/\">Arcade</a><a href=\"/Tracker/\" aria-current=\"page\">Prompts</a><a href=\"/Community/\">Community</a></nav>");
+          html = html.replace('</head>', '<script src="brand/theme-boot.js"></script><link rel="stylesheet" href="brand/brand.css"><link rel="stylesheet" href="/navigation.css"><link rel="stylesheet" href="/transitions.css"></head>').replace('<body>', "<body><nav class=\"console-links\" aria-label=\"Primary navigation\"><a href=\"/\">Home</a><a href=\"/Arcade/\">Arcade</a><a href=\"/Tracker/\" aria-current=\"page\">Prompts</a><a href=\"/Community/\">Community</a></nav>");
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(html), 'Cache-Control': 'no-cache' });
           res.end(req.method === 'HEAD' ? undefined : html);
           return;
@@ -461,15 +461,23 @@ async function start(opts = {}) {
         req_wants_head = false;
         return await serveFrom(path.join(__dirname, "public"), [url.pathname.slice(1)], res);
       }
+      if (!strippedArcade && url.pathname.startsWith("/brand/")) {
+        req_wants_head = false;
+        return await serveFrom(path.join(__dirname, "public"), [url.pathname.slice(1)], res);
+      }
 
       // arcade static frontend (reached with the /Arcade prefix stripped)
       if (url.pathname === "/" || url.pathname === "/index.html") {
         req_wants_head = false;
         let html = await fsp.readFile(path.join(OX, 'public', 'index.html'), 'utf8');
-        html = html.replace('</head>', '<link rel="stylesheet" href="/console.css"><link rel="stylesheet" href="/navigation.css"><link rel="stylesheet" href="/transitions.css"></head>').replace('<body>', "<body><div class=\"console-stars\" aria-hidden=\"true\"></div><div class=\"space-decor\" aria-hidden=\"true\"><div class=\"orbit-ring ring-1\"></div><div class=\"orbit-ring ring-2\"></div><div class=\"orbit-ring ring-3\"></div><div class=\"planet-earth\"></div></div><div class=\"crt-overlay\" aria-hidden=\"true\"></div><div class=\"hud-frame\" aria-hidden=\"true\"><i class=\"hud-corner tl\"></i><i class=\"hud-corner tr\"></i><i class=\"hud-corner bl\"></i><i class=\"hud-corner br\"></i></div><nav class=\"console-links\" aria-label=\"Primary navigation\"><a href=\"/\">Home</a><a href=\"/Arcade/\" aria-current=\"page\">Arcade</a><a href=\"/Tracker/\">Prompts</a><a href=\"/Community/\">Community</a></nav><header class=\"console-head\"><p class=\"console-kicker\">EPHIX / PLAYABLE BUILDS</p><h1 class=\"console-title\">ARCADE</h1><p class=\"console-subtitle\">Builds from Epic’s own model tests. Ready to play.</p></header>");
+        html = html.replace('</head>', '<script src="/brand/theme-boot.js"></script><link rel="stylesheet" href="/console.css"><link rel="stylesheet" href="/navigation.css"><link rel="stylesheet" href="/transitions.css"></head>').replace('<body>', "<body><nav class=\"console-links\" aria-label=\"Primary navigation\"><a href=\"/\">Home</a><a href=\"/Arcade/\" aria-current=\"page\">Arcade</a><a href=\"/Tracker/\">Prompts</a><a href=\"/Community/\">Community</a></nav><header class=\"console-head\"><img class=\"masthead-logo\" src=\"brand/logos/ephix-icon-96.png\" alt=\"\" aria-hidden=\"true\"><div class=\"masthead-collage eb-ambient\" aria-hidden=\"true\"></div><img class=\"masthead-tape\" src=\"brand/textures/generated/ephix-grunge-tape-pair-black-blue.png\" alt=\"\" aria-hidden=\"true\"><p class=\"console-kicker\">EPHIX / PLAYABLE BUILDS</p><h1 class=\"console-title\">ARCADE</h1><p class=\"console-subtitle\">The museum of everything the models built. Ready to play.</p></header>");
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(html), 'Cache-Control': 'no-cache' });
         res.end(req.method === 'HEAD' ? undefined : html);
         return;
+      }
+      if (strippedArcade && url.pathname.startsWith("/brand/")) {
+        req_wants_head = false;
+        return await serveFrom(path.join(OX, "public"), [url.pathname.slice(1)], res);
       }
       if (url.pathname === "/style.css" || url.pathname === "/app.js") {
         req_wants_head = false;

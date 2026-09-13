@@ -1,6 +1,6 @@
-﻿const MODEL_KEYS = ['ox-alpha', 'astra', 'omen-alpha'];
+const MODEL_KEYS = ['ox-alpha', 'astra', 'omen-alpha'];
 const MODEL_LABELS = { 'ox-alpha': 'Ox Alpha', astra: 'Astra', 'omen-alpha': 'Omen Alpha' };
-const MODEL_COLORS = { 'ox-alpha': '#22d3ee', astra: '#a78bfa', 'omen-alpha': '#f472b6' };
+const MODEL_COLORS = { 'ox-alpha': '#1769ff', astra: '#a8b0bc', 'omen-alpha': '#f4f6f8' };
 const HARNESS_KEYS = ['pi', 'opencode', 'codex', 'claude', 'hermes'];
 const HARNESS_LABELS = {
   hermes: 'Hermes',
@@ -205,24 +205,24 @@ function showLoadError(err) {
   const box = document.createElement('div');
   box.className = 'load-error';
   box.style.cssText =
-    'max-width:720px;margin:48px auto;padding:28px 32px;border:1px solid rgba(248,113,113,0.55);' +
-    'border-radius:14px;background:rgba(18,10,16,0.9);color:#fecaca;' +
-    'box-shadow:0 0 32px rgba(248,113,113,0.15);font-family:inherit;';
+    'max-width:720px;margin:48px auto;padding:28px 32px;border:1px solid rgba(255,93,108,0.55);border-left:4px solid #ff5d6c;' +
+    'background:#0b0e13;color:#fecaca;' +
+    'font-family:Inter,Arial,sans-serif;';
   const h = document.createElement('h2');
   h.textContent = 'DATA LINK FAILURE';
   h.style.cssText =
-    'margin:0 0 12px;font-size:18px;letter-spacing:0.14em;text-transform:uppercase;color:#f87171;';
+    'margin:0 0 12px;font:700 18px Rajdhani,Arial,sans-serif;letter-spacing:0.14em;text-transform:uppercase;color:#ff5d6c;';
   const p1 = document.createElement('p');
   p1.textContent = 'Could not load prompts.json.';
   p1.style.cssText = 'margin:0 0 12px;line-height:1.6;';
   const p2 = document.createElement('p');
   p2.textContent = `Reason: ${err && err.message ? err.message : err}`;
-  p2.style.cssText = 'margin:0 0 12px;line-height:1.6;color:#f87171;';
+  p2.style.cssText = 'margin:0 0 12px;line-height:1.6;color:#ff5d6c;';
   const p3 = document.createElement('p');
   p3.textContent =
     'This usually happens when the page is opened via file:// - browsers block local file access there. ' +
     'Serve this folder over HTTP instead (e.g. "python -m http.server") and reload.';
-  p3.style.cssText = 'margin:0;line-height:1.6;color:#cbd5e1;';
+  p3.style.cssText = 'margin:0;line-height:1.6;color:#a8b0bc;';
   box.append(h, p1, p2, p3);
   app.appendChild(box);
 }
@@ -380,7 +380,7 @@ function buildOrbitSystem(mk) {
         stroke-dashoffset="${ARC_CIRC.toFixed(2)}" transform="rotate(-90 36 36)"></circle>
     </svg>
     <div class="moon-field"></div>
-    <div class="planet-icon" style="background: radial-gradient(circle at 32% 32%, #ffffff, ${MODEL_COLORS[mk]} 42%, #000000 100%); color:${MODEL_COLORS[mk]}"></div>
+    <div class="planet-icon" style="background: var(--surface); color:${MODEL_COLORS[mk]}"></div>
   `;
   const field = sys.querySelector('.moon-field');
   const moons = [];
@@ -628,7 +628,7 @@ function spawnBurst(x, y) {
     s.className = 'fx-particle';
     s.style.left = x + 'px';
     s.style.top = y + 'px';
-    s.style.background = i % 3 === 0 ? '#fff' : i % 3 === 1 ? '#4ade80' : '#67e8f9';
+    s.style.background = i % 3 === 0 ? '#f4f6f8' : i % 3 === 1 ? '#3c86ff' : '#1769ff';
     document.body.appendChild(s);
     const ang = Math.random() * Math.PI * 2;
     const dist = 26 + Math.random() * 34;
@@ -773,7 +773,7 @@ function confettiAlong(el) {
     s.className = 'confetti-bit';
     s.style.left = (r.left + Math.random() * r.width) + 'px';
     s.style.top = (r.top + r.height / 2) + 'px';
-    s.style.background = ['#fde68a', '#4ade80', '#67e8f9', '#c084fc'][i % 4];
+    s.style.background = ['#f4f6f8', '#3c86ff', '#1769ff', '#a8b0bc'][i % 4];
     document.body.appendChild(s);
     const dx = (Math.random() - 0.5) * 120;
     const dy = -(30 + Math.random() * 60);
@@ -890,169 +890,17 @@ function updateFavicon(pct) {
   } catch {}
 }
 
-const Starfield = (function () {
-  const canvas = document.getElementById('starfield');
-  const ctx = canvas.getContext('2d');
-  let stars = [];
-  let shooting = [];
-  let W = 0, H = 0;
-  let mouseX = 0, mouseY = 0, mx = 0, my = 0;
-  let scrollCur = 0;
-  let warpUntil = 0, warpStart = 0;
-  const LAYER_F = [0.35, 0.65, 1];
-
-  const nebula = document.createElement('canvas');
-  nebula.width = nebula.height = 600;
-  (function paintNebula() {
-    const n = nebula.getContext('2d');
-    const blob = (x, y, r, col) => {
-      const grad = n.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, col);
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      n.fillStyle = grad;
-      n.fillRect(0, 0, 600, 600);
-    };
-    blob(210, 240, 240, 'rgba(88,60,190,.16)');
-    blob(400, 330, 200, 'rgba(30,110,190,.15)');
-    blob(320, 190, 140, 'rgba(200,80,180,.07)');
-  })();
-
-  function resize() {
-    canvas.width = W = window.innerWidth;
-    canvas.height = H = window.innerHeight;
-    const target = Math.min(340, Math.round((W * H) / 8200));
-    stars = Array.from({ length: target }, () => {
-      const roll = Math.random();
-      const layer = roll < 0.45 ? 0 : roll < 0.82 ? 1 : 2;
-      return {
-        x: Math.random() * W,
-        y: Math.random() * H,
-        r: Math.random() * (layer === 2 ? 1.5 : 1.1) + 0.3 + layer * 0.25,
-        tw: Math.random() * Math.PI * 2,
-        speed: Math.random() * 0.02 + 0.005,
-        layer,
-      };
-    });
-  }
-
-  function spawnShootingStar() {
-    if (shooting.length < 2 && Math.random() < 0.012) {
-      shooting.push({
-        x: Math.random() * W,
-        y: -10,
-        vx: (Math.random() - 0.5) * 4,
-        vy: Math.random() * 4 + 3,
-        life: 1,
-      });
+const Starfield = {
+  warp() {
+    if (REDUCED_MOTION) return;
+    const wf = document.getElementById('warpFlash');
+    if (wf) {
+      wf.classList.remove('go');
+      void wf.offsetWidth;
+      wf.classList.add('go');
     }
-  }
-
-  function warpPower() {
-    if (!warpUntil || Date.now() > warpUntil) return 0;
-    const t = (Date.now() - warpStart) / (warpUntil - warpStart);
-    return Math.sin(Math.min(1, Math.max(0, t)) * Math.PI) ** 0.65;
-  }
-
-  function draw() {
-    const now = Date.now();
-    ctx.clearRect(0, 0, W, H);
-
-    mx += (mouseX - mx) * 0.055;
-    my += (mouseY - my) * 0.055;
-    const wp = warpPower();
-
-    const driftX = (now * 0.004) % (W + 600);
-    ctx.globalAlpha = 0.75;
-    ctx.drawImage(nebula, -driftX * 0.3, H * 0.12, 600, 600);
-    ctx.drawImage(nebula, W - driftX * 0.22, -H * 0.08, 520, 520);
-    ctx.globalAlpha = 1;
-
-    const cx = W / 2, cy = H / 2;
-    for (const s of stars) {
-      s.tw += s.speed;
-      const f = LAYER_F[s.layer];
-      let px = s.x + mx * f * 24;
-      let py = s.y + my * f * 24 - scrollCur * f * 0.35;
-      py = ((py % H) + H) % H;
-      px = ((px % W) + W) % W;
-
-      if (wp > 0 && !REDUCED_MOTION) {
-        const dx = px - cx, dy = py - cy;
-        const d = Math.hypot(dx, dy) || 1;
-        const nx = dx / d, ny = dy / d;
-        const tail = wp * (26 + s.r * 44) * (0.35 + d / Math.max(W, H));
-        ctx.beginPath();
-        ctx.moveTo(px - nx * tail, py - ny * tail);
-        ctx.lineTo(px + nx * tail * 0.25, py + ny * tail * 0.25);
-        ctx.strokeStyle = `rgba(185,228,255,${0.25 + wp * 0.5})`;
-        ctx.lineWidth = s.r + 0.7;
-        ctx.stroke();
-        s.x += nx * wp * 2.6;
-        s.y += ny * wp * 2.6;
-        if (s.x < -20) s.x = W + 20;
-        if (s.x > W + 20) s.x = -20;
-        if (s.y < -20) s.y = H + 20;
-        if (s.y > H + 20) s.y = -20;
-      } else {
-        const alpha = 0.35 + Math.sin(s.tw) * 0.38;
-        ctx.beginPath();
-        ctx.arc(px, py, s.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-        ctx.fill();
-      }
-    }
-
-    if (wp === 0) spawnShootingStar();
-    for (let i = shooting.length - 1; i >= 0; i--) {
-      const m = shooting[i];
-      m.x += m.vx;
-      m.y += m.vy;
-      m.life -= 0.015;
-      if (m.life <= 0) {
-        shooting.splice(i, 1);
-        continue;
-      }
-      ctx.beginPath();
-      ctx.moveTo(m.x, m.y);
-      ctx.lineTo(m.x - m.vx * 8, m.y - m.vy * 8);
-      ctx.strokeStyle = `rgba(180,220,255,${m.life})`;
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
-    }
-    requestAnimationFrame(draw);
-  }
-
-  window.addEventListener('resize', resize);
-  window.addEventListener(
-    'scroll',
-    () => {
-      scrollCur = window.scrollY;
-    },
-    { passive: true }
-  );
-  if (FINE_POINTER && !REDUCED_MOTION) {
-    window.addEventListener(
-      'mousemove',
-      (e) => {
-        mouseX = e.clientX / window.innerWidth - 0.5;
-        mouseY = e.clientY / window.innerHeight - 0.5;
-      },
-      { passive: true }
-    );
-  }
-  resize();
-  draw();
-
-  return {
-    warp(duration) {
-      if (REDUCED_MOTION) return;
-      warpStart = Date.now();
-      warpUntil = warpStart + duration;
-      document.body.classList.add('warp-active');
-      setTimeout(() => document.body.classList.remove('warp-active'), duration + 250);
-    },
-  };
-})();
+  },
+};
 
 function scrambleDecode(el) {
   if (!el || REDUCED_MOTION) return;
@@ -1076,7 +924,7 @@ function scrambleDecode(el) {
   }, 30);
 }
 
-const THEMES = ['cyan', 'violet', 'amber'];
+const THEMES = ['electric', 'paper', 'steel'];
 function buildThemeDots() {
   const host = document.getElementById('themeDots');
   if (!host) return;
@@ -1090,8 +938,8 @@ function buildThemeDots() {
   });
 }
 function applyTheme(t) {
-  if (!THEMES.includes(t)) t = 'cyan';
-  document.documentElement.dataset.theme = t === 'cyan' ? '' : t;
+  if (!THEMES.includes(t)) t = 'electric';
+  document.documentElement.dataset.theme = t === 'electric' ? '' : t;
   localStorage.setItem(THEME_KEY, t);
   document.querySelectorAll('.theme-dot').forEach((d) =>
     d.classList.toggle('active', d.dataset.t === t)
@@ -1099,9 +947,10 @@ function applyTheme(t) {
   updateFavicon(lastKnownPct());
 }
 function cycleTheme() {
-  const cur = localStorage.getItem(THEME_KEY) || 'cyan';
+  const cur = localStorage.getItem(THEME_KEY) || 'electric';
   const next = THEMES[(THEMES.indexOf(cur) + 1) % THEMES.length];
   applyTheme(next);
+  Starfield.warp(260);
   toast(`ACCENT THEME \u2192 ${next.toUpperCase()}`);
 }
 function lastKnownPct() {
@@ -1647,19 +1496,18 @@ window.addEventListener('keydown', (e) => {
 /* ---------- help overlay styles (injected once) ---------- */
 (function injectHelpStyles() {
   const css = `
-.help-overlay{position:fixed;inset:0;z-index:130;background:rgba(2,6,12,.7);backdrop-filter:blur(3px);
+.help-overlay{position:fixed;inset:0;z-index:130;background:rgba(5,6,8,.78);backdrop-filter:blur(4px);
   display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .18s ease}
 .help-overlay.open{opacity:1}
-.help-panel{width:min(460px,92vw);background:#070d16;border:1px solid rgba(34,211,238,.35);border-radius:12px;
-  padding:20px 22px;color:#cfe3f2;font-family:Rajdhani,'Segoe UI',sans-serif;position:relative;
-  box-shadow:0 0 40px rgba(34,211,238,.14)}
-.help-panel h3{font-family:Orbitron,sans-serif;font-size:13px;letter-spacing:.24em;color:#22d3ee;margin:0 0 14px}
+.help-panel{width:min(460px,92vw);background:#0b0e13;border:1px solid #425064;border-left:3px solid #1769ff;
+  padding:20px 22px;color:#f4f6f8;font-family:Inter,Arial,sans-serif;position:relative}
+.help-panel h3{font-family:Rajdhani,Arial,sans-serif;font-weight:700;font-size:15px;letter-spacing:.24em;color:#3c86ff;margin:0 0 14px;text-transform:uppercase}
 .help-panel dl{display:grid;grid-template-columns:130px 1fr;gap:8px 14px;margin:0;font-size:13.5px}
-.help-panel dt{font-family:Orbitron,sans-serif;font-size:11px;letter-spacing:.1em;color:#7dd3fc;align-self:center}
-.help-panel dd{margin:0;color:#9fb6c9}
-.help-close{position:absolute;top:10px;right:14px;cursor:pointer;color:#7f97ab}
-.help-close:hover{color:#22d3ee}
-.help-foot{margin:14px 0 0;font-size:11px;color:#64809a}`;
+.help-panel dt{font-family:'Barlow Semi Condensed',Arial,sans-serif;font-weight:600;font-size:11px;letter-spacing:.1em;color:#3c86ff;align-self:center;text-transform:uppercase}
+.help-panel dd{margin:0;color:#a8b0bc}
+.help-close{position:absolute;top:10px;right:14px;cursor:pointer;color:#a8b0bc}
+.help-close:hover{color:#3c86ff}
+.help-foot{margin:14px 0 0;font-size:11px;color:#687585}`;
   const style = document.createElement('style');
   style.textContent = css;
   document.head.appendChild(style);

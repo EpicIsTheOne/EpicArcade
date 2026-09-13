@@ -1,0 +1,1275 @@
+{
+  "pack": "style-pack-2",
+  "source_folder": "C:/Users/Epic/Downloads/EPHIX_NewStylePack",
+  "note": "Expansion pack. Originals stored unmodified under brand/generated-originals/style-pack-2/. All extractions preserve the source alpha channel (no background removal was needed or performed).",
+  "sheets": [
+    {
+      "sheet": "brand/generated-originals/style-pack-2/ephix-style-pack-2-symbols.png",
+      "original_filename": "EPHIX_Symbols.png",
+      "category": "symbols",
+      "destination": "brand/symbols/generated/",
+      "description": "brush and geometric mark symbols",
+      "assets_extracted": 16,
+      "items": [
+        {
+          "file": "brand/symbols/generated/ephix-symbol-pinwheel-star-blue.png",
+          "source_cell": "r0c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol pinwheel star blue"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-brush-x-blue.png",
+          "source_cell": "r0c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol brush x blue"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-sparkle-four-point-black.png",
+          "source_cell": "r0c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol sparkle four point black"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-chevron-double-blue.png",
+          "source_cell": "r0c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol chevron double blue"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-crosshair-ring-star.png",
+          "source_cell": "r1c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol crosshair ring star"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-slash-bars-triple-blue.png",
+          "source_cell": "r1c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol slash bars triple blue"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-orbit-ring-sweep.png",
+          "source_cell": "r1c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol orbit ring sweep"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-corner-brackets-viewfinder.png",
+          "source_cell": "r1c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol corner brackets viewfinder"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-lightning-bolt-blue.png",
+          "source_cell": "r2c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol lightning bolt blue"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-diamond-cluster-black.png",
+          "source_cell": "r2c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol diamond cluster black"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-starburst-shatter-blue.png",
+          "source_cell": "r2c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol starburst shatter blue"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-chevron-stack-triple.png",
+          "source_cell": "r2c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol chevron stack triple"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-eclipse-crescent-sparkle.png",
+          "source_cell": "r3c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol eclipse crescent sparkle"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-crosshair-thin-blue.png",
+          "source_cell": "r3c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol crosshair thin blue"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-torn-banner-flag.png",
+          "source_cell": "r3c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol torn banner flag"
+        },
+        {
+          "file": "brand/symbols/generated/ephix-symbol-sparkle-slim-black.png",
+          "source_cell": "r3c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "symbol sparkle slim black"
+        }
+      ]
+    },
+    {
+      "sheet": "brand/generated-originals/style-pack-2/ephix-style-pack-2-stickers-decals.png",
+      "original_filename": "EPHIX_Stickers & Decals.png",
+      "category": "stickers-decals",
+      "destination": "brand/stickers/generated/",
+      "description": "die-cut sticker decals",
+      "assets_extracted": 20,
+      "items": [
+        {
+          "file": "brand/stickers/generated/ephix-sticker-ephix-logo-badge.png",
+          "source_cell": "r0c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker logo badge"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-globe-orbit-spark.png",
+          "source_cell": "r0c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker globe orbit spark"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-create-explore-belong-banner.png",
+          "source_cell": "r0c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker create explore belong banner"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-x-starburst-tm.png",
+          "source_cell": "r0c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker x starburst tm"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-caution-high-creativity.png",
+          "source_cell": "r1c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker caution high creativity"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-katakana-ephix-plaque.png",
+          "source_cell": "r1c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker katakana plaque"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-more-than-models-oval.png",
+          "source_cell": "r1c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker more than models oval"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-barcode-ticket-001.png",
+          "source_cell": "r1c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker barcode ticket 001"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-spray-crown-blue.png",
+          "source_cell": "r2c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker spray crown blue"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-pixel-checker-cluster.png",
+          "source_cell": "r2c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker pixel checker cluster"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-built-different.png",
+          "source_cell": "r2c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker built different"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-x-arrow-mark.png",
+          "source_cell": "r2c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker x arrow mark"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-same-ideas-higher-reality.png",
+          "source_cell": "r3c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker same ideas higher reality"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-creative-minds-roundel.png",
+          "source_cell": "r3c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker creative minds roundel"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-good-things-ahead-banner.png",
+          "source_cell": "r3c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker good things ahead banner"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-experiment-triangle.png",
+          "source_cell": "r3c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker experiment triangle"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-kanji-create-badge.png",
+          "source_cell": "r4c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker kanji create badge"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-ideas-builds-people-barcode.png",
+          "source_cell": "r4c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker ideas builds people barcode"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-drip-smiley.png",
+          "source_cell": "r4c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker drip smiley"
+        },
+        {
+          "file": "brand/stickers/generated/ephix-sticker-chevron-arrow-badge.png",
+          "source_cell": "r4c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "sticker chevron arrow badge"
+        }
+      ]
+    },
+    {
+      "sheet": "brand/generated-originals/style-pack-2/ephix-style-pack-2-frames-ornaments.png",
+      "original_filename": "EPHIX_Frames & Ornaments.png",
+      "category": "frames-ornaments",
+      "destination": "brand/frames/generated/",
+      "description": "frames, plates and ornaments",
+      "assets_extracted": 16,
+      "items": [
+        {
+          "file": "brand/frames/generated/ephix-frame-chamfer-tech-blue.png",
+          "source_cell": "r0c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame chamfer tech blue"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-corner-brackets-spark.png",
+          "source_cell": "r0c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame corner brackets spark"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-banner-plate-black.png",
+          "source_cell": "r0c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame banner plate black"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-corner-bracket-spark.png",
+          "source_cell": "r0c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame corner bracket spark"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-ring-gauge-blue.png",
+          "source_cell": "r1c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame ring gauge blue"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-octo-tech-black.png",
+          "source_cell": "r1c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame octo tech black"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-slash-cluster-diagonal-blue.png",
+          "source_cell": "r1c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame slash cluster diagonal blue"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-corner-slash-black.png",
+          "source_cell": "r1c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame corner slash black"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-chevron-play-blue.png",
+          "source_cell": "r2c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame chevron play blue"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-x-cross-slash.png",
+          "source_cell": "r2c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame x cross slash"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-torn-paper-taped.png",
+          "source_cell": "r2c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame torn paper taped"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-slash-column-black.png",
+          "source_cell": "r2c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame slash column black"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-tech-corners-blue.png",
+          "source_cell": "r3c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame tech corners blue"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-compass-star-ring.png",
+          "source_cell": "r3c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame compass star ring"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-banner-underline.png",
+          "source_cell": "r3c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame banner underline"
+        },
+        {
+          "file": "brand/frames/generated/ephix-frame-grunge-square-x.png",
+          "source_cell": "r3c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "frame grunge square x"
+        }
+      ]
+    },
+    {
+      "sheet": "brand/generated-originals/style-pack-2/ephix-style-pack-2-slashes-shards.png",
+      "original_filename": "EPHIX_Slashes & Shards.png",
+      "category": "slashes-shards",
+      "destination": "brand/shapes/generated/",
+      "description": "slashes and shard fragments",
+      "assets_extracted": 16,
+      "items": [
+        {
+          "file": "brand/shapes/generated/ephix-shard-slash-sweep-double.png",
+          "source_cell": "r0c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard slash sweep double"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-flag-shatter.png",
+          "source_cell": "r0c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard flag shatter"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-star-burst.png",
+          "source_cell": "r0c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard star burst"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-speed-cluster.png",
+          "source_cell": "r0c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard speed cluster"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-torn-slab.png",
+          "source_cell": "r1c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard torn slab"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-x-spark-thin.png",
+          "source_cell": "r1c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard x spark thin"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-wedge-cluster.png",
+          "source_cell": "r1c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard wedge cluster"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-cubist-stack.png",
+          "source_cell": "r1c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard cubist stack"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-slash-flock.png",
+          "source_cell": "r2c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard slash flock"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-cubist-collapse.png",
+          "source_cell": "r2c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard cubist collapse"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-jag-diagonal.png",
+          "source_cell": "r2c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard jag diagonal"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-swoosh-double.png",
+          "source_cell": "r2c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard swoosh double"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-slab-grunge.png",
+          "source_cell": "r3c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard slab grunge"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-ring-shatter.png",
+          "source_cell": "r3c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard ring shatter"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-spire-cluster.png",
+          "source_cell": "r3c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard spire cluster"
+        },
+        {
+          "file": "brand/shapes/generated/ephix-shard-wedge-large.png",
+          "source_cell": "r3c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "shard wedge large"
+        }
+      ]
+    },
+    {
+      "sheet": "brand/generated-originals/style-pack-2/ephix-style-pack-2-print-grunge.png",
+      "original_filename": "EPHIX_Print & Grunge.png",
+      "category": "print-grunge",
+      "destination": "brand/textures/generated/",
+      "description": "print and grunge texture overlays",
+      "assets_extracted": 16,
+      "items": [
+        {
+          "file": "brand/textures/generated/ephix-grunge-ink-splatter-black.png",
+          "source_cell": "r0c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge ink splatter black"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-brush-strokes-horizontal.png",
+          "source_cell": "r0c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge brush strokes horizontal"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-halftone-fade-diagonal.png",
+          "source_cell": "r0c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge halftone fade diagonal"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-crumpled-paper-white.png",
+          "source_cell": "r0c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge crumpled paper white"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-cracked-slab-black.png",
+          "source_cell": "r1c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge cracked slab black"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-ink-ring-stamp-black.png",
+          "source_cell": "r1c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge ink ring stamp black"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-tape-pair-black-blue.png",
+          "source_cell": "r1c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge tape pair black blue"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-dry-brush-vertical-black.png",
+          "source_cell": "r1c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge dry brush vertical black"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-torn-halftone.png",
+          "source_cell": "r2c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge torn halftone"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-crack-lines-web.png",
+          "source_cell": "r2c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge crack lines web"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-brush-x-cross-black.png",
+          "source_cell": "r2c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge brush x cross black"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-paint-smear-black.png",
+          "source_cell": "r2c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge paint smear black"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-torn-slab-white-tear.png",
+          "source_cell": "r3c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge torn slab white tear"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-paint-drip-blue-black.png",
+          "source_cell": "r3c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge paint drip blue black"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-grid-scratches.png",
+          "source_cell": "r3c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge grid scratches"
+        },
+        {
+          "file": "brand/textures/generated/ephix-grunge-ink-circle-ring.png",
+          "source_cell": "r3c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "grunge ink circle ring"
+        }
+      ]
+    },
+    {
+      "sheet": "brand/generated-originals/style-pack-2/ephix-style-pack-2-pattern-tiles.png",
+      "original_filename": "EPHIX_Pattern Tiles.png",
+      "category": "pattern-tiles",
+      "destination": "brand/patterns/generated/",
+      "description": "repeating pattern tiles (full rectangles)",
+      "assets_extracted": 16,
+      "items": [
+        {
+          "file": "brand/patterns/generated/ephix-pattern-cross-star-tile.png",
+          "source_cell": "r0c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern cross star tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-chevron-arrows-tile.png",
+          "source_cell": "r0c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern chevron arrows tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-shatter-lightning-tile.png",
+          "source_cell": "r0c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern shatter lightning tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-grid-stars-tile.png",
+          "source_cell": "r0c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern grid stars tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-halftone-dot-fade-tile.png",
+          "source_cell": "r1c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern halftone dot fade tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-checker-glitch-tile.png",
+          "source_cell": "r1c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern checker glitch tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-racing-stripes-diagonal-tile.png",
+          "source_cell": "r1c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern racing stripes diagonal tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-chevron-zigzag-tile.png",
+          "source_cell": "r1c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern chevron zigzag tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-circuit-lines-tile.png",
+          "source_cell": "r2c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern circuit lines tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-plus-stars-tile.png",
+          "source_cell": "r2c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern plus stars tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-glitch-letters-tile.png",
+          "source_cell": "r2c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern glitch letters tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-dot-grid-fade-tile.png",
+          "source_cell": "r2c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern dot grid fade tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-torn-strip-tile.png",
+          "source_cell": "r3c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern torn strip tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-plus-cross-grid-tile.png",
+          "source_cell": "r3c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern plus cross grid tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-contour-lines-tile.png",
+          "source_cell": "r3c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern contour lines tile"
+        },
+        {
+          "file": "brand/patterns/generated/ephix-pattern-ephix-wordmark-tile.png",
+          "source_cell": "r3c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "pattern wordmark tile"
+        }
+      ]
+    },
+    {
+      "sheet": "brand/generated-originals/style-pack-2/ephix-style-pack-2-broadcast-graphics.png",
+      "original_filename": "EPHIX_Broadcast Graphics.png",
+      "category": "broadcast-graphics",
+      "destination": "brand/broadcast/generated/",
+      "description": "broadcast and stream overlay graphics",
+      "assets_extracted": 16,
+      "items": [
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-live-badge.png",
+          "source_cell": "r0c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast live badge"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-rec-frame.png",
+          "source_cell": "r0c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast rec frame"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-barcode-strip.png",
+          "source_cell": "r0c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast barcode strip"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-warning-triangle.png",
+          "source_cell": "r0c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast warning triangle"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-signal-plaque.png",
+          "source_cell": "r1c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast signal plaque"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-chapter-01.png",
+          "source_cell": "r1c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast chapter 01"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-chevron-forward-triple.png",
+          "source_cell": "r1c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast chevron forward triple"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-target-ring.png",
+          "source_cell": "r1c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast target ring"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-timecode-counter.png",
+          "source_cell": "r2c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast timecode counter"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-hazard-bar-frame.png",
+          "source_cell": "r2c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast hazard bar frame"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-ceb-list.png",
+          "source_cell": "r2c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast ceb list"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-target-marks.png",
+          "source_cell": "r2c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast target marks"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-terminal-window.png",
+          "source_cell": "r3c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast terminal window"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-on-air-badge.png",
+          "source_cell": "r3c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast on air badge"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-equalizer-bars.png",
+          "source_cell": "r3c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast equalizer bars"
+        },
+        {
+          "file": "brand/broadcast/generated/ephix-broadcast-globe-wireframe.png",
+          "source_cell": "r3c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "broadcast globe wireframe"
+        }
+      ]
+    },
+    {
+      "sheet": "brand/generated-originals/style-pack-2/ephix-style-pack-2-wildcard-ephix.png",
+      "original_filename": "EPHIX_Wildcard Ephix.png",
+      "category": "wildcard-ephix",
+      "destination": "brand/wildcard/generated/",
+      "description": "wildcard art and editorial pieces",
+      "assets_extracted": 16,
+      "items": [
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-star-flare-compass.png",
+          "source_cell": "r0c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard star flare compass"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-shatter-x-black.png",
+          "source_cell": "r0c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard shatter x black"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-pinwheel-shards.png",
+          "source_cell": "r0c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard pinwheel shards"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-globe-ring-spark.png",
+          "source_cell": "r0c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard globe ring spark"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-ephix-grunge-card.png",
+          "source_cell": "r1c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard grunge card"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-x-blades-blue.png",
+          "source_cell": "r1c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard x blades blue"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-halftone-eye-shard.png",
+          "source_cell": "r1c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard halftone eye shard"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-sparkle-column.png",
+          "source_cell": "r1c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard sparkle column"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-moon-ring-eclipse.png",
+          "source_cell": "r2c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard moon ring eclipse"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-ideas-games-people-slab.png",
+          "source_cell": "r2c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard ideas games people slab"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-cube-e-structure.png",
+          "source_cell": "r2c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard cube e structure"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-shatter-cross-glitch.png",
+          "source_cell": "r2c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard shatter cross glitch"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-glitch-column-ephix.png",
+          "source_cell": "r3c0",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard glitch column ephix"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-drip-smiley-x.png",
+          "source_cell": "r3c1",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard drip smiley x"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-road-horizon-star.png",
+          "source_cell": "r3c2",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard road horizon star"
+        },
+        {
+          "file": "brand/wildcard/generated/ephix-wildcard-prism-flag-diagonal.png",
+          "source_cell": "r3c3",
+          "format": [
+            "png"
+          ],
+          "transparency": "preserved",
+          "description": "wildcard prism flag diagonal"
+        }
+      ]
+    }
+  ]
+}

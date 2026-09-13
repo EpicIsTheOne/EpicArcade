@@ -1,11 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@600&display=swap');
-/* Shared navigation; intentionally not mounted on Home. */
-nav.console-links {position:relative;z-index:30;display:flex;align-items:center;justify-content:center;gap:24px;flex-wrap:wrap;padding:22px 20px 0;margin:0;width:100%;height:auto;box-sizing:border-box;view-transition-name:site-navigation;}
-nav.console-links a {display:block;position:relative;height:auto;margin:0;border:0;border-bottom:1px solid transparent;color:var(--muted,#7d92b0);font:600 .7rem 'Orbitron',sans-serif;letter-spacing:.14em;text-decoration:none;padding:9px 0;}
-nav.console-links a:hover,nav.console-links a[aria-current] {color:var(--cyan-soft,#67e8f9);text-shadow:0 0 12px #22d3ee66;}
-nav.console-links a[aria-current] {border-bottom-color:var(--cyan,#22d3ee);}
-nav.console-links a::after {display:none;}
-nav.console-links a:focus-visible {outline:2px solid #67e8f9;outline-offset:4px;}
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&display=swap');
+/* Shared section navigation (Tracker / Arcade / Community); intentionally not mounted on Home. */
+nav.console-links {position:relative;z-index:30;display:flex;align-items:center;justify-content:center;gap:26px;flex-wrap:wrap;padding:20px 20px 0;margin:0;width:100%;height:auto;box-sizing:border-box;view-transition-name:site-navigation;}
+nav.console-links a {display:block;position:relative;height:auto;margin:0;border:0;color:var(--muted,#a8b0bc);font:600 .82rem 'Barlow Semi Condensed',Arial,sans-serif;font-variant-caps:all-small-caps;letter-spacing:.22em;text-decoration:none;padding:9px 0;}
+nav.console-links a::before {content:'';position:absolute;left:0;bottom:4px;height:2px;width:0;background:var(--accent,#1769ff);transform:skewX(-32deg);transition:width .2s cubic-bezier(.2,.7,.3,1);}
+nav.console-links a:hover,nav.console-links a[aria-current] {color:var(--text,#f4f6f8);}
+nav.console-links a:hover::before,nav.console-links a[aria-current]::before {width:100%;}
+nav.console-links a:focus-visible {outline:2px solid var(--accent-bright,#3c86ff);outline-offset:4px;}
 .community-nav {flex-wrap:wrap;gap:0;}
 .community-nav nav.console-links {flex:0 0 100%;order:-1;}
 .community-nav>.brand,.community-nav>.nav-actions {margin-top:18px;}

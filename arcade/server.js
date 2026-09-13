@@ -292,6 +292,10 @@ function start(opts = {}) {
       if (url.pathname === '/model-catalog.js') {
         return await serveFrom(path.join(__dirname, 'lib'), ['model-catalog.js'], res);
       }
+      if (url.pathname.startsWith("/brand/")) {
+        req_wants_head = false;
+        return await serveFrom(path.join(__dirname, "public"), [url.pathname.slice(1)], res);
+      }
       if (url.pathname === "/style.css" || url.pathname === "/app.js") {
         req_wants_head = false;
         return await serveFrom(path.join(__dirname, "public"), [url.pathname.slice(1)], res);

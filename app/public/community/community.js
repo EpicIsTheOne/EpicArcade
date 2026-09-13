@@ -52,6 +52,22 @@
   }
   function layout(...children) {
     app.replaceChildren(node('div', { class: 'wrap' }, ...children));
+    // page-mount choreography: stagger the lead blocks; grids animate per-card.
+    // 'wipe' (a zero-width clip) is reserved for heading blocks — clip-animating
+    // image containers stops loading=lazy images from ever intersecting.
+    if (!REDUCED) {
+      app.querySelectorAll('.wrap > *').forEach((block, i) => {
+        if (i > 5 || block.matches('.project-grid')) return;
+        const kind = i === 0 && block.matches('.masthead, .page-heading') ? 'wipe' : 'up';
+        block.setAttribute('data-reveal', kind);
+        block.style.setProperty('--reveal-i', i);
+      });
+      app.querySelectorAll('.publish-grid > *, .detail-cols > *, .profile-hero').forEach((el, i) => {
+        el.setAttribute('data-reveal', 'up');
+        el.style.setProperty('--reveal-i', Math.min(i + 2, 9));
+      });
+    }
+    revealScan();
     document.getElementById('accountButton').textContent = state.user ? initials(state.user) : '↗';
     document.getElementById('accountButton').setAttribute('aria-label', state.user ? 'Your account' : 'Sign in');
   }
@@ -63,7 +79,26 @@
       node('h3', { text: title }), node('p', { text: copy }), publish && link('/Community/publish', 'Publish a project', 'button'));
   }
   function loading() { return node('div', { class: 'loading-screen', role: 'status' }, node('span', { class: 'spinner' }), 'Loading…'); }
-  function navigate(url) { history.pushState({}, '', url); render(); window.scrollTo(0, 0); }
+  function goRender() {
+    // SPA route changes ride the channel-switch transition
+    if (REDUCED || !document.startViewTransition) { render(); return; }
+    try { document.startViewTransition(() => { render(); }); }
+    catch (e) { render(); }
+  }
+  function navigate(url) { history.pushState({}, '', url); goRender(); window.scrollTo(0, 0); }
+
+  /* ---------- motion pass: reveals + FLIP ---------- */
+  const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function revealScan(scope = app) {
+    if (REDUCED || !('IntersectionObserver' in window)) return;
+    document.documentElement.classList.add('js-reveal');
+    const targets = scope.querySelectorAll('[data-reveal]:not(.is-in)');
+    if (!targets.length) return;
+    const io = new IntersectionObserver(entries => {
+      for (const entry of entries) if (entry.isIntersecting) { entry.target.classList.add('is-in'); io.unobserve(entry.target); }
+    }, { threshold: 0.08 });
+    targets.forEach((el, i) => { if (!el.style.getPropertyValue('--reveal-i')) el.style.setProperty('--reveal-i', Math.min(i, 9)); io.observe(el); });
+  }
 
   function art(project, className = 'card-art') {
     const surface = node('div', { class: className, 'aria-hidden': 'true' });
@@ -80,7 +115,7 @@
   function projectCard(project) {
     // Keep construction explicit rather than extending DOM prototypes.
     const artLink = node('a', { class: 'card-art-link', href: routeUrl('projects', project.slug), 'aria-label': 'View ' + project.name }, art(project));
-    return node('article', { class: 'project-card' }, artLink,
+    return node('article', { class: 'project-card', 'data-pid': project.id }, artLink,
       node('div', { class: 'card-body' }, node('div', { class: 'card-eyebrow' },
         project.featured && node('span', { text: '✦ Featured' }), project.visibility === 'unlisted' && node('span', { text: 'Unlisted' }),
         project.moderation === 'hidden' && node('span', { text: 'Hidden by moderator' })),
@@ -177,7 +212,7 @@
     const featured = node('div'), combinations = node('div', { class: 'combination-strip' });
     const more = button('Load more', () => refresh(true)); more.hidden = true;
     const mast = modelId ? heading('Community / Models', label('models', modelId), 'Real projects built with this model. See how creators put it to work.') :
-      node('section', { class: 'masthead' }, node('div', { class: 'kicker', text: 'Ephix / Community' }),
+      node('section', { class: 'masthead' }, node('div', { class: 'masthead-slab', 'aria-hidden': 'true' }), node('div', { class: 'kicker', text: 'Ephix / Community' }),
         node('h1', { text: 'COMMUNITY' }),
         node('p', { text: 'Benchmarks measure capability. These are the projects people make with it: the games, tools, experiments and ideas that come next.' }));
     const modelLinks = modelId && node('div', { class: 'model-links' },
@@ -208,9 +243,29 @@
         if (sequence !== state.request || !grid.isConnected) return;
         items = append ? [...items, ...data.projects] : data.projects; total = data.total;
         count.textContent = `${total} project${total === 1 ? '' : 's'}${filter.models.length > 1 ? ' · model combination' : ''}`;
+        // FLIP: surviving cards glide to their new spot, fresh cards cascade in
+        const before = new Map();
+        if (!append && !REDUCED) grid.querySelectorAll('.project-card').forEach(card => before.set(card.dataset.pid, card.getBoundingClientRect()));
         grid.replaceChildren(...(items.length ? items.map(projectCard) : [empty(
           filter.search || filter.models.length || filter.tag || filter.harness ? 'No matching projects yet.' : filter.sort === 'featured' ? 'The next standout is still out there.' : 'The first build starts here.',
           filter.search || filter.models.length || filter.tag || filter.harness ? 'Try a different search or clear a filter.' : 'Share a project with just a name and a link.', true)]));
+        if (!append && !REDUCED) {
+          let fresh = 0;
+          grid.querySelectorAll('.project-card').forEach(card => {
+            const firstRect = before.get(card.dataset.pid);
+            if (!firstRect) {
+              card.style.animation = `ebRise var(--t-slow) var(--ease-out) ${Math.min(fresh++ * 40, 200)}ms both`;
+              return;
+            }
+            const last = card.getBoundingClientRect();
+            const dx = firstRect.left - last.left, dy = firstRect.top - last.top;
+            if (dx || dy) {
+              card.classList.add('is-flipping');
+              card.style.transform = `translate(${dx}px, ${dy}px)`;
+              requestAnimationFrame(() => requestAnimationFrame(() => { card.classList.remove('is-flipping'); card.style.transform = ''; }));
+            }
+          });
+        }
         more.hidden = items.length >= total; more.disabled = false;
         if (!modelId && !append && !filter.search && !filter.models.length && !filter.tag && !filter.harness) {
           const groups = new Map();
@@ -237,6 +292,8 @@
         if (!featured.isConnected || !data.projects.length) return;
         const project = data.projects[0];
         featured.append(node('a', { class: 'featured', href: routeUrl('projects', project.slug) },
+          node('img', { class: 'feat-tape t1', src: '/brand/textures/generated/ephix-grunge-tape-pair-black-blue.png', alt: '', 'aria-hidden': 'true' }),
+          node('img', { class: 'feat-tape t2', src: '/brand/textures/generated/ephix-grunge-tape-pair-black-blue.png', alt: '', 'aria-hidden': 'true' }),
           node('div', { class: 'featured-copy' }, node('div', { class: 'kicker', text: 'Selected by Ephix' }), node('h2', { text: project.name }),
             project.description && node('p', { text: project.description }), node('span', { class: 'button button-violet', text: 'Explore project →' })), art(project, 'featured-art')));
       }).catch(() => {});
@@ -333,11 +390,11 @@
     form.addEventListener('submit', async event => {
       event.preventDefault();
       const button = form.querySelector('[type=submit]'), original = button.textContent;
-      button.disabled = true; button.textContent = 'Working…';
+      button.disabled = true; button.classList.add('is-working'); button.textContent = 'Working…';
       form.querySelector('.inline-error')?.remove();
       try { await action(); }
       catch (error) { form.append(node('div', { class: 'inline-error', role: 'alert', text: error.message })); }
-      finally { button.disabled = false; button.textContent = original; }
+      finally { button.disabled = false; button.classList.remove('is-working'); button.textContent = original; }
     });
   }
   async function publish() {
@@ -511,11 +568,20 @@
     const backdrop = node('div', { class: 'modal-backdrop' }, modal);
     backdrop.addEventListener('click', event => { if (event.target === backdrop) closeModal(); });
     dialogRoot.replaceChildren(backdrop);
+    requestAnimationFrame(() => { if (dialogRoot.firstElementChild === backdrop) backdrop.classList.add('is-open'); });
     app.inert = true; document.querySelector('.community-nav').inert = true;
     modalClosed = () => { app.inert = false; document.querySelector('.community-nav').inert = false; previousFocus?.focus?.(); onClose?.(); };
     setTimeout(() => modal.querySelector('input,textarea,select,button')?.focus(), 0);
   }
-  function closeModal() { const callback = modalClosed; modalClosed = null; dialogRoot.replaceChildren(); callback?.(); }
+  function closeModal() {
+    const callback = modalClosed; modalClosed = null;
+    const backdrop = dialogRoot.firstElementChild;
+    if (backdrop && !REDUCED) {
+      backdrop.classList.add('is-closing');
+      setTimeout(() => { if (dialogRoot.firstElementChild === backdrop) dialogRoot.replaceChildren(); }, 170);
+    } else dialogRoot.replaceChildren();
+    callback?.();
+  }
   function showSecret(title, value, filename, done) {
     const content = JSON.stringify(value, null, 2), url = URL.createObjectURL(new Blob([content + '\n'], { type: 'application/json' }));
     openModal(title, [node('p', { text: 'Download this private file now. This secret is only shown once. Keep it outside your project repository.' }),
@@ -601,7 +667,7 @@
   document.getElementById('menuButton').addEventListener('click', event => {
     const opened = document.querySelector('.community-nav nav').classList.toggle('open'); event.currentTarget.setAttribute('aria-expanded', opened);
   });
-  window.addEventListener('popstate', render);
+  window.addEventListener('popstate', goRender);
   async function boot() {
     try {
       const [catalog, me] = await Promise.all([api('/catalog'), api('/auth/me')]);

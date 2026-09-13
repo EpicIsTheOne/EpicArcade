@@ -1,29 +1,44 @@
 <!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Ephix — Live Results</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='%2304060c' stroke='%2322d3ee'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"/>
+<link rel="icon" type="image/png" href="brand/logos/ephix-icon-32.png"/>
+<link rel="stylesheet" href="brand/brand.css"/>
 <style>
-body{margin:0;background:#04060c;color:#cfe3f2;font-family:Rajdhana,Rajdhani,Segoe UI,monospace}
-a{color:#22d3ee;text-decoration:none} a:hover{text-decoration:underline}
-.wrap{max-width:1080px;margin:0 auto;padding:24px 16px}
-h1{font-size:28px;letter-spacing:.08em;margin:0 0 4px;color:#e8f6ff}
-.sub{color:#7f97ab;font-size:13px;margin-bottom:18px}
-nav{margin-bottom:20px;font-size:14px} nav a{margin-right:16px}
-.card{background:rgba(10,18,28,.85);border:1px solid rgba(34,211,238,.22);border-radius:10px;padding:16px;margin-bottom:18px}
-.prog b{color:#22d3ee;font-size:20px}
-.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid #2b4257;margin-right:6px}
-.pass{color:#34d399;border-color:#34d39955}.fail,.error{color:#f87171;border-color:#f8717155}
-.running{color:#22d3ee;border-color:#22d3ee55}.skipped{color:#94a3b8}
-select,input,textarea{background:#0a1420;color:#dbeafe;border:1px solid #24435c;border-radius:6px;padding:6px 8px;font-family:inherit;width:100%;max-width:420px}
-label{display:block;font-size:12px;color:#8fa8bd;margin:10px 0 4px}
-button{background:#0e2a3d;color:#22d3ee;border:1px solid #22d3ee66;border-radius:6px;padding:8px 16px;cursor:pointer;margin-top:10px}
-button:hover{background:#12354f}
+:root{--ink:#050608;--void:#0b0e13;--surface:#11161e;--paper:#f4f6f8;--steel:#a8b0bc;--mutedc:#687585;--electric:#1769ff;--bright:#3c86ff;--line:#26303d;--strong:#425064;--ok:#59d39b;--bad:#ff5d6c;--warn:#ffc857}
+body{margin:0;background:var(--ink);color:var(--paper);font-family:Inter,Arial,sans-serif}
+a{color:var(--bright);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 16px;position:relative;z-index:1}
+h1{font:700 clamp(1.8rem,4vw,2.6rem)/1 Rajdhani,Arial,sans-serif;letter-spacing:.08em;margin:0 0 4px;color:var(--paper);text-transform:uppercase;transform:skewX(-3deg);transform-origin:left bottom;width:fit-content}
+h1::after{content:'';display:block;width:64px;height:4px;margin-top:10px;background:var(--electric);transform:skewX(32deg)}
+.sub{color:var(--steel);font:600 .8rem 'Barlow Semi Condensed',Arial,sans-serif;letter-spacing:.14em;text-transform:uppercase;margin:14px 0 18px}
+nav:not(.console-links){margin-bottom:20px;font:600 .8rem 'Barlow Semi Condensed',Arial,sans-serif;letter-spacing:.1em;text-transform:uppercase} nav:not(.console-links) a{margin-right:16px}
+.card{background:var(--surface);border:1px solid var(--line);padding:16px;margin-bottom:18px;clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,0 100%)}
+.card>b{font:700 1rem Rajdhani,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase}
+.prog b{color:var(--bright);font-size:20px}
+.pill{display:inline-block;padding:2px 8px 1px;font:600 12px 'Barlow Semi Condensed',Arial,sans-serif;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--strong);margin-right:6px;clip-path:polygon(0 0,calc(100% - 6px) 0,100% 50%,calc(100% - 6px) 100%,0 100%)}
+.pass{color:var(--ok);border-color:#59d39b66}.fail,.error{color:var(--bad);border-color:#ff5d6c66}
+.running{color:var(--bright);border-color:#3c86ff66}.skipped{color:var(--steel)}
+select,input,textarea{background:var(--void);color:var(--paper);border:1px solid var(--line);padding:8px 10px;font:400 14px Inter,Arial,sans-serif;width:100%;max-width:420px}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--bright)}
+label{display:block;font:600 .68rem 'Barlow Semi Condensed',Arial,sans-serif;letter-spacing:.16em;color:var(--steel);margin:12px 0 4px;text-transform:uppercase}
+button{background:var(--electric);color:#fff;border:0;padding:9px 18px;cursor:pointer;margin-top:12px;font:600 .78rem 'Barlow Semi Condensed',Arial,sans-serif;letter-spacing:.14em;text-transform:uppercase;clip-path:polygon(0 0,calc(100% - 9px) 0,100% 50%,calc(100% - 9px) 100%,0 100%)}
+button:hover{background:#0b42b6}
 table{width:100%;border-collapse:collapse;font-size:14px}
-td,th{padding:6px 8px;border-bottom:1px solid #16283a;text-align:left;vertical-align:top}
-th{color:#8fa8bd;font-weight:600}
-.msg{color:#7dd3fc;font-size:13px;margin-top:8px;min-height:18px}
-.muted{color:#64809a;font-size:12px}
-</style></head><body><div class="wrap">
+td,th{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--steel);font:600 .68rem 'Barlow Semi Condensed',Arial,sans-serif;letter-spacing:.14em;text-transform:uppercase}
+.msg{color:var(--bright);font-size:13px;margin-top:8px;min-height:18px}
+.muted{color:var(--mutedc);font-size:12px}
+@keyframes rowIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+tbody.rows-anim tr{animation:rowIn .32s cubic-bezier(.2,.7,.3,1) both}
+tbody.rows-anim tr:nth-child(2){animation-delay:30ms}tbody.rows-anim tr:nth-child(3){animation-delay:60ms}
+tbody.rows-anim tr:nth-child(4){animation-delay:90ms}tbody.rows-anim tr:nth-child(5){animation-delay:120ms}
+tbody.rows-anim tr:nth-child(6){animation-delay:150ms}tbody.rows-anim tr:nth-child(7){animation-delay:180ms}
+tbody.rows-anim tr:nth-child(8){animation-delay:210ms}tbody.rows-anim tr:nth-child(9){animation-delay:240ms}
+tbody.rows-anim tr:nth-child(n+10){animation-delay:260ms}
+@media(prefers-reduced-motion:reduce){tbody.rows-anim tr{animation:none}}
+</style></head><body><div class="bg-bands" aria-hidden="true"></div><div class="bg-grid" aria-hidden="true"></div><div class="bg-grain" aria-hidden="true"></div><div class="wrap">
 <h1>EPHIX — LIVE RESULTS</h1>
 <div class="sub">Ephix · canonical pack <span id="packHash">…</span> · <a href="index.html">Prompt Browser</a></div>
 <nav><a href="index.html">Prompts</a><a href="results.html">Live Results</a><a href="https://epic.techexplore.us/Community/">Community</a><a href="results.html#suggest">Suggest a Prompt</a><a href="results.html#feedback">Give Feedback</a></nav>
@@ -92,6 +107,7 @@ async function load(){try{const r=await fetch('api/status',{cache:'no-store'});c
  const modelFilter=params.get('model');
  if(modelFilter)rows=rows.filter(x=>x.model===modelFilter);
  rows.sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+ if(!firstRows){$('rows').classList.add('rows-anim');firstRows=false;}
  $('rows').innerHTML=rows.slice(0,80).map(x=>`<tr><td>${esc(x.updatedAt)}</td><td>${esc(x.harness||'—')}</td><td><a href="https://epic.techexplore.us/Community/models/${encodeURIComponent(x.model)}" title="Explore Community projects">${esc(x.model)}</a></td>`+
   `<td>${x.promptId!=null?`${String(x.promptId).padStart(2,'0')} · ${esc((PROMPT_BY_ID[x.promptId]||{}).title||('#'+x.promptId))}`:'(run-level)'}</td>`+
   `<td><span class="pill ${x.status}">${esc(x.status)}</span></td><td>${esc(x.notes)}</td></tr>`).join('')
@@ -106,5 +122,5 @@ async function sendRq(){const r=await fetch('api/prompt-request',{method:'POST',
  difficulty:$('rqDiff').value,capability:$('rqCap').value,deliverable:$('rqDeliv').value,context:ctx()})});
  const d=await r.json().catch(()=>({}));$('rqMsg').textContent=r.ok?('Received! Suggestion #'+d.id+' is in the review queue.'):(d.error||'Failed.');
  if(r.ok){['rqTitle','rqIdea','rqWhy','rqDeliv'].forEach(i=>$(i).value='');}}
-loadProgress();setInterval(loadProgress,5000);load();setInterval(load,5000);
+loadProgress();setInterval(loadProgress,5000);let firstRows=true;load();setInterval(load,5000);
 </script></body></html>

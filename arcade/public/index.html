@@ -4,20 +4,35 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ephix</title>
-<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="icon" type="image/png" href="brand/logos/ephix-icon-32.png">
+<link rel="stylesheet" href="brand/brand.css">
 <link rel="stylesheet" href="style.css">
 <script src="config.js"></script>
 <script src="model-catalog.js"></script>
 </head>
 <body>
-<canvas id="stars" aria-hidden="true"></canvas>
+<div class="bg-bands" aria-hidden="true"></div>
+<div class="bg-grid" aria-hidden="true"></div>
+<div class="bg-grain grain-live" aria-hidden="true"></div>
+<div class="crt-overlay" aria-hidden="true"></div>
+<div class="hud-frame" aria-hidden="true">
+  <i class="hud-corner tl"></i><i class="hud-corner tr"></i>
+  <i class="hud-corner bl"></i><i class="hud-corner br"></i>
+</div>
+
 <div class="boot" id="boot">
-  <pre class="mono" id="boot-text"></pre>
+  <div class="boot-term">
+    <img class="boot-terminal" src="brand/broadcast/generated/ephix-broadcast-terminal-window.png" alt="" aria-hidden="true">
+    <pre class="mono" id="boot-text"></pre>
+  </div>
 </div>
 
 <header class="topbar">
   <div class="brand">
-    <span class="pulse-dot" aria-hidden="true"></span>
+    <img class="brand-icon" src="brand/logos/ephix-icon-96.png" alt="" aria-hidden="true">
     <h1>EPHIX</h1>
     <span class="count" id="count"></span>
     <button class="btn small ghost sync-btn" id="sync-btn" hidden title="Pull Ephix repo">&#8645; Sync</button>
@@ -38,6 +53,7 @@
       <button class="active" data-view="grid" title="Grid view">▦</button>
       <button data-view="strip" title="Filmstrip view">▥</button>
     </div>
+        <div class="theme-dots" data-theme-dots></div>
   </div>
 </header>
 
@@ -48,12 +64,17 @@
   <button class="btn small ghost" id="copy-link" title="Copy link to this page">&#128279; Copy link</button>
 </div>
 
-<section class="hero" id="hero" hidden>
+<div class="hero-shell">
+  <img class="hero-frame" src="brand/frames/generated/ephix-frame-chamfer-tech-blue.png" alt="" aria-hidden="true">
+  <section class="hero" id="hero" hidden>
   <div class="hero-bg">
     <img id="hero-img" alt="">
+    <div class="hero-shatter eb-ambient" aria-hidden="true"></div>
+    <div class="hero-standby" hidden><img src="brand/broadcast/generated/ephix-broadcast-signal-plaque.png" alt=""></div>
     <div class="hero-fade"></div>
     <div class="scanline" aria-hidden="true"></div>
   </div>
+  <img class="hero-rec" src="brand/broadcast/generated/ephix-broadcast-rec-frame.png" alt="" aria-hidden="true">
   <div class="hero-content">
     <div class="eyebrow">LATEST EXHIBIT</div>
     <h2 id="hero-title"></h2>
@@ -63,14 +84,18 @@
       <button class="btn ghost" id="hero-folder">Open folder</button>
     </div>
   </div>
+  <img class="hero-eq eb-ambient" src="brand/broadcast/generated/ephix-broadcast-equalizer-bars.png" alt="" aria-hidden="true">
 </section>
+</div>
 
 <section class="reel-wrap" id="reel" hidden aria-label="Recently built">
+  <img class="reel-onair" src="brand/broadcast/generated/ephix-broadcast-on-air-badge.png" alt="" aria-hidden="true">
   <div class="reel-track" id="reel-track"></div>
 </section>
 
 <main id="grid" class="grid" aria-live="polite"></main>
 <div id="empty" class="empty" hidden>Nothing matches that filter.</div>
+<div class="edge-zigzag eb-ambient" aria-hidden="true"></div>
 
 <div class="overlay" id="overlay" hidden>
   <div class="overlay-backdrop" id="ov-backdrop"></div>
