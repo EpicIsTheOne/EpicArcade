@@ -270,7 +270,7 @@ function start(opts = {}) {
       // Ephix route: /<Model>/<Project>/<Harness>/... (sync mode only)
       const seg = url.pathname.split("/").filter(Boolean);
       if (arcadeState.enabled && seg.length >= 3 &&
-          !["api", "play", "thumbs", "media"].includes(seg[0])) {
+          !["api", "play", "thumbs", "media", "brand"].includes(seg[0])) {
         const gameDir = path.join(arcadeState.dir, seg[0], seg[1], seg[2]);
         const rel = seg.slice(3);
         allowGameProbe(res);
