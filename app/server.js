@@ -441,7 +441,7 @@ async function start(opts = {}) {
       // Ephix route: /<Model>/<Project>/<Harness>/... (sync mode only)
       const seg = url.pathname.split("/").filter(Boolean);
       if (arcadeState.enabled && seg.length >= 3 &&
-          !["api", "play", "thumbs", "media"].includes(seg[0])) {
+          !["api", "play", "thumbs", "media", "brand"].includes(seg[0])) {
         return redirectGame(url, res);
       }
 
