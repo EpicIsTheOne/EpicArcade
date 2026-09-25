@@ -1,6 +1,0 @@
-{
- "ok": false,
- "step": "load",
- "error": "page.waitForFunction: Timeout 90000ms exceeded.",
- "consoleErrors": []
-}

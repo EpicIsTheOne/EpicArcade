@@ -1,0 +1,11 @@
+{
+  "name": "lumen-threshold-aster-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/level.test.mjs tests/physics.test.mjs",
+    "test:browser": "node tests/browser.test.mjs"
+  }
+}

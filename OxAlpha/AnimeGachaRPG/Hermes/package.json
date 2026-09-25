@@ -1,6 +1,0 @@
-{
-  "type": "module",
-  "dependencies": {
-    "playwright-core": "^1.62.1"
-  }
-}

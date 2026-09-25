@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#15172b" />
+    <meta name="description" content="Lumen Threshold: Astra's Relay, an original rhythm precision platformer." />
+    <title>Lumen Threshold: Astra's Relay</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="shell" aria-label="Lumen Threshold: Astra's Relay">
+      <section class="game-frame" aria-describedby="game-help">
+        <canvas id="game" width="1280" height="720" aria-label="Rhythm platformer playfield"></canvas>
+        <div id="hud" class="hud" hidden></div>
+        <div id="overlay" class="overlay">
+          <div class="eyebrow">AN ORIGINAL RHYTHM VOYAGE</div>
+          <h1>LUMEN<br /><em>THRESHOLD</em></h1>
+          <p class="tagline">Astra carries a living spark through a world tuned to her footsteps.</p>
+          <div class="start-actions">
+            <button id="play-button" class="primary-button">BEGIN RELAY <span>SPACE</span></button>
+            <button id="practice-button" class="ghost-button">PRACTICE SECTIONS</button>
+          </div>
+          <p class="microcopy">Tap, hold, and switch on the pulse. Headphones recommended.</p>
+        </div>
+        <div id="pause-card" class="pause-card" hidden>
+          <span class="eyebrow">RELAY PAUSED</span>
+          <h2>Catch your breath.</h2>
+          <div class="pause-actions">
+            <button id="resume-button" class="primary-button">RESUME <span>SPACE</span></button>
+            <button id="restart-button" class="ghost-button">RESTART RUN</button>
+            <button id="quit-button" class="text-button">RETURN TO TITLE</button>
+          </div>
+        </div>
+        <div id="completion-card" class="completion-card" hidden>
+          <span class="eyebrow">RELAY COMPLETE</span>
+          <h2>The threshold remembers you.</h2>
+          <p id="completion-copy">A clean line through the living score.</p>
+          <div class="completion-stats">
+            <div><strong id="completion-time">2:29</strong><span>CLEAR TIME</span></div>
+            <div><strong id="completion-attempts">01</strong><span>ATTEMPTS</span></div>
+            <div><strong id="completion-motes">0/0</strong><span>MEMORY MOTES</span></div>
+          </div>
+          <div class="pause-actions">
+            <button id="again-button" class="primary-button">RELAY AGAIN <span>SPACE</span></button>
+            <button id="title-button" class="ghost-button">RETURN TO TITLE</button>
+          </div>
+        </div>
+        <div id="checkpoint-toast" class="checkpoint-toast" hidden></div>
+        <div id="touch-controls" class="touch-controls" hidden>
+          <button class="touch-pad" data-action="press">PULSE</button>
+          <button class="touch-pad hold" data-action="hold">HOLD</button>
+        </div>
+      </section>
+      <aside class="utility-rail" aria-label="Game options">
+        <button id="audio-button" class="rail-button" aria-label="Toggle audio">AUDIO <strong id="audio-status">ON</strong></button>
+        <button id="pause-button" class="rail-button">PAUSE <strong>P</strong></button>
+        <button id="settings-button" class="rail-button">SETTINGS <strong>⚙</strong></button>
+        <span class="rail-rule"></span>
+        <span id="run-status" class="run-status">READY</span>
+      </aside>
+    </main>
+    <section id="practice-drawer" class="drawer" hidden>
+      <div class="drawer-head">
+        <div><span class="eyebrow">PRACTICE ROOM</span><h2>Choose a movement.</h2></div>
+        <button id="practice-close" class="close-button" aria-label="Close practice room">×</button>
+      </div>
+      <div id="checkpoint-list" class="checkpoint-list"></div>
+      <p class="drawer-note">Each section begins on a strong beat and keeps collected memory motes.</p>
+    </section>
+    <section id="settings-drawer" class="drawer" hidden>
+      <div class="drawer-head">
+        <div><span class="eyebrow">RELAY SETTINGS</span><h2>Tune your signal.</h2></div>
+        <button id="settings-close" class="close-button" aria-label="Close settings">×</button>
+      </div>
+      <label class="setting-row"><span>Volume</span><input id="volume-slider" type="range" min="0" max="1" step="0.01" /></label>
+      <label class="setting-row"><span>Reduced motion</span><input id="motion-toggle" type="checkbox" /></label>
+      <label class="setting-row"><span>High contrast</span><input id="contrast-toggle" type="checkbox" /></label>
+      <label class="setting-row"><span>Touch controls</span><input id="touch-toggle" type="checkbox" /></label>
+      <button id="reset-progress" class="danger-button">RESET LOCAL PROGRESS</button>
+      <p class="drawer-note">Progress is stored only in this browser. No account or network connection is required.</p>
+    </section>
+    <div id="help-strip" class="help-strip">
+      <span><b>SPACE</b> / TAP: pulse</span><span><b>HOLD:</b> lift through cloudways</span><span><b>P:</b> pause</span><span><b>R:</b> restart</span>
+    </section>
+    <div id="live-region" class="sr-only" aria-live="polite"></div>
+    <p id="game-help" class="sr-only">A precision platformer where Aster moves automatically. Press Space or tap to pulse, hold to rise in Starlift, and switch rails in the Sieve of Stars.</p>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
