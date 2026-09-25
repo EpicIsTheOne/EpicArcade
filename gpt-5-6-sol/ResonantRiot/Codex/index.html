@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#100c26">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%230d0920'/%3E%3Cpath d='M18 14h28v8H26v7h16v8H26v13h-8z' fill='%2355f3e0'/%3E%3Ccircle cx='46' cy='45' r='8' fill='%23ff4dba'/%3E%3C/svg%3E">
+  <title>Resonant Riot</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="game-shell" aria-label="Resonant Riot rhythm action game">
+    <div id="stage" class="stage">
+      <canvas id="game" width="1440" height="900" aria-label="Resonant Riot playfield"></canvas>
+      <div id="vignette" class="vignette" aria-hidden="true"></div>
+      <div id="flash" class="flash" aria-hidden="true"></div>
+
+      <section id="title-screen" class="screen title-screen">
+        <div class="title-mark">RESONANT <span>RIOT</span></div>
+        <p class="kicker">LUMA DISTRICT // SOUND RESTORATION RUN 01</p>
+        <p class="lede">Paint the silence back into the city. Strike on the pulse, but never let the beat own you.</p>
+        <button id="start-button" class="primary-button">ENTER THE RIOT <span>↵</span></button>
+        <div class="title-controls">
+          <span><b>WASD</b> move</span>
+          <span><b>J</b> chain</span>
+          <span><b>K</b> pulse</span>
+          <span><b>SPACE</b> dodge</span>
+          <span><b>I</b> parry</span>
+        </div>
+        <p class="tiny-note">Headphones recommended · original soundtrack included</p>
+      </section>
+
+      <section id="brief-screen" class="screen brief-screen hidden" aria-live="polite">
+        <div class="brief-card">
+          <div class="brief-eyebrow">FIRST RUN // CALIBRATE YOUR COLOR</div>
+          <h1>Find the pulse.<br><em>Make it loud.</em></h1>
+          <p>Luma lost its color when the Quiet Engine started broadcasting silence. You are Vela, a courier with a paintbrush that only works in motion.</p>
+          <div class="brief-grid">
+            <div><span class="mini-icon">✦</span><b>J / CLICK</b><small>Chain light strikes</small></div>
+            <div><span class="mini-icon">◈</span><b>K / RIGHT CLICK</b><small>Break guards with a pulse</small></div>
+            <div><span class="mini-icon">↗</span><b>L / SHIFT</b><small>Launch and finish in the air</small></div>
+            <div><span class="mini-icon">⌁</span><b>SPACE</b><small>Dash through danger</small></div>
+            <div><span class="mini-icon">◇</span><b>I</b><small>Parry on the bright beat</small></div>
+            <div><span class="mini-icon">◎</span><b>O</b><small>Spend Flow for Overdrive</small></div>
+          </div>
+          <button id="brief-button" class="primary-button">PAINT THE CROSSING <span>↵</span></button>
+          <p class="tiny-note">The action is always live. The pulse is your edge.</p>
+        </div>
+      </section>
+
+      <section id="hud" class="hud hidden" aria-live="polite">
+        <div class="hud-top">
+          <div class="player-card">
+            <div class="portrait vela-portrait" aria-hidden="true"><span>V</span></div>
+            <div><div class="name-row"><strong>VELA</strong><span class="status-pill" id="player-status">READY</span></div><div class="bar hp-bar"><span id="player-hp-fill"></span></div></div>
+          </div>
+          <div class="chapter-card">
+            <span id="chapter-label">01 // CALIBRATE THE CHORUS</span>
+            <strong id="chapter-title">First resonance</strong>
+          </div>
+          <div class="score-card"><span>FLOW SCORE</span><strong id="score">000000</strong><small id="grade">D</small></div>
+        </div>
+        <div class="rhythm-ribbon" aria-label="Beat timing ribbon">
+          <div class="ribbon-label"><span id="bpm-label">120 BPM</span><span id="section-label">GROOVE</span></div>
+          <div class="beat-track" id="beat-track"><span class="beat-now"></span></div>
+          <div class="timing-readout"><span id="timing-label">LISTEN FOR THE COLOR</span><span id="timing-delta">—</span></div>
+        </div>
+        <div class="combo-panel"><div class="combo-number" id="combo">0</div><div><span>CHAIN</span><small id="combo-type">MOVE / STRIKE / REPEAT</small></div></div>
+        <div class="flow-panel"><div class="flow-label"><span>FLOW</span><b id="flow-text">0%</b></div><div class="bar flow-bar"><span id="flow-fill"></span></div><small id="ability-text">OVERDRIVE CHARGING</small></div>
+        <div class="boss-hud hidden" id="boss-hud"><div class="boss-name"><span>THE QUIET ENGINE</span><b id="boss-phase">PHASE 01 / SIGNAL SHELL</b></div><div class="bar boss-bar"><span id="boss-hp-fill"></span></div></div>
+        <div class="callout hidden" id="callout"></div>
+      </section>
+
+      <section id="touch-controls" class="touch-controls hidden" aria-label="Touch controls">
+        <div class="touch-pad"><button data-action="left" aria-label="Move left">←</button><button data-action="down" aria-label="Move down">↓</button><button data-action="right" aria-label="Move right">→</button><button data-action="up" aria-label="Move up">↑</button></div>
+        <div class="touch-actions"><button data-action="light">CHAIN</button><button data-action="heavy">PULSE</button><button data-action="launch">LAUNCH</button><button data-action="dodge">DODGE</button><button data-action="parry">PARRY</button></div>
+      </section>
+
+      <section id="pause-screen" class="screen pause-screen hidden">
+        <div class="pause-card"><span class="brief-eyebrow">SIGNAL HOLD</span><h2>PAUSED</h2><p>Press <b>P</b> to return to the signal.</p><button id="resume-button" class="primary-button">RESUME <span>↵</span></button></div>
+      </section>
+
+      <section id="result-screen" class="screen result-screen hidden">
+        <div class="result-card">
+          <div class="result-burst" aria-hidden="true">✦</div>
+          <span class="brief-eyebrow" id="result-eyebrow">TRANSMISSION COMPLETE</span>
+          <h1 id="result-title">LUMA IS <em>LOUD</em></h1>
+          <p id="result-copy">The murals are singing again. The Quiet Engine is only a whisper.</p>
+          <div class="result-grid"><div><span>FLOW SCORE</span><strong id="result-score">000000</strong></div><div><span>BEST CHAIN</span><strong id="result-combo">0</strong></div><div><span>ON-BEAT</span><strong id="result-accuracy">0%</strong></div><div><span>FINAL GRADE</span><strong id="result-grade">D</strong></div></div>
+          <p class="unlock" id="result-unlock">UNLOCKED // <b>Rainline Dash</b> · your next dash paints a longer echo</p>
+          <button id="replay-button" class="primary-button">PAINT IT AGAIN <span>↵</span></button>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>

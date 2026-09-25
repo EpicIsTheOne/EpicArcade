@@ -1,0 +1,6 @@
+{
+  "title": "Resonant Riot",
+  "description": "An original browser rhythm-action brawler about Vela, a courier restoring color and sound to Luma after the Quiet Engine begins broadcasting silence.",
+  "multiplayer": false,
+  "engine": "HTML5 Canvas + Web Audio"
+}
