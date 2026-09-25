@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#080a20">
+  <meta name="description" content="EMBERLINE: Last Nightmail, an original storm-rail action RPG.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23ff9f43' d='M32 4 54 32 32 60 10 32z'/%3E%3Cpath fill='%23ffe7a3' d='m32 16 10 16-10 16-10-16z'/%3E%3C/svg%3E">
+  <title>EMBERLINE: Last Nightmail</title>
+  <link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+  <main id="game-shell" aria-label="EMBERLINE game">
+    <canvas id="game" width="960" height="540" tabindex="0" aria-label="Playable side-scrolling action game"></canvas>
+
+    <section id="title-screen" class="screen-layer active" aria-labelledby="game-title">
+      <div class="title-stamp">NIGHTMAIL ROUTE 07</div>
+      <h1 id="game-title"><span>EMBERLINE</span><small>LAST NIGHTMAIL</small></h1>
+      <p class="tagline">Keep the lantern burning. The last carriage remembers everything.</p>
+      <button id="start-button" class="primary-button">Begin the route</button>
+      <div class="control-strip">
+        <span><kbd>A</kbd><kbd>D</kbd> Move</span>
+        <span><kbd>W</kbd> Jump</span>
+        <span><kbd>J</kbd> Combo</span>
+        <span><kbd>K</kbd> Heavy</span>
+        <span><kbd>L</kbd> Storm</span>
+        <span><kbd>Shift</kbd> Dash</span>
+      </div>
+      <p class="bestiary-note">Original procedural art, animation, effects, and audio</p>
+    </section>
+
+    <section id="pause-screen" class="screen-layer" aria-live="polite">
+      <div class="panel compact">
+        <div class="eyebrow">SIGNAL HELD</div>
+        <h2>Paused</h2>
+        <button id="resume-button" class="primary-button">Resume</button>
+        <button id="restart-button" class="secondary-button">Restart route</button>
+      </div>
+    </section>
+
+    <section id="route-screen" class="screen-layer" aria-live="polite">
+      <div class="panel compact route-panel">
+        <div class="eyebrow">NIGHTMAIL CONTROL</div>
+        <h2 id="route-title">Route interrupted</h2>
+        <p id="route-copy">The last carriage is still open.</p>
+        <div class="route-stat-grid">
+          <div><span>WARDEN'S STARS</span><strong id="route-stars">0 / 2</strong></div>
+          <div><span>EMBER CORES</span><strong id="route-cores">0 / 3</strong></div>
+          <div><span>SIGIL FRAGMENTS</span><strong id="route-fragments">0 / 4</strong></div>
+        </div>
+        <button id="continue-button" class="primary-button">Rekindle the lantern</button>
+      </div>
+    </section>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <div id="screen-flash" aria-hidden="true"></div>
+
+    <nav id="touch-controls" aria-label="Touch controls">
+      <div class="touch-cluster movement-cluster">
+        <button data-hold="left" aria-label="Move left">◀</button>
+        <button data-hold="right" aria-label="Move right">▶</button>
+      </div>
+      <div class="touch-cluster action-cluster">
+        <button data-hold="light">LIGHT</button>
+        <button data-hold="heavy">HEAVY</button>
+        <button data-hold="storm">STORM</button>
+        <button data-press="jump">JUMP</button>
+        <button data-hold="dash">DASH</button>
+      </div>
+    </nav>
+  </main>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
