@@ -1,12 +1,12 @@
 {
-  "url": "http://127.0.0.1:4191/index.html",
+  "url": "https://techexplore.us/OxAlpha/GlasslightRequiem/Codex/index.html",
   "consoleErrors": [],
   "pageErrors": [],
   "checks": {
     "introTitle": "GLASSLIGHT\nREQUIEM",
-    "audioSource": "music/Glasslight_Requiem.mp3",
+    "audioSource": "music/Glasslight_Requiem_preview.mp3",
     "started": true,
-    "timeAfterStart": 2.1493333333333333,
+    "timeAfterStart": 1.2693333333333334,
     "sectionAfterStart": "waking",
     "hudVisible": true,
     "canvasSize": [
@@ -15,7 +15,7 @@
     ],
     "ended": true,
     "endCardVisible": true,
-    "replayTime": 0.9200000000000017,
+    "replayTime": 0.7786666666666662,
     "replayHudVisible": true,
     "pauseLabel": "\u2161",
     "mobileCanvas": [
@@ -27,33 +27,33 @@
   "frames": [
     {
       "label": "02-ember",
-      "time": 21.978666666666665,
+      "time": 20.92,
       "section": "ember",
-      "fps": 0.48782867456949086
+      "fps": 30.493802872319513
     },
     {
       "label": "03-choir",
-      "time": 37.111999999999995,
+      "time": 36.928,
       "section": "choir",
-      "fps": 0.9091735612328381
+      "fps": 31.939605110336796
     },
     {
       "label": "04-fracture",
-      "time": 56.49066666666667,
+      "time": 55.93066666666667,
       "section": "fracture",
-      "fps": 0.6383250351078745
+      "fps": 27.100271002710056
     },
     {
       "label": "05-afterglow",
-      "time": 67.36,
+      "time": 66.93066666666667,
       "section": "afterglow",
-      "fps": 0.7142857142857143
+      "fps": 27.09764831123582
     },
     {
       "label": "06-ember-return",
-      "time": 81.37866666666667,
+      "time": 80.928,
       "section": "ember-return",
-      "fps": 0.5882698982293096
+      "fps": 31.477473932716887
     }
   ]
 }

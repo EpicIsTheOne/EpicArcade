@@ -90,6 +90,8 @@ let stars = [];
 let spine = [];
 let seenEvents = new Set();
 let lastFrameStats = { fps: 0, samples: 0, started: performance.now() };
+let glowCanvas = null;
+let glowContext = null;
 
 const random = (min = 0, max = 1) => min + Math.random() * (max - min);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -114,6 +116,10 @@ function setupCanvas() {
   canvas.width = Math.floor(width * pixelRatio);
   canvas.height = Math.floor(height * pixelRatio);
   context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  glowCanvas = document.createElement('canvas');
+  glowCanvas.width = Math.max(1, Math.floor(width * pixelRatio));
+  glowCanvas.height = Math.max(1, Math.floor(height * pixelRatio));
+  glowContext = glowCanvas.getContext('2d');
   buildScene();
 }
 
@@ -512,7 +518,6 @@ function drawParticles(time, section, colors) {
   const base = Math.min(width, height);
   const flow = section.id === 'afterglow' ? .28 : .56;
   context.save();
-  context.globalCompositeOperation = 'screen';
   for (const particle of particles) {
     if (particle.depth > .4 && section.energy < .35) continue;
     const orbit = particle.angle + time * flow * (.35 + particle.depth * .45);
@@ -523,14 +528,11 @@ function drawParticles(time, section, colors) {
     const depthAlpha = .18 + particle.depth * .52;
     const color = particle.hue === 'ember' ? colors.ember : colors.glass;
     context.fillStyle = rgba(color, depthAlpha * (.35 + resonance * .45 + beatPulse * .2));
-    context.shadowColor = color;
-    context.shadowBlur = 3 + particle.depth * 12;
     const size = particle.size * (1 + beatPulse * .7 + impact * .8);
     context.beginPath();
     context.arc(x, y, size, 0, Math.PI * 2);
     context.fill();
   }
-  context.restore();
 }
 
 function drawEmber(time, section, sectionProgress, colors) {
@@ -540,17 +542,30 @@ function drawEmber(time, section, sectionProgress, colors) {
   const radius = Math.min(width, height) * (.022 + section.energy * .018) * pulse;
   context.save();
   context.globalCompositeOperation = 'screen';
-  context.shadowColor = colors.ember;
-  context.shadowBlur = 32 + impact * 58;
-  const gradient = context.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius * 4.5);
-  gradient.addColorStop(0, 'rgba(255,246,220,.98)');
-  gradient.addColorStop(.08, rgba(colors.ember, .98));
-  gradient.addColorStop(.35, rgba(colors.ember, .34));
-  gradient.addColorStop(1, 'rgba(0,0,0,0)');
-  context.fillStyle = gradient;
-  context.beginPath();
-  context.arc(centerX, centerY, radius * 4.5, 0, Math.PI * 2);
-  context.fill();
+  if (glowContext) {
+    const glowRadius = radius * 4.5;
+    const textureRadius = Math.min(glowCanvas.width, glowCanvas.height) * .18;
+    glowContext.clearRect(0, 0, glowCanvas.width, glowCanvas.height);
+    glowContext.save();
+    glowContext.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    const gradient = glowContext.createRadialGradient(0, 0, 0, 0, 0, textureRadius);
+    gradient.addColorStop(0, 'rgba(255,246,220,.98)');
+    gradient.addColorStop(.08, rgba(colors.ember, .98));
+    gradient.addColorStop(.35, rgba(colors.ember, .34));
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    glowContext.translate(centerX, centerY);
+    glowContext.scale(glowRadius / textureRadius, glowRadius / textureRadius);
+    glowContext.fillStyle = gradient;
+    glowContext.beginPath();
+    glowContext.arc(0, 0, textureRadius, 0, Math.PI * 2);
+    glowContext.fill();
+    glowContext.restore();
+    context.save();
+    context.globalCompositeOperation = 'screen';
+    context.globalAlpha = .9;
+    context.drawImage(glowCanvas, 0, 0, width, height);
+    context.restore();
+  }
   context.fillStyle = 'rgba(255, 249, 225, .96)';
   context.beginPath();
   context.arc(centerX, centerY, radius * .32, 0, Math.PI * 2);
