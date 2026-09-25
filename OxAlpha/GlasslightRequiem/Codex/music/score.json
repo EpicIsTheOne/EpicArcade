@@ -1,0 +1,113 @@
+{
+  "title": "Glasslight Requiem",
+  "concept": "A sealed observatory follows one surviving ember through six acts of light, pressure, and release.",
+  "audio": "Glasslight_Requiem.mp3",
+  "duration": 96.90322580645162,
+  "sampleRate": 48000,
+  "tempo": 124.0,
+  "key": "D minor",
+  "meter": "4/4",
+  "sections": [
+    {
+      "id": "waking",
+      "label": "I. Waking Glass",
+      "startBar": 0,
+      "bars": 8,
+      "energy": 0.18,
+      "start": 0.0,
+      "end": 15.484
+    },
+    {
+      "id": "ember",
+      "label": "II. Ember Current",
+      "startBar": 8,
+      "bars": 8,
+      "energy": 0.48,
+      "start": 15.484,
+      "end": 30.968
+    },
+    {
+      "id": "choir",
+      "label": "III. Choir of Lines",
+      "startBar": 16,
+      "bars": 12,
+      "energy": 0.72,
+      "start": 30.968,
+      "end": 54.194
+    },
+    {
+      "id": "fracture",
+      "label": "IV. The Fracture",
+      "startBar": 28,
+      "bars": 4,
+      "energy": 0.96,
+      "start": 54.194,
+      "end": 61.935
+    },
+    {
+      "id": "afterglow",
+      "label": "V. Afterglow",
+      "startBar": 32,
+      "bars": 8,
+      "energy": 0.38,
+      "start": 61.935,
+      "end": 77.419
+    },
+    {
+      "id": "ember-return",
+      "label": "VI. Ember Return",
+      "startBar": 40,
+      "bars": 8,
+      "energy": 0.88,
+      "start": 77.419,
+      "end": 92.903
+    }
+  ],
+  "events": [
+    {
+      "time": 9.677,
+      "type": "firstPulse",
+      "strength": 0.48
+    },
+    {
+      "time": 15.484,
+      "type": "emberIgnite",
+      "strength": 0.68
+    },
+    {
+      "time": 29.032,
+      "type": "emberIgnite",
+      "strength": 0.9
+    },
+    {
+      "time": 30.968,
+      "type": "choirOpen",
+      "strength": 0.78
+    },
+    {
+      "time": 46.452,
+      "type": "choirSurge",
+      "strength": 0.94
+    },
+    {
+      "time": 54.194,
+      "type": "fracture",
+      "strength": 1.0
+    },
+    {
+      "time": 61.935,
+      "type": "afterglow",
+      "strength": 0.42
+    },
+    {
+      "time": 77.419,
+      "type": "emberReturn",
+      "strength": 1.0
+    },
+    {
+      "time": 89.032,
+      "type": "resolve",
+      "strength": 0.28
+    }
+  ]
+}
