@@ -36,7 +36,7 @@ The game also runs from any static HTTP server. Opening the files directly throu
 4. **Starlift**: hold/release flight through cloudways and moving air hazards.
 5. **Sieve of Stars**: switch between two readable rails on the pulse.
 6. **Supernova Loom**: the finale cycles through the movement languages while the score drops into its highest-intensity section.
-7. **Aster Relay**: a short quiet release and completion state.
+7. **Astra Relay**: a short quiet release and completion state.
 
 The full run is approximately 2:30, contains 49 authored hazards, 25 memory motes, and checkpoints at every major section.
 
@@ -71,7 +71,7 @@ Audio starts after the first user gesture to comply with browser autoplay rules.
 | 1:08 | Starlift | Pad-led breakdown with long sustain tones | Hold/release flight |
 | 1:39 | Sieve of Stars | Faster plucks, claps, and repeating ostinato | Two-rail switching |
 | 2:05 | Supernova Loom | Full percussion, drops, and stacked harmonic stings | Finale combining all languages |
-| 2:28 | Aster Relay | Pad and chime resolution | Safe ending and completion card |
+| 2:28 | Astra Relay | Pad and chime resolution | Safe ending and completion card |
 
 ## What I would add next
 

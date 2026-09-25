@@ -140,7 +140,6 @@ async function startRun(beat = 0, practice = false) {
   autopilotIndex = 0;
   held = false;
   lastDeathBeat = -1;
-  attemptCounted = true;
   attemptCounted = false;
   lastPersistTime = 0;
   accumulator = 0;
@@ -148,6 +147,11 @@ async function startRun(beat = 0, practice = false) {
   await music.startMusic(beat, beat);
   startWallTime = performance.now();
   setState(state);
+  if (!practice) {
+    progress = saveProgress({ attempts: progress.attempts + 1 });
+    attemptCounted = true;
+    updateProgressUi();
+  }
   announce(`${practice ? "Practice" : "Relay"} started at ${getSectionAtBeat(beat).title}.`);
 }
 
@@ -302,7 +306,9 @@ function complete() {
   completedThisRun = true;
   music.stopMusic();
   const elapsed = (performance.now() - startWallTime) / 1000;
-  progress = saveProgress({ bestTimeMs: progress.bestTimeMs == null ? Math.round(elapsed * 1000) : Math.min(progress.bestTimeMs, Math.round(elapsed * 1000)), completes: progress.completes + 1, bestProgress: 1, bestProgressBeat: 316, collectibles: Array.from(new Set([...(progress.collectibles ?? []), ...currentCollectedIds()])) });
+  const countAttempt = !attemptCounted;
+  if (countAttempt) attemptCounted = true;
+  progress = saveProgress({ attempts: progress.attempts + (countAttempt ? 1 : 0), bestTimeMs: progress.bestTimeMs == null ? Math.round(elapsed * 1000) : Math.min(progress.bestTimeMs, Math.round(elapsed * 1000)), completes: progress.completes + 1, bestProgress: 1, bestProgressBeat: 316, collectibles: Array.from(new Set([...(progress.collectibles ?? []), ...currentCollectedIds()])) });
   $("completion-time").textContent = formatClock(elapsed);
   $("completion-attempts").textContent = String(Math.max(1, progress.attempts)).padStart(2, "0");
   $("completion-motes").textContent = `${currentCollectedIds().length}/${LEVEL.collectibles.length}`;

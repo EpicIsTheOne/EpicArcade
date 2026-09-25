@@ -9,7 +9,7 @@ export const SECTIONS = [
   { id: "drift", title: "Starlift", subtitle: "Hold to rise, release to fall", startBeat: 144, endBeat: 208, mode: "drift", checkpoint: 144 },
   { id: "orbit", title: "Sieve of Stars", subtitle: "Switch rails on the pulse", startBeat: 208, endBeat: 264, mode: "orbit", checkpoint: 208 },
   { id: "supernova", title: "Supernova Loom", subtitle: "Carry every movement through the drop", startBeat: 264, endBeat: 312, mode: "finale", checkpoint: 264 },
-  { id: "outro", title: "Aster Relay", subtitle: "The threshold remembers you", startBeat: 312, endBeat: 320, mode: "outro", checkpoint: 312 }
+  { id: "outro", title: "Astra Relay", subtitle: "The threshold remembers you", startBeat: 312, endBeat: 320, mode: "outro", checkpoint: 312 }
 ];
 
 export const CHECKPOINTS = SECTIONS.filter((section) => section.id !== "outro").map((section) => ({
