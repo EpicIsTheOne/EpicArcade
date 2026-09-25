@@ -242,7 +242,7 @@
   function spawnBoss() {
     game.boss = {
       kind: 'boss', x: 900, y: 390, z: 0, vx: 0, vy: 0,
-      radius: 76, hp: 700, maxHp: 700, speed: 42, color: COLORS.violet,
+      radius: 76, hp: 520, maxHp: 520, speed: 42, color: COLORS.violet,
       name: 'THE QUIET ENGINE', state: 'entrance', timer: 2.8, attackAt: 0,
       telegraph: 0, attackDuration: 0, hitDone: false, stun: 0, knockback: 0,
       guard: 0, guardCycle: 5, phase: 1, flash: 0, alive: true,
@@ -548,6 +548,7 @@
     const beatBonus = beat === enemy.lastHitBeat ? 1.18 : 1;
     enemy.lastHitBeat = beat;
     const guardMultiplier = enemy.guard > 0 && !options.breaksGuard ? .18 : 1;
+    if (options.breaksGuard && enemy.guard > 0) enemy.guard = 0;
     const total = Math.round(damage * guardMultiplier * beatBonus * (judgment === 'PERFECT' ? 1.4 : judgment === 'GOOD' ? 1.15 : 1));
     enemy.hp -= total;
     enemy.stun = Math.max(enemy.stun, options.heavy ? .75 : .28);
@@ -581,7 +582,8 @@
     const target = getTarget(action.range);
     const hitList = game.enemies.filter(enemy => enemy.alive && dist(player, enemy) < action.range + enemy.radius);
     if (action.type === 'overdrive') {
-      hitList.forEach(enemy => hitEnemy(enemy, action.damage || 48, action.judgment.label, 'OVERDRIVE', { color: COLORS.lime, heavy: true, knockback: 240 }));
+      hitList.forEach(enemy => hitEnemy(enemy, action.damage || 48, action.judgment.label, 'OVERDRIVE', { color: COLORS.lime, heavy: true, breaksGuard: true, knockback: 240 }));
+      if (game.boss?.alive && dist(player, game.boss) < 520) hitBoss(action.damage || 48, action.judgment.label, 'OVERDRIVE', COLORS.lime, true);
       addRing(player.x, player.y, 10, COLORS.lime, 390, 12);
       game.screenShake = 28;
       game.hitstop = .15;
@@ -598,15 +600,15 @@
     }
     if (!hitList.length && !game.boss?.alive) return;
     if (action.type === 'launch') {
-      hitList.forEach(enemy => hitEnemy(enemy, action.damage, action.judgment.label, action.move, { color: COLORS.violet, heavy: true, knockback: 100, launch: true }));
+      hitList.forEach(enemy => hitEnemy(enemy, action.damage, action.judgment.label, action.move, { color: COLORS.violet, heavy: true, breaksGuard: true, knockback: 100, launch: true }));
       player.launched = true;
       player.launchedTimer = .35;
       player.z = 12;
       addRing(player.x, player.y, 8, COLORS.violet, 180, 7);
       return;
     }
-    hitList.forEach(enemy => hitEnemy(enemy, action.damage, action.judgment.label, action.move, { color: action.color, heavy: action.heavy, knockback: action.heavy ? 210 : 100 }));
-    if (game.boss?.alive && dist(player, game.boss) < action.range + game.boss.radius) hitBoss(action.damage, action.judgment, action.move, action.color, action.heavy);
+    hitList.forEach(enemy => hitEnemy(enemy, action.damage, action.judgment.label, action.move, { color: action.color, heavy: action.heavy, breaksGuard: action.heavy, knockback: action.heavy ? 210 : 100 }));
+    if (game.boss?.alive && dist(player, game.boss) < action.range + game.boss.radius) hitBoss(action.damage, action.judgment.label, action.move, action.color, action.heavy);
     if (action.type === 'heavy' && hitList.some(enemy => enemy.guard > 0)) { audio.guard(); addFloater(target.x, target.y - 55, 90, 'GUARD BROKEN', COLORS.orange, 14); }
     if (action.type === 'light' && player.comboIndex === 2) {
       game.slashes.push({ x: player.x, y: player.y, z: 12, color: COLORS.pink, life: .28, maxLife: .28, angle: player.facing * .25 });
@@ -803,7 +805,7 @@
       boss.timer -= dt;
       if (!boss.hitDone && boss.attackPattern % 4 !== 2 && d < boss.radius + 76) {
         boss.hitDone = true;
-        damagePlayer(boss.phase === 2 ? 20 : 15, boss.x, boss.y);
+        damagePlayer(boss.phase === 2 ? 16 : 12, boss.x, boss.y);
       }
       if (boss.timer <= 0) { boss.state = 'approach'; boss.timer = boss.phase === 2 ? .65 : 1.05; }
     } else {
@@ -835,7 +837,7 @@
       if (shot.life <= 0 || shot.x < 0 || shot.x > W || shot.y < 0 || shot.y > H) { game.projectiles.splice(i, 1); continue; }
       const hitRadius = shot.owner === game.boss ? 58 : 30;
       if (dist(shot, game.player) < hitRadius) {
-        damagePlayer(shot.owner === game.boss ? 16 : 9, shot.x, shot.y);
+        damagePlayer(shot.owner === game.boss ? 12 : 9, shot.x, shot.y);
         addParticles(shot.x, shot.y, shot.z, shot.color, 10, .9);
         game.projectiles.splice(i, 1);
       }
@@ -848,7 +850,7 @@
       hazard.age += dt;
       if (!hazard.hit && hazard.age > hazard.duration * .45) {
         hazard.hit = true;
-        if (Math.abs(game.player.x - hazard.x) < hazard.width * .5) damagePlayer(14, hazard.x, hazard.y);
+        if (Math.abs(game.player.x - hazard.x) < hazard.width * .5) damagePlayer(10, hazard.x, hazard.y);
         addRing(hazard.x, hazard.y, 10, COLORS.pink, hazard.width, 8);
       }
       if (hazard.age > hazard.duration) game.hazards.splice(i, 1);
@@ -1300,12 +1302,6 @@
           bpm: currentBeat().config.bpm
         };
       },
-      clearStage() {
-        game.enemies.forEach(enemy => { enemy.hp = 0; enemy.alive = false; });
-        if (game.boss) { game.boss.hp = 0; game.boss.alive = false; game.boss.y = 520; }
-      },
-      damageBoss(amount = 10) { if (game.boss?.alive) hitBoss(amount, { label: 'PERFECT' }, 'QA STRIKE', COLORS.lime, true); },
-      forceBeat() { game.beatPulse = 1; game.beatFlash = 1; }
     };
     requestAnimationFrame(frame);
   }
